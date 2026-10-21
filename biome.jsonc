@@ -1,0 +1,89 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": ["ultracite/biome/core", "ultracite/biome/solid"],
+  "files": {
+    // `!!` = 保护性排除，不被后续 include 覆盖
+    // 资源目录只放图片/SVG，不参与检查
+    "includes": ["!!**/assets"]
+  },
+  "javascript": {
+    // Biome 不认 runtime 注入的全局；Bun 由 bun-types 提供 tsc 类型，只缺 lint 侧声明
+    "globals": ["Bun"]
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        // 导入排序分组（先匹配到的组优先，未匹配的排最后）
+        // https://biomejs.dev/assist/actions/organize-imports/
+        "organizeImports": {
+          "level": "on",
+          "options": {
+            "sortBareImports": true,
+            "identifierOrder": "lexicographic",
+            "groups": [
+              [":BUN:", ":NODE:"],
+              ":BLANK_LINE:",
+              ["react", "react-*"],
+              ":PACKAGE:",
+              ":BLANK_LINE:",
+              ":ALIAS:",
+              ":BLANK_LINE:",
+              [":PATH:", ":STYLE:", ":URL:"]
+            ]
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      // 配置文件按语义顺序手工维护，不参与自动排序
+      // useSortedPackageJson: package.json 专用约定顺序（scripts 等）
+      // useSortedKeys: JS/TS 对象字面量（app.config.ts）
+      "includes": ["**/package.json", "**/app.config.ts"],
+      "assist": {
+        "actions": {
+          "source": {
+            "useSortedPackageJson": "off",
+            "useSortedKeys": "off"
+          }
+        }
+      }
+    },
+    {
+      // 声明文件里的全局增强（如 declare global 扩 Window）必须用 interface 才能声明合并，
+      // 换 type 会和 lib.dom 冲突报 TS2300
+      "includes": ["**/*.d.ts", "**/*.d.mts", "**/*.d.cts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useConsistentTypeDefinitions": "off"
+          }
+        }
+      }
+    }
+  ],
+  "linter": {
+    "rules": {
+      "performance": {
+        // 禁止命名空间导入
+        "noNamespaceImport": "off",
+        // 禁止JSX属性绑定（JavaScript）
+        "noJsxPropsBind": "off"
+      },
+      "style": {
+        // 使用一致性类型定义
+        "useConsistentTypeDefinitions": {
+          "level": "warn",
+          "options": {
+            "style": "type"
+          }
+        }
+      },
+      "suspicious": {
+        // 不允许有console, 保持构建干净
+        "noConsole": "off"
+      }
+    }
+  }
+}

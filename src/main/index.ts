@@ -4,6 +4,7 @@ import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import { BrowserWindow, app, ipcMain, shell } from "electron";
 
 import icon from "../../resources/icon.png?asset";
+import { createTray } from "./tray";
 
 function createWindow(): void {
   // Create the browser window.
@@ -55,6 +56,7 @@ app.whenReady().then(() => {
   ipcMain.on("ping", () => console.log("pong"));
 
   createWindow();
+  createTray();
 
   app.on("activate", () => {
     // On macOS it's common to re-create a window in the app when the

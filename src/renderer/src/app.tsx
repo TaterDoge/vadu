@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 
 import electronLogo from "./assets/electron.svg";
+import { Button } from "./components/ui/button";
 import Versions from "./components/versions";
 
 const btn =
@@ -11,6 +12,7 @@ function App(): JSX.Element {
 
   return (
     <main className="flex h-screen select-none flex-col items-center justify-center bg-[#1b1b1f] pb-20 text-neutral-200">
+      <Button>这是一个按钮</Button>
       <img
         alt="logo"
         className="mb-5 size-32"

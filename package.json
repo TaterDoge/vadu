@@ -1,7 +1,7 @@
 {
   "name": "vadu",
   "version": "1.0.0",
-  "description": "An Electron application with Solid and TypeScript",
+  "description": "An Electron application with React and TypeScript",
   "homepage": "https://electron-vite.org",
   "author": "example.com",
   "main": "./out/main/index.js",
@@ -24,19 +24,23 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
-    "electron-updater": "^6.8.9"
+    "electron-updater": "^6.8.9",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
     "@electron-toolkit/tsconfig": "^2.0.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
     "electron": "^44.7.2",
     "electron-builder": "^26.15.3",
     "electron-vite": "^6.0.0",
     "husky": "^9.1.7",
-    "@solidjs/vite-plugin": "^3.0.0-next.50",
-    "@solidjs/web": "^2.0.0-rc.16",
-    "solid-js": "^2.0.0-rc.16",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "ultracite": "8.0.1",
     "vite": "^8.3.4"

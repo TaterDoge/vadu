@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "extends": ["ultracite/biome/core", "ultracite/biome/solid"],
+  "extends": ["ultracite/biome/core", "ultracite/biome/react"],
   "files": {
     // `!!` = 保护性排除，不被后续 include 覆盖
     // 资源目录只放图片/SVG，不参与检查

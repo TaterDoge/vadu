@@ -1,34 +1,26 @@
 # vadu
 
-An Electron application with Solid and TypeScript
+桌面翻译软件。翻译能力全部由插件提供，首要支持 AI 翻译（自带 endpoint / 密钥 / 模型）。
 
-## Recommended IDE Setup
+## 文档
 
-- [VSCode](https://code.visualstudio.com/) + [Biome](https://marketplace.visualstudio.com/items?itemName=biomejs.biome)
+架构、插件规范、IPC 契约、路线图都在 [docs/](./docs/README.md)。改动前先按 [AGENTS.md](./AGENTS.md) 的查表读对应文档。
 
-## Project Setup
-
-### Install
+## 开发
 
 ```bash
-$ npm install
+bun install
+bun run dev          # electron-vite dev
+bun run typecheck    # 双 tsconfig 类型检查
+bun run check        # Biome + ultracite
 ```
 
-### Development
+## 构建
 
 ```bash
-$ npm run dev
+bun run build:mac     # 或 build:win / build:linux
 ```
 
-### Build
+## IDE
 
-```bash
-# For windows
-$ npm run build:win
-
-# For macOS
-$ npm run build:mac
-
-# For Linux
-$ npm run build:linux
-```
+VSCode + [Biome](https://marketplace.visualstudio.com/items?itemName=biomejs.biome) 扩展。

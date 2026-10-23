@@ -28,7 +28,7 @@ const titleBarOptions =
 
 function createWindow(): void {
   // Create the browser window.
-  const window = new BrowserWindow({
+  const win = new BrowserWindow({
     autoHideMenuBar: true,
     height: 620,
     resizable: false,
@@ -41,19 +41,19 @@ function createWindow(): void {
       sandbox: false,
     },
   });
-  mainWindow = window;
+  mainWindow = win;
 
-  window.on("closed", () => {
-    if (mainWindow === window) {
+  win.on("closed", () => {
+    if (mainWindow === win) {
       mainWindow = null;
     }
   });
 
-  window.on("ready-to-show", () => {
-    window.show();
+  win.on("ready-to-show", () => {
+    win.show();
   });
 
-  window.webContents.setWindowOpenHandler((details) => {
+  win.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url);
     return { action: "deny" };
   });
@@ -61,9 +61,9 @@ function createWindow(): void {
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    window.loadURL(process.env.ELECTRON_RENDERER_URL);
+    win.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    window.loadFile(join(import.meta.dirname, "../renderer/index.html"));
+    win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
   }
 }
 
@@ -93,8 +93,8 @@ app.whenReady().then(() => {
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
   // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
-  app.on("browser-window-created", (_, window) => {
-    optimizer.watchWindowShortcuts(window);
+  app.on("browser-window-created", (_, win) => {
+    optimizer.watchWindowShortcuts(win);
   });
 
   // IPC test

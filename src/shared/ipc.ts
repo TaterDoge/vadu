@@ -12,6 +12,15 @@ export type IpcResult<T> =
 
 export type HotkeyState = { accelerator: string | null; registered: boolean };
 
+export type AppSettings = {
+  defaultProfileId?: string;
+  hotkey: string;
+  theme: "system" | "light" | "dark";
+  historyLimit: number;
+  /** 全局术语表，M3 实现。渲染层不按请求传术语，core 统一注入 */
+  glossary: { from: string; to: string }[];
+};
+
 export type VaduApi = {
   hotkey: {
     get: () => Promise<IpcResult<HotkeyState>>;

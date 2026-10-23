@@ -2,7 +2,7 @@ import { globalShortcut } from "electron";
 
 import { isSupportedAccelerator } from "../shared/hotkey";
 import type { HotkeyState } from "../shared/ipc";
-import { readSettings, writeSettings } from "./settings";
+import { readSettings, saveSettings } from "./core/config/store";
 
 let onTrigger: () => void = () => undefined;
 let state: HotkeyState = { accelerator: null, registered: false };
@@ -41,7 +41,7 @@ export function applyHotkey(accelerator: string | null): HotkeyState {
   globalShortcut.setSuspended(false);
   state = { accelerator, registered: false };
   registerCurrent();
-  writeSettings({ hotkey: state.accelerator ?? "" });
+  saveSettings({ ...readSettings(), hotkey: state.accelerator ?? "" });
   return state;
 }
 

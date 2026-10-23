@@ -165,7 +165,7 @@ export type AppSettings = {
   defaultProfileId?: string;
   hotkey: string;          // 全局快捷键，如 "CommandOrControl+Shift+T"
   theme: "system" | "light" | "dark";
-  historyLimit: number;
+  historyLimit: number;    // 默认 50
   /** 全局术语表，M3 实现。渲染层不按请求传术语，core 统一注入 */
   glossary: { from: string; to: string }[];
 };

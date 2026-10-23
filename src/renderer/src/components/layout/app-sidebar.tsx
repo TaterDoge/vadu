@@ -18,6 +18,7 @@ import { IS_MAC } from "@renderer/lib/platform";
 import { cn } from "cn";
 
 import { NAV_GROUPS, type SectionId } from "./nav";
+import { StyleSwitcher } from "./style-switcher";
 
 type AppSidebarProps = {
   section: SectionId;
@@ -82,6 +83,7 @@ export function AppSidebar({
         )}
       >
         <AnimatedThemeToggler />
+        <StyleSwitcher />
         <SidebarTrigger />
       </SidebarFooter>
       <SidebarRail />

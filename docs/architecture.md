@@ -142,11 +142,11 @@ src/
 │   └── index.d.ts
 └── renderer/src/
     ├── app.tsx              # 壳：ThemeProvider + SidebarProvider + 分区切换（当前是本地 state）
-    ├── lib/                 # 渲染层通用能力（主题等）
+    ├── lib/                 # 渲染层通用能力（主题、shadcn style 切换）
     ├── hooks/
     └── components/
         ├── ui/                # shadcn 生成件；只改样式不改结构
-        ├── layout/            # 侧边栏、页面骨架、分区登记
+        ├── layout/            # 侧边栏、页面骨架、分区登记、style 切换器
         └── pages/             # 各分区页面内容（一个分区一个文件）
 ```
 

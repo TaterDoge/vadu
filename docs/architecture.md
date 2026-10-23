@@ -141,9 +141,13 @@ src/
 │   ├── index.ts              # contextBridge 暴露 window.vadu
 │   └── index.d.ts
 └── renderer/src/
-    ├── app.tsx
-    ├── features/{translate,plugins,settings}/
-    └── components/{ui,...}
+    ├── app.tsx              # 壳：ThemeProvider + SidebarProvider + 分区切换（当前是本地 state）
+    ├── lib/                 # 渲染层通用能力（主题等）
+    ├── hooks/
+    └── components/
+        ├── ui/                # shadcn 生成件；只改样式不改结构
+        ├── layout/            # 侧边栏、页面骨架、分区登记
+        └── pages/             # 各分区页面内容（一个分区一个文件）
 ```
 
 插件目录在运行时有两个来源：

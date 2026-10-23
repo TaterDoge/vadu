@@ -65,6 +65,10 @@
   ],
   "linter": {
     "rules": {
+      "correctness": {
+        // @renderer/* 由 tsconfig paths 解析，不是 npm 包；shadcn 生成的代码同样用它
+        "noUndeclaredDependencies": "off"
+      },
       "performance": {
         // 禁止命名空间导入
         "noNamespaceImport": "off",

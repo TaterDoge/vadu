@@ -2,7 +2,10 @@
   "files": [],
   "compilerOptions": {
     "baseUrl": ".",
-    "paths": { "@renderer/*": ["src/renderer/src/*"] }
+    "paths": {
+      "@renderer/*": ["src/renderer/src/*"],
+      "@shared/*": ["src/shared/*"]
+    }
   },
   "references": [
     { "path": "./tsconfig.node.json" },

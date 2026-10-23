@@ -194,6 +194,17 @@ UI 回填规则：
 | --- | --- | --- | --- |
 | `vadu:app:getSecretStorage` | invoke | — | `{ available: boolean; backend?: string; plaintext: boolean }` |
 | `vadu:app:openExternal` | invoke | `{ url: string }` | `void` |
+| `vadu:app:getHotkey` | invoke | — | `HotkeyState` |
+| `vadu:app:setHotkey` | invoke | `{ accelerator: string \| null }` | `HotkeyState` |
+| `vadu:app:setHotkeySuspended` | invoke | `{ suspended: boolean }` | `null` |
+
+`HotkeyState`：
+
+```ts
+export type HotkeyState = { accelerator: string | null; registered: boolean };
+```
+
+`accelerator` 用 Electron accelerator 语法（如 `CommandOrControl+Shift+T`），`registered: false` 表示注册失败（组合被系统或其他应用占用）。`AppSettings.hotkey` 存的就是这同一个 accelerator 字符串（见 `src/shared/hotkey.ts`）。录制期间主进程会 suspend 全局注册（`setHotkeySuspended(true)`），避免录到的组合立即触发唤起，录制结束恢复并换绑。
 
 `openExternal` 只允许 `https:` 与 `http:`，其它协议（`file:`、自定义 scheme）直接拒绝。不要把这个能力暴露成 `shell.openExternal` 的直通。
 

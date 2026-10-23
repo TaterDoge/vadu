@@ -127,4 +127,28 @@
   html {
     @apply font-sans;
   }
+  /* 主题切换用 View Transition 做 clip-path 揭示，默认交叉淡入会抢掉效果 */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    mix-blend-mode: normal;
+    animation: none;
+  }
+  /* 只在 AnimatedThemeToggler 切换期间生效，不影响其它 view transition */
+  html[data-magicui-theme-vt="active"]::view-transition-group(root) {
+    animation-duration: var(--magicui-theme-toggle-vt-duration);
+  }
+  /* Firefox 在 ready 前会画出未裁剪的新主题，先把收拢态钉住 */
+  html[data-magicui-theme-vt="active"]::view-transition-new(root) {
+    clip-path: var(--magicui-theme-vt-clip-from);
+  }
+}
+
+@layer utilities {
+  /* 无边框窗口靠它拖动；子元素需要可点击时再加 .no-drag */
+  .drag-region {
+    -webkit-app-region: drag;
+  }
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
 }

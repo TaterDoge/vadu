@@ -164,8 +164,14 @@ export type Profile = {
 export type AppSettings = {
   defaultProfileId?: string;
   hotkey: string;          // 全局快捷键，如 "CommandOrControl+Shift+T"
+  inAppHotkeys: {
+    // 局内快捷键：窗口聚焦时生效，渲染层用 TanStack Hotkeys 自行监听，不经 globalShortcut
+    openSettings: string | null; // 浮窗内打开设置，默认 "CommandOrControl+,"
+  };
   theme: "system" | "light" | "dark";
   historyLimit: number;    // 默认 50
+  /** 启动时是否弹出主窗，默认 false（静默驻留托盘，从托盘/Dock 进设置） */
+  showMainWindowOnStartup: boolean;
   /** 全局术语表，M3 实现。渲染层不按请求传术语，core 统一注入 */
   glossary: { from: string; to: string }[];
 };
@@ -197,6 +203,14 @@ UI 回填规则：
 | `vadu:app:getHotkey` | invoke | — | `HotkeyState` |
 | `vadu:app:setHotkey` | invoke | `{ accelerator: string \| null }` | `HotkeyState` |
 | `vadu:app:setHotkeySuspended` | invoke | `{ suspended: boolean }` | `null` |
+| `vadu:app:toggleQuickWindow` | invoke | — | `null` |
+| `vadu:app:setQuickWindowPinned` | invoke | `{ pinned: boolean }` | `null` |
+| `vadu:app:getQuickWindowPinned` | invoke | — | `boolean` |
+| `vadu:app:showSettings` | invoke | — | `null` |
+| `vadu:app:getInAppHotkey` | invoke | — | `InAppHotkeyState` |
+| `vadu:app:setInAppHotkey` | invoke | `{ action: "openSettings"; accelerator: string \| null }` | `InAppHotkeyState` |
+| `vadu:app:getShowMainWindowOnStartup` | invoke | — | `boolean` |
+| `vadu:app:setShowMainWindowOnStartup` | invoke | `{ enabled: boolean }` | `boolean` |
 
 `HotkeyState`：
 
@@ -207,6 +221,16 @@ export type HotkeyState = { accelerator: string | null; registered: boolean };
 `accelerator` 用 Electron accelerator 语法（如 `CommandOrControl+Shift+T`），`registered: false` 表示注册失败（组合被系统或其他应用占用）。`AppSettings.hotkey` 存的就是这同一个 accelerator 字符串（见 `src/shared/hotkey.ts`）。录制期间主进程会 suspend 全局注册（`setHotkeySuspended(true)`），避免录到的组合立即触发唤起，录制结束恢复并换绑。
 
 `openExternal` 只允许 `https:` 与 `http:`，其它协议（`file:`、自定义 scheme）直接拒绝。不要把这个能力暴露成 `shell.openExternal` 的直通。
+
+`toggleQuickWindow` 显示/收起翻译浮窗，全局热键与渲染层（Esc 收起）共用同一入口。翻译窗与主窗共用 `index.html`，以 `#/quick` hash 区分根组件，由 `src/main/windows.ts` 管理窗口生命周期。
+
+`setQuickWindowPinned` 切换浮窗「图钉」状态：固定中失焦不收起，并抬到 `screen-saver` 置顶层级；取消固定恢复默认置顶与失焦收起。状态仅存主进程内存（会话级），不持久化到 `AppSettings`。
+
+`getQuickWindowPinned` 回读上面这个主进程内存状态。渲染层 `pinned` 只是本地 `useState`，渲染层重载（HMR / `Ctrl+R`）会把它重置为 `false`，而主进程仍固定中；浮窗挂载时必须回读，否则图标与实际置顶层级错位，用户点一下会以为「没效果」（实际是方向反了）。
+
+`showSettings` 显示并聚焦设置窗口（主窗），浮窗内快捷键打开设置走这里，不复用 `toggleMainWindow`（避免设置窗已聚焦时被反向隐藏）。
+
+**局内快捷键**（`getInAppHotkey` / `setInAppHotkey`）：与全局热键相对，只在窗口聚焦时生效。存储在 `AppSettings.inAppHotkeys`（同一 Electron accelerator 语法），但**不经 `globalShortcut`**——渲染层用 TanStack Hotkeys（`@tanstack/react-hotkeys`）自行监听，主进程只负责校验与持久化。绑定值在渲染层转成 TanStack chord（`CommandOrControl` → `Mod`）；TanStack 不认的组合退化为「未绑定」。浮窗只藏不销毁，改绑后靠重新聚焦时重拉 `getInAppHotkey` 生效。
 
 ## 4. preload 形状
 

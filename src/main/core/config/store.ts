@@ -19,6 +19,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   glossary: [],
   historyLimit: 50,
   hotkey: "CommandOrControl+Shift+T",
+  inAppHotkeys: { openSettings: "CommandOrControl+," },
+  showMainWindowOnStartup: false,
   theme: "system",
 };
 
@@ -33,6 +35,7 @@ function legacyPath(): string {
 
 function toSettings(value: unknown): AppSettings {
   const partial = (value ?? {}) as Partial<AppSettings>;
+  const inApp = partial.inAppHotkeys;
   return {
     ...DEFAULT_SETTINGS,
     ...partial,
@@ -40,6 +43,19 @@ function toSettings(value: unknown): AppSettings {
       typeof partial.hotkey === "string"
         ? partial.hotkey
         : DEFAULT_SETTINGS.hotkey,
+    // 旧配置没有该字段；形状不对直接回默认，别让坏值混进运行时
+    inAppHotkeys: {
+      openSettings:
+        inApp &&
+        (typeof inApp.openSettings === "string" || inApp.openSettings === null)
+          ? inApp.openSettings
+          : DEFAULT_SETTINGS.inAppHotkeys.openSettings,
+    },
+    // 同上：旧配置缺字段时按默认走静默启动，坏值也不混进运行时
+    showMainWindowOnStartup:
+      typeof partial.showMainWindowOnStartup === "boolean"
+        ? partial.showMainWindowOnStartup
+        : DEFAULT_SETTINGS.showMainWindowOnStartup,
   };
 }
 

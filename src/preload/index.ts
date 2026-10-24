@@ -4,6 +4,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import {
   type HotkeyState,
   IPC,
+  type InAppHotkeyState,
   type IpcResult,
   type VaduApi,
 } from "../shared/ipc";
@@ -12,11 +13,34 @@ import {
 const api = {};
 
 const vadu: VaduApi = {
+  app: {
+    getQuickWindowPinned: (): Promise<IpcResult<boolean>> =>
+      ipcRenderer.invoke(IPC.getQuickWindowPinned),
+    getShowMainWindowOnStartup: (): Promise<IpcResult<boolean>> =>
+      ipcRenderer.invoke(IPC.getShowMainWindowOnStartup),
+    setQuickWindowPinned: (pinned: boolean): Promise<IpcResult<boolean>> =>
+      ipcRenderer.invoke(IPC.setQuickWindowPinned, { pinned }),
+    setShowMainWindowOnStartup: (
+      enabled: boolean
+    ): Promise<IpcResult<boolean>> =>
+      ipcRenderer.invoke(IPC.setShowMainWindowOnStartup, { enabled }),
+    showSettings: (): Promise<IpcResult<null>> =>
+      ipcRenderer.invoke(IPC.showSettings),
+    toggleQuickWindow: (): Promise<IpcResult<null>> =>
+      ipcRenderer.invoke(IPC.toggleQuickWindow),
+  },
   hotkey: {
     get: (): Promise<IpcResult<HotkeyState>> =>
       ipcRenderer.invoke(IPC.getHotkey),
+    getInApp: (): Promise<IpcResult<InAppHotkeyState>> =>
+      ipcRenderer.invoke(IPC.getInAppHotkey),
     set: (accelerator: string | null): Promise<IpcResult<HotkeyState>> =>
       ipcRenderer.invoke(IPC.setHotkey, { accelerator }),
+    setInApp: (
+      action: "openSettings",
+      accelerator: string | null
+    ): Promise<IpcResult<InAppHotkeyState>> =>
+      ipcRenderer.invoke(IPC.setInAppHotkey, { accelerator, action }),
     suspend: (suspended: boolean): Promise<IpcResult<null>> =>
       ipcRenderer.invoke(IPC.setHotkeySuspended, { suspended }),
   },

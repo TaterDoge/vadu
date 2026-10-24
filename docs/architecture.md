@@ -222,7 +222,8 @@ app.whenReady
   → core/plugin/loader.discover()     扫描两个插件根目录，校验 manifest
   → core/plugin/loader.loadAll()      逐个 import，失败隔离
   → core/plugin/registry.ready()
-  → createWindow() + createTray()
+  → createTray()
+  → settings.showMainWindowOnStartup ? createWindow() : 只驻留托盘
   → 渲染层 invoke vadu:plugins:list
 ```
 
@@ -313,6 +314,7 @@ function sanitize(meta: Record<string, unknown>): Record<string, unknown> {
 | ADR-007 | 插件 `translate()` 返回 `AsyncIterable<string>`，只吐增量文本 | 最窄契约：非流式厂商 yield 一次即可，宿主不需要区分两种模式 | 暂时拿不到 token 用量与结构化元信息；需要时再扩契约并升 `apiVersion` |
 | ADR-008 | 配置 schema 用**可序列化的 JSON 子集**，不用 zod | 插件是纯 JS 目录，配置 UI 必须从数据生成；zod 只能存在于 TS 构建期，无法跨进程传给渲染层，也无法描述第三方插件 | 手写约 80 行校验器（只支持 7 个约束）+ 单元测试；表达能力有限，复杂交互靠 `x-widget` 扩展 |
 | ADR-009 | 取消是"尽力而为"，不回滚已显示的译文 | 事务式回滚需要缓存整个流并重放，用户看到的闪烁比"半句译文 + 已取消标记"更差 | 用户需要在 UI 上看到"已取消"状态，不能静默停住 |
+| ADR-010 | 局内快捷键由渲染层用 TanStack Hotkeys（keydown）绑定，不经主进程 `globalShortcut`；主进程只校验与持久化 `AppSettings.inAppHotkeys` | 全局热键是 OS 级稀缺资源且会吞键；窗口聚焦时才生效的组合键犯不着占用系统层 | 浮窗失焦即失效；与全局热键同组合时全局优先；改绑靠重新聚焦重拉，不广播 |
 
 ## 8. 明确不做
 

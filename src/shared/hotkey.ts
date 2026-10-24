@@ -37,18 +37,44 @@ const CODE_TO_KEY: Record<string, string> = {
   ArrowLeft: "Left",
   ArrowRight: "Right",
   ArrowUp: "Up",
+  Backquote: "`",
+  Backslash: "\\",
   Backspace: "Backspace",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Comma: ",",
   Delete: "Delete",
   End: "End",
   Enter: "Return",
+  Equal: "=",
   Escape: "Escape",
   Home: "Home",
   Insert: "Insert",
+  Minus: "-",
   PageDown: "PageDown",
   PageUp: "PageUp",
+  Period: ".",
+  Quote: "'",
+  Semicolon: ";",
+  Slash: "/",
   Space: "Space",
   Tab: "Tab",
 };
+
+/** Electron accelerator 接受单个标点键（如 ⌘,），录入与校验都要认得它们 */
+const PUNCTUATION_MAIN_KEYS = new Set([
+  ",",
+  ".",
+  "/",
+  ";",
+  "'",
+  "[",
+  "]",
+  "\\",
+  "-",
+  "=",
+  "`",
+]);
 
 const KEY_CODE_RE = /^Key[A-Z]$/;
 const DIGIT_CODE_RE = /^Digit[0-9]$/;
@@ -74,8 +100,14 @@ function isSupportedMainKey(key: string): boolean {
     LETTER_KEY_RE.test(key) ||
     DIGIT_KEY_RE.test(key) ||
     FUNCTION_KEY_RE.test(key) ||
-    SPECIAL_KEYS.has(key)
+    SPECIAL_KEYS.has(key) ||
+    PUNCTUATION_MAIN_KEYS.has(key)
   );
+}
+
+/** 供渲染层把 accelerator 拆成修饰符与主键时复用，别再抄一份修饰符名单 */
+export function isAcceleratorModifier(token: string): boolean {
+  return MODIFIERS.has(token);
 }
 
 export function acceleratorFromEvent(

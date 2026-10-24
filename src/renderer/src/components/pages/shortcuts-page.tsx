@@ -12,8 +12,14 @@ import {
 import { Kbd, KbdGroup } from "@renderer/components/ui/kbd";
 import { IS_MAC } from "@renderer/lib/platform";
 import { acceleratorFromEvent, formatAccelerator } from "@shared/hotkey";
-import type { HotkeyState } from "@shared/ipc";
-import { AlertCircleIcon, KeyboardIcon, Trash2Icon } from "lucide-react";
+import type { HotkeyState, InAppHotkeyState } from "@shared/ipc";
+import {
+  AlertCircleIcon,
+  KeyboardIcon,
+  type LucideIcon,
+  SettingsIcon,
+  Trash2Icon,
+} from "lucide-react";
 
 function AcceleratorKeys({
   accelerator,
@@ -35,43 +41,16 @@ function AcceleratorKeys({
   );
 }
 
-function ShortcutsPage(): ReactNode {
-  const [state, setState] = useState<HotkeyState | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [hint, setHint] = useState<string | null>(null);
+/** 录制一次组合键；Esc 取消，录到的合法 accelerator 经 onCapture 交给调用方保存 */
+function useHotkeyRecorder(onCapture: (accelerator: string) => void): {
+  hint: string | null;
+  recording: boolean;
+  start: () => void;
+} {
   const [recording, setRecording] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
 
-  const load = useCallback(async (): Promise<void> => {
-    const result = await window.vadu.hotkey.get();
-    if (result.ok) {
-      setState(result.data);
-      return;
-    }
-    setError(result.error.message ?? result.error.code);
-  }, []);
-
-  useEffect(() => {
-    load().catch((reason) => console.error(reason));
-  }, [load]);
-
-  const applyAccelerator = useCallback(
-    async (accelerator: string | null): Promise<void> => {
-      setHint(null);
-      setError(null);
-      const result = await window.vadu.hotkey.set(accelerator);
-      if (!result.ok) {
-        setError(result.error.message ?? result.error.code);
-        return;
-      }
-      setState(result.data);
-      if (accelerator !== null && !result.data.registered) {
-        setHint("该组合已被系统或其他应用占用，请换一个");
-      }
-    },
-    []
-  );
-
-  const stopRecording = useCallback((): void => {
+  const stop = useCallback((): void => {
     setRecording(false);
     window.vadu.hotkey.suspend(false).catch((reason) => console.error(reason));
   }, []);
@@ -91,23 +70,23 @@ function ShortcutsPage(): ReactNode {
       }
       if (event.key === "Escape") {
         settled = true;
-        stopRecording();
+        stop();
         return;
       }
       const accelerator = acceleratorFromEvent(event, IS_MAC);
       if (accelerator === null) {
         setHint(
-          "需要包含 ⌘/Ctrl/Alt 等修饰键，且主键须是字母、数字、F1–F24 或方向键"
+          "需要包含 ⌘/Ctrl/Alt 等修饰键，且主键须是字母、数字、F1–F24、方向键或标点键"
         );
         return;
       }
       settled = true;
-      stopRecording();
-      applyAccelerator(accelerator).catch((reason) => console.error(reason));
+      stop();
+      onCapture(accelerator);
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [recording, stopRecording, applyAccelerator]);
+  }, [recording, stop, onCapture]);
 
   // 录制中途切走分区会让 suspend 永远不恢复，整个应用再也唤不起来；
   // 未录制时调用是空操作，所以卸载时无条件恢复
@@ -120,47 +99,64 @@ function ShortcutsPage(): ReactNode {
     []
   );
 
-  const startRecording = (): void => {
+  const start = useCallback((): void => {
     setHint(null);
-    setError(null);
     setRecording(true);
     window.vadu.hotkey.suspend(true).catch((reason) => console.error(reason));
-  };
+  }, []);
 
+  return { hint, recording, start };
+}
+
+function HotkeyItem({
+  accelerator,
+  description,
+  disabled,
+  icon: Icon,
+  onCapture,
+  onClear,
+  title,
+}: {
+  accelerator: string | null;
+  description: string;
+  disabled: boolean;
+  icon: LucideIcon;
+  onCapture: (accelerator: string) => void;
+  onClear: () => void;
+  title: string;
+}): ReactNode {
+  const { hint, recording, start } = useHotkeyRecorder(onCapture);
+  const displayDescription = recording
+    ? "正在录制，按下组合键（Esc 取消）"
+    : description;
   return (
-    <div className="flex flex-col gap-4">
+    <>
       <Item
         className={recording ? "border-ring ring-3 ring-ring/50" : undefined}
         size="default"
         variant="outline"
       >
         <ItemMedia variant="icon">
-          <KeyboardIcon />
+          <Icon />
         </ItemMedia>
         <ItemContent>
-          <ItemTitle>显示 / 隐藏窗口</ItemTitle>
-          <ItemDescription>
-            {recording
-              ? "正在录制，按下组合键（Esc 取消）"
-              : "按一次唤起并聚焦窗口，再按一次隐藏到后台"}
-          </ItemDescription>
+          <ItemTitle>{title}</ItemTitle>
+          <ItemDescription>{displayDescription}</ItemDescription>
         </ItemContent>
         <ItemActions>
-          <AcceleratorKeys accelerator={state?.accelerator ?? null} />
+          <AcceleratorKeys accelerator={accelerator} />
           <Button
-            disabled={state === null || recording}
-            onClick={startRecording}
+            disabled={disabled || recording}
+            onClick={start}
             size="sm"
             variant={recording ? "secondary" : "outline"}
           >
             {recording ? "录制中…" : "录制"}
           </Button>
           <Button
-            aria-label="清除快捷键"
-            disabled={recording || !state?.accelerator}
-            onClick={() => {
-              applyAccelerator(null).catch((reason) => console.error(reason));
-            }}
+            aria-label={`清除「${title}」快捷键`}
+            disabled={disabled || recording || !accelerator}
+            onClick={onClear}
             size="icon-sm"
             variant="ghost"
           >
@@ -168,6 +164,96 @@ function ShortcutsPage(): ReactNode {
           </Button>
         </ItemActions>
       </Item>
+
+      {hint ? (
+        <Alert>
+          <AlertCircleIcon />
+          <AlertDescription>{hint}</AlertDescription>
+        </Alert>
+      ) : null}
+    </>
+  );
+}
+
+function ShortcutsPage(): ReactNode {
+  const [state, setState] = useState<HotkeyState | null>(null);
+  const [inApp, setInApp] = useState<InAppHotkeyState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
+
+  useEffect(() => {
+    Promise.all([window.vadu.hotkey.get(), window.vadu.hotkey.getInApp()])
+      .then(([globalResult, inAppResult]) => {
+        if (globalResult.ok) {
+          setState(globalResult.data);
+        } else {
+          setError(globalResult.error.message ?? globalResult.error.code);
+        }
+        if (inAppResult.ok) {
+          setInApp(inAppResult.data);
+        } else {
+          setError(inAppResult.error.message ?? inAppResult.error.code);
+        }
+      })
+      .catch((reason) => console.error(reason));
+  }, []);
+
+  const applyGlobal = useCallback((accelerator: string | null): void => {
+    setHint(null);
+    setError(null);
+    window.vadu.hotkey
+      .set(accelerator)
+      .then((result) => {
+        if (!result.ok) {
+          setError(result.error.message ?? result.error.code);
+          return;
+        }
+        setState(result.data);
+        if (accelerator !== null && !result.data.registered) {
+          setHint("该组合已被系统或其他应用占用，请换一个");
+        }
+      })
+      .catch((reason) => console.error(reason));
+  }, []);
+
+  const applyInApp = useCallback((accelerator: string | null): void => {
+    setHint(null);
+    setError(null);
+    window.vadu.hotkey
+      .setInApp("openSettings", accelerator)
+      .then((result) => {
+        if (result.ok) {
+          setInApp(result.data);
+          return;
+        }
+        setError(result.error.message ?? result.error.code);
+      })
+      .catch((reason) => console.error(reason));
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h2 className="font-medium text-sm">全局快捷键</h2>
+      <HotkeyItem
+        accelerator={state?.accelerator ?? null}
+        description="按一次唤起并聚焦翻译窗口，再按一次隐藏到后台；应用设置窗口从托盘打开"
+        disabled={state === null}
+        icon={KeyboardIcon}
+        onCapture={applyGlobal}
+        onClear={() => applyGlobal(null)}
+        title="唤起 / 隐藏翻译浮窗"
+      />
+
+      <h2 className="font-medium text-sm">局内快捷键</h2>
+      <HotkeyItem
+        accelerator={inApp?.openSettings ?? null}
+        description="在翻译浮窗内打开设置页面，仅浮窗聚焦时生效（默认 ⌘,）"
+        disabled={inApp === null}
+        icon={SettingsIcon}
+        onCapture={applyInApp}
+        onClear={() => applyInApp(null)}
+        title="浮窗内打开设置"
+      />
 
       {hint ? (
         <Alert>

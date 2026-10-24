@@ -63,13 +63,13 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     items: [
       {
-        description: "主题、默认 profile、历史条数",
+        description: "启动行为、主题、默认 profile、历史条数",
         icon: SettingsIcon,
         id: "general",
         label: "通用",
       },
       {
-        description: "唤起翻译的全局快捷键及其冲突提示",
+        description: "全局与局内快捷键的录制、清除与冲突提示",
         icon: KeyboardIcon,
         id: "shortcuts",
         label: "快捷键",

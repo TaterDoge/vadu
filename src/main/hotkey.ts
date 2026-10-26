@@ -1,7 +1,12 @@
 import { globalShortcut } from "electron";
 
 import { isSupportedAccelerator } from "../shared/hotkey";
-import type { HotkeyState, InAppHotkeyState } from "../shared/ipc";
+import {
+  type HotkeyState,
+  IN_APP_HOTKEY_ACTIONS,
+  type InAppHotkeyAction,
+  type InAppHotkeyState,
+} from "../shared/ipc";
 import { readSettings, saveSettings } from "./core/config/store";
 
 let onTrigger: () => void = () => undefined;
@@ -49,11 +54,16 @@ export function getHotkeyState(): HotkeyState {
   return state;
 }
 
+// 手改配置文件的坏值让它退化为「未绑定」，而不是把非法组合交给渲染层
+function validAccelerator(value: string | null): string | null {
+  return value && isSupportedAccelerator(value) ? value : null;
+}
+
 export function getInAppHotkeyState(): InAppHotkeyState {
-  const stored = readSettings().inAppHotkeys.openSettings;
-  // 手改配置文件的坏值让它退化为「未绑定」，而不是把非法组合交给渲染层
+  const stored = readSettings().inAppHotkeys;
   return {
-    openSettings: stored && isSupportedAccelerator(stored) ? stored : null,
+    openSettings: validAccelerator(stored.openSettings),
+    togglePin: validAccelerator(stored.togglePin),
   };
 }
 
@@ -61,7 +71,7 @@ export function applyInAppHotkey(
   action: string,
   accelerator: string | null
 ): InAppHotkeyState {
-  if (action !== "openSettings") {
+  if (!IN_APP_HOTKEY_ACTIONS.includes(action as InAppHotkeyAction)) {
     throw new Error(`未知的局内快捷键: ${action}`);
   }
   if (accelerator !== null && !isSupportedAccelerator(accelerator)) {
@@ -70,9 +80,12 @@ export function applyInAppHotkey(
   const settings = readSettings();
   saveSettings({
     ...settings,
-    inAppHotkeys: { ...settings.inAppHotkeys, openSettings: accelerator },
+    inAppHotkeys: {
+      ...settings.inAppHotkeys,
+      [action as InAppHotkeyAction]: accelerator,
+    },
   });
-  return { openSettings: accelerator };
+  return getInAppHotkeyState();
 }
 
 export function setHotkeySuspended(suspended: boolean): void {

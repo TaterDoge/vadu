@@ -22,7 +22,6 @@ function QuickAppInner(): JSX.Element {
   const [pinned, setPinned] = useState(false);
   const inputRef = useFocusOnShow<HTMLTextAreaElement>();
   useEscapeToHide();
-  useHotkeys(useInAppHotkeys());
 
   // 渲染层重载（HMR / Ctrl+R）会把本地状态清零，但主进程仍固定中；
   // 主进程才是唯一事实来源：读回来再渲染图标，否则图标与置顶层级错位，看起来像“没生效”
@@ -48,6 +47,13 @@ function QuickAppInner(): JSX.Element {
       })
       .catch((reason) => console.error(reason));
   };
+
+  useHotkeys(
+    useInAppHotkeys({
+      openSettings: () => window.vadu.app.showSettings().catch(console.error),
+      togglePin,
+    })
+  );
 
   return (
     <div className="flex h-svh flex-col bg-background text-foreground">

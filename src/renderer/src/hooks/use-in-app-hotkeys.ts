@@ -1,20 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toChord } from "@renderer/lib/hotkey";
-import type { InAppHotkeyState } from "@shared/ipc";
+import type { InAppHotkeyAction, InAppHotkeyState } from "@shared/ipc";
 import type { UseHotkeyDefinition } from "@tanstack/react-hotkeys";
 
-/** 局内动作的实现；新增动作时在这里补一行并与 `InAppHotkeyAction` 对齐 */
-const ACTIONS = {
-  openSettings: (): void => {
-    window.vadu.app.showSettings().catch((reason) => console.error(reason));
-  },
-} satisfies Record<keyof InAppHotkeyState, () => void>;
+const ACTIONS: InAppHotkeyAction[] = ["openSettings", "togglePin"];
 
 /**
  * 拉取局内快捷键绑定，转成可直接交给 `useHotkeys` 的定义。
  * 绑定非法（手改配置或旧版本写入）的动作不注册，等同未绑定。
+ * 入参每次渲染都是新闭包，所以不做 memo，回调始终用最新的动作实现。
  */
-export function useInAppHotkeys(): UseHotkeyDefinition[] {
+export function useInAppHotkeys(
+  actions: Record<InAppHotkeyAction, () => void>
+): UseHotkeyDefinition[] {
   const [bindings, setBindings] = useState<InAppHotkeyState | null>(null);
 
   useEffect(() => {
@@ -36,8 +34,11 @@ export function useInAppHotkeys(): UseHotkeyDefinition[] {
     };
   }, []);
 
-  return useMemo(() => {
-    const chord = toChord(bindings?.openSettings ?? null);
-    return chord ? [{ callback: ACTIONS.openSettings, hotkey: chord }] : [];
-  }, [bindings]);
+  if (!bindings) {
+    return [];
+  }
+  return ACTIONS.flatMap((action) => {
+    const chord = toChord(bindings[action]);
+    return chord ? [{ callback: actions[action], hotkey: chord }] : [];
+  });
 }

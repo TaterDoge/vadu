@@ -21,16 +21,21 @@ export type IpcResult<T> =
 
 export type HotkeyState = { accelerator: string | null; registered: boolean };
 
-/** 局内快捷键的绑定点；目前只有浮窗内打开设置 */
-export type InAppHotkeyAction = "openSettings";
+/** 局内快捷键的绑定点：浮窗内打开设置、切换窗口固定 */
+export const IN_APP_HOTKEY_ACTIONS = ["openSettings", "togglePin"] as const;
 
-export type InAppHotkeyState = { openSettings: string | null };
+export type InAppHotkeyAction = (typeof IN_APP_HOTKEY_ACTIONS)[number];
+
+export type InAppHotkeyState = {
+  openSettings: string | null;
+  togglePin: string | null;
+};
 
 export type AppSettings = {
   defaultProfileId?: string;
   hotkey: string;
   /** 局内快捷键（窗口聚焦时生效，渲染层自行监听），不经 globalShortcut */
-  inAppHotkeys: { openSettings: string | null };
+  inAppHotkeys: InAppHotkeyState;
   /** 启动时是否弹出主窗；关掉后只能从托盘 / Dock 唤起 */
   showMainWindowOnStartup: boolean;
   theme: "system" | "light" | "dark";

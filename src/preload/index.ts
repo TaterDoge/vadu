@@ -4,6 +4,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import {
   type HotkeyState,
   IPC,
+  type InAppHotkeyAction,
   type InAppHotkeyState,
   type IpcResult,
   type VaduApi,
@@ -37,7 +38,7 @@ const vadu: VaduApi = {
     set: (accelerator: string | null): Promise<IpcResult<HotkeyState>> =>
       ipcRenderer.invoke(IPC.setHotkey, { accelerator }),
     setInApp: (
-      action: "openSettings",
+      action: InAppHotkeyAction,
       accelerator: string | null
     ): Promise<IpcResult<InAppHotkeyState>> =>
       ipcRenderer.invoke(IPC.setInAppHotkey, { accelerator, action }),

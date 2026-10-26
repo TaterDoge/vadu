@@ -167,6 +167,7 @@ export type AppSettings = {
   inAppHotkeys: {
     // 局内快捷键：窗口聚焦时生效，渲染层用 TanStack Hotkeys 自行监听，不经 globalShortcut
     openSettings: string | null; // 浮窗内打开设置，默认 "CommandOrControl+,"
+    togglePin: string | null; // 浮窗内切换固定窗口，默认 "CommandOrControl+P"
   };
   theme: "system" | "light" | "dark";
   historyLimit: number;    // 默认 50
@@ -208,7 +209,7 @@ UI 回填规则：
 | `vadu:app:getQuickWindowPinned` | invoke | — | `boolean` |
 | `vadu:app:showSettings` | invoke | — | `null` |
 | `vadu:app:getInAppHotkey` | invoke | — | `InAppHotkeyState` |
-| `vadu:app:setInAppHotkey` | invoke | `{ action: "openSettings"; accelerator: string \| null }` | `InAppHotkeyState` |
+| `vadu:app:setInAppHotkey` | invoke | `{ action: "openSettings" \| "togglePin"; accelerator: string \| null }` | `InAppHotkeyState` |
 | `vadu:app:getShowMainWindowOnStartup` | invoke | — | `boolean` |
 | `vadu:app:setShowMainWindowOnStartup` | invoke | `{ enabled: boolean }` | `boolean` |
 
@@ -230,7 +231,7 @@ export type HotkeyState = { accelerator: string | null; registered: boolean };
 
 `showSettings` 显示并聚焦设置窗口（主窗），浮窗内快捷键打开设置走这里，不复用 `toggleMainWindow`（避免设置窗已聚焦时被反向隐藏）。
 
-**局内快捷键**（`getInAppHotkey` / `setInAppHotkey`）：与全局热键相对，只在窗口聚焦时生效。存储在 `AppSettings.inAppHotkeys`（同一 Electron accelerator 语法），但**不经 `globalShortcut`**——渲染层用 TanStack Hotkeys（`@tanstack/react-hotkeys`）自行监听，主进程只负责校验与持久化。绑定值在渲染层转成 TanStack chord（`CommandOrControl` → `Mod`）；TanStack 不认的组合退化为「未绑定」。浮窗只藏不销毁，改绑后靠重新聚焦时重拉 `getInAppHotkey` 生效。
+**局内快捷键**（`getInAppHotkey` / `setInAppHotkey`）：与全局热键相对，只在窗口聚焦时生效。存储在 `AppSettings.inAppHotkeys`（同一 Electron accelerator 语法），但**不经 `globalShortcut`**——渲染层用 TanStack Hotkeys（`@tanstack/react-hotkeys`）自行监听，主进程只负责校验与持久化。当前绑定点：`openSettings`（默认 `CommandOrControl+,`）与 `togglePin`（默认 `CommandOrControl+P`，等价于点图钉按钮，走 `setQuickWindowPinned`）。绑定值在渲染层转成 TanStack chord（`CommandOrControl` → `Mod`）；TanStack 不认的组合退化为「未绑定」。浮窗只藏不销毁，改绑后靠重新聚焦时重拉 `getInAppHotkey` 生效。
 
 ## 4. preload 形状
 

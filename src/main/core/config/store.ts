@@ -9,7 +9,7 @@ import { join } from "node:path";
 
 import { app } from "electron";
 
-import type { AppSettings } from "../../../shared/ipc";
+import type { AppSettings, InAppHotkeyState } from "../../../shared/ipc";
 
 type ConfigFile = { schemaVersion: 1; settings: AppSettings };
 
@@ -19,7 +19,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   glossary: [],
   historyLimit: 50,
   hotkey: "CommandOrControl+Shift+T",
-  inAppHotkeys: { openSettings: "CommandOrControl+," },
+  inAppHotkeys: {
+    openSettings: "CommandOrControl+,",
+    togglePin: "CommandOrControl+P",
+  },
   showMainWindowOnStartup: false,
   theme: "system",
 };
@@ -31,6 +34,16 @@ function configPath(): string {
 // M1 之前只存过 hotkey 的旧文件，读一次就转成 config.json，之后删掉避免双源
 function legacyPath(): string {
   return join(app.getPath("userData"), "settings.json");
+}
+
+function pickInApp(
+  source: Partial<InAppHotkeyState> | undefined,
+  key: keyof InAppHotkeyState
+): string | null {
+  const value = source?.[key];
+  return typeof value === "string" || value === null
+    ? value
+    : DEFAULT_SETTINGS.inAppHotkeys[key];
 }
 
 function toSettings(value: unknown): AppSettings {
@@ -45,11 +58,8 @@ function toSettings(value: unknown): AppSettings {
         : DEFAULT_SETTINGS.hotkey,
     // 旧配置没有该字段；形状不对直接回默认，别让坏值混进运行时
     inAppHotkeys: {
-      openSettings:
-        inApp &&
-        (typeof inApp.openSettings === "string" || inApp.openSettings === null)
-          ? inApp.openSettings
-          : DEFAULT_SETTINGS.inAppHotkeys.openSettings,
+      openSettings: pickInApp(inApp, "openSettings"),
+      togglePin: pickInApp(inApp, "togglePin"),
     },
     // 同上：旧配置缺字段时按默认走静默启动，坏值也不混进运行时
     showMainWindowOnStartup:

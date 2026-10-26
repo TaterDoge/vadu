@@ -12,11 +12,16 @@ import {
 import { Kbd, KbdGroup } from "@renderer/components/ui/kbd";
 import { IS_MAC } from "@renderer/lib/platform";
 import { acceleratorFromEvent, formatAccelerator } from "@shared/hotkey";
-import type { HotkeyState, InAppHotkeyState } from "@shared/ipc";
+import type {
+  HotkeyState,
+  InAppHotkeyAction,
+  InAppHotkeyState,
+} from "@shared/ipc";
 import {
   AlertCircleIcon,
   KeyboardIcon,
   type LucideIcon,
+  PinIcon,
   SettingsIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -216,20 +221,23 @@ function ShortcutsPage(): ReactNode {
       .catch((reason) => console.error(reason));
   }, []);
 
-  const applyInApp = useCallback((accelerator: string | null): void => {
-    setHint(null);
-    setError(null);
-    window.vadu.hotkey
-      .setInApp("openSettings", accelerator)
-      .then((result) => {
-        if (result.ok) {
-          setInApp(result.data);
-          return;
-        }
-        setError(result.error.message ?? result.error.code);
-      })
-      .catch((reason) => console.error(reason));
-  }, []);
+  const applyInApp = useCallback(
+    (action: InAppHotkeyAction, accelerator: string | null): void => {
+      setHint(null);
+      setError(null);
+      window.vadu.hotkey
+        .setInApp(action, accelerator)
+        .then((result) => {
+          if (result.ok) {
+            setInApp(result.data);
+            return;
+          }
+          setError(result.error.message ?? result.error.code);
+        })
+        .catch((reason) => console.error(reason));
+    },
+    []
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -250,9 +258,19 @@ function ShortcutsPage(): ReactNode {
         description="在翻译浮窗内打开设置页面，仅浮窗聚焦时生效（默认 ⌘,）"
         disabled={inApp === null}
         icon={SettingsIcon}
-        onCapture={applyInApp}
-        onClear={() => applyInApp(null)}
+        onCapture={(accelerator) => applyInApp("openSettings", accelerator)}
+        onClear={() => applyInApp("openSettings", null)}
         title="浮窗内打开设置"
+      />
+
+      <HotkeyItem
+        accelerator={inApp?.togglePin ?? null}
+        description="在翻译浮窗内切换图钉（固定窗口），仅浮窗聚焦时生效（默认 ⌘P）"
+        disabled={inApp === null}
+        icon={PinIcon}
+        onCapture={(accelerator) => applyInApp("togglePin", accelerator)}
+        onClear={() => applyInApp("togglePin", null)}
+        title="浮窗内切换固定窗口"
       />
 
       {hint ? (

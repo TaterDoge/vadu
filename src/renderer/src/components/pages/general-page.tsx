@@ -9,7 +9,7 @@ import {
   ItemTitle,
 } from "@renderer/components/ui/item";
 import { Switch } from "@renderer/components/ui/switch";
-import { AlertCircleIcon, MonitorIcon } from "lucide-react";
+import { ALERT_ICON } from "@renderer/lib/icons";
 
 function GeneralPage(): ReactNode {
   const [showOnStartup, setShowOnStartup] = useState<boolean | null>(null);
@@ -50,7 +50,7 @@ function GeneralPage(): ReactNode {
       <h2 className="font-medium text-sm">启动</h2>
       <Item variant="outline">
         <ItemMedia variant="icon">
-          <MonitorIcon />
+          <span aria-hidden="true" className="icon-[lucide--monitor] size-4" />
         </ItemMedia>
         <ItemContent>
           <ItemTitle>启动时显示主界面</ItemTitle>
@@ -70,8 +70,8 @@ function GeneralPage(): ReactNode {
       </Item>
 
       {error ? (
-        <Alert variant="destructive">
-          <AlertCircleIcon />
+        <Alert className="grid-cols-[auto_1fr] gap-x-2" variant="destructive">
+          <span aria-hidden="true" className={ALERT_ICON} />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}

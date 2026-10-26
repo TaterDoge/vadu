@@ -64,7 +64,11 @@ export function AppSidebar({
                       onClick={() => onSectionChange(item.id)}
                       tooltip={item.label}
                     >
-                      <item.icon />
+                      {/* Iconify 是空 span + mask，shadcn 的 [&_svg]:size-4 选不中，尺寸要自己写 */}
+                      <span
+                        aria-hidden="true"
+                        className={cn(item.icon, "size-4 shrink-0")}
+                      />
                       <span>{item.label}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

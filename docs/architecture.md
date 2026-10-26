@@ -150,6 +150,8 @@ src/
         └── pages/             # 各分区页面内容（一个分区一个文件）
 ```
 
+图标分两套：业务组件（`layout/`、`pages/`、`quick/`）用 Iconify 类名 `icon-[lucide--*]`，由 `@iconify/tailwind4` 在构建期把 SVG 内联成 CSS `data:` URI（运行时零网络、零 JS，受 `img-src data:` 约束）；`components/ui/` 是 shadcn 生成件，保持 `lucide-react` 不动。类名类型见 `lib/icons.ts`。
+
 插件目录在运行时有两个来源：
 
 - 内置：`out/main/plugins/<id>/`（随应用打包，只读）。

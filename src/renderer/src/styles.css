@@ -1,10 +1,15 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 @import "@fontsource-variable/jetbrains-mono";
 
 @custom-variant dark (&:is(.dark *));
+
+/* 图标在构建期从 @iconify-json/* 读，产物里只有被用到的那几个 svg 的 data URI，运行时零网络零 JS。
+   插件自带 width/height:1em，和 size-* 同层同 specificity：普通写法下 size-* 输出在后必胜，
+   但带变体前缀时图标规则会排到后面反压，那种情况改用 !size-* */
+@plugin "@iconify/tailwind4";
 
 @theme inline {
   --font-heading: var(--font-sans);
@@ -51,7 +56,10 @@
 }
 
 :root {
-  --font-ui: "Geist Variable", sans-serif;
+  --font-ui: "Geist Mono Variable", ui-monospace, monospace;
+  /* Geist Mono 只收了 ⇧，⌘⌥⌃ 没有字形；Arial/Menlo 也没有，最终靠 macOS 的 Lucida Grande 兑住。
+     显式写出来，避免依赖 Chromium 的兜底顺序（shadcn 文档站就是靠这个自然生效的） */
+  --font-key: "Lucida Grande", Menlo, monospace;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -125,6 +133,7 @@
 html[data-style="lyra"] {
   --radius: 0rem;
   --font-ui: "JetBrains Mono Variable", ui-monospace, monospace;
+  --font-key: "Lucida Grande", Menlo, monospace;
   --text-xs: 0.75rem;
   --text-xs--line-height: calc(1 / 0.75);
   --text-sm: 0.75rem;

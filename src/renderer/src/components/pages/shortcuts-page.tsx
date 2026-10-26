@@ -10,6 +10,8 @@ import {
   ItemTitle,
 } from "@renderer/components/ui/item";
 import { Kbd, KbdGroup } from "@renderer/components/ui/kbd";
+import type { IconClass } from "@renderer/lib/icons";
+import { ALERT_ICON } from "@renderer/lib/icons";
 import { IS_MAC } from "@renderer/lib/platform";
 import { acceleratorFromEvent, formatAccelerator } from "@shared/hotkey";
 import type {
@@ -17,14 +19,7 @@ import type {
   InAppHotkeyAction,
   InAppHotkeyState,
 } from "@shared/ipc";
-import {
-  AlertCircleIcon,
-  KeyboardIcon,
-  type LucideIcon,
-  PinIcon,
-  SettingsIcon,
-  Trash2Icon,
-} from "lucide-react";
+import { cn } from "cn";
 
 function AcceleratorKeys({
   accelerator,
@@ -117,7 +112,7 @@ function HotkeyItem({
   accelerator,
   description,
   disabled,
-  icon: Icon,
+  icon,
   onCapture,
   onClear,
   title,
@@ -125,7 +120,8 @@ function HotkeyItem({
   accelerator: string | null;
   description: string;
   disabled: boolean;
-  icon: LucideIcon;
+  /** Iconify 类名，构建期由 @iconify/tailwind4 内联成 data URI */
+  icon: IconClass;
   onCapture: (accelerator: string) => void;
   onClear: () => void;
   title: string;
@@ -142,7 +138,7 @@ function HotkeyItem({
         variant="outline"
       >
         <ItemMedia variant="icon">
-          <Icon />
+          <span aria-hidden="true" className={cn(icon, "size-4")} />
         </ItemMedia>
         <ItemContent>
           <ItemTitle>{title}</ItemTitle>
@@ -165,14 +161,17 @@ function HotkeyItem({
             size="icon-sm"
             variant="ghost"
           >
-            <Trash2Icon />
+            <span
+              aria-hidden="true"
+              className="icon-[lucide--trash-2] size-4"
+            />
           </Button>
         </ItemActions>
       </Item>
 
       {hint ? (
-        <Alert>
-          <AlertCircleIcon />
+        <Alert className="grid-cols-[auto_1fr] gap-x-2">
+          <span aria-hidden="true" className={ALERT_ICON} />
           <AlertDescription>{hint}</AlertDescription>
         </Alert>
       ) : null}
@@ -246,7 +245,7 @@ function ShortcutsPage(): ReactNode {
         accelerator={state?.accelerator ?? null}
         description="按一次唤起并聚焦翻译窗口，再按一次隐藏到后台；应用设置窗口从托盘打开"
         disabled={state === null}
-        icon={KeyboardIcon}
+        icon="icon-[lucide--keyboard]"
         onCapture={applyGlobal}
         onClear={() => applyGlobal(null)}
         title="唤起 / 隐藏翻译浮窗"
@@ -257,7 +256,7 @@ function ShortcutsPage(): ReactNode {
         accelerator={inApp?.openSettings ?? null}
         description="在翻译浮窗内打开设置页面，仅浮窗聚焦时生效（默认 ⌘,）"
         disabled={inApp === null}
-        icon={SettingsIcon}
+        icon="icon-[lucide--settings]"
         onCapture={(accelerator) => applyInApp("openSettings", accelerator)}
         onClear={() => applyInApp("openSettings", null)}
         title="浮窗内打开设置"
@@ -267,22 +266,22 @@ function ShortcutsPage(): ReactNode {
         accelerator={inApp?.togglePin ?? null}
         description="在翻译浮窗内切换图钉（固定窗口），仅浮窗聚焦时生效（默认 ⌘P）"
         disabled={inApp === null}
-        icon={PinIcon}
+        icon="icon-[lucide--pin]"
         onCapture={(accelerator) => applyInApp("togglePin", accelerator)}
         onClear={() => applyInApp("togglePin", null)}
         title="浮窗内切换固定窗口"
       />
 
       {hint ? (
-        <Alert>
-          <AlertCircleIcon />
+        <Alert className="grid-cols-[auto_1fr] gap-x-2">
+          <span aria-hidden="true" className={ALERT_ICON} />
           <AlertDescription>{hint}</AlertDescription>
         </Alert>
       ) : null}
 
       {error ? (
-        <Alert variant="destructive">
-          <AlertCircleIcon />
+        <Alert className="grid-cols-[auto_1fr] gap-x-2" variant="destructive">
+          <span aria-hidden="true" className={ALERT_ICON} />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}

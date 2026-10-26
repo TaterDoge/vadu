@@ -15,7 +15,6 @@ import {
 } from "@renderer/hooks/use-quick-window";
 import { ThemeProvider } from "@renderer/lib/theme";
 import { useHotkeys } from "@tanstack/react-hotkeys";
-import { EraserIcon, LayersIcon, PinIcon, PinOffIcon } from "lucide-react";
 
 function QuickAppInner(): JSX.Element {
   const [source, setSource] = useState("");
@@ -67,7 +66,14 @@ function QuickAppInner(): JSX.Element {
           title={pinned ? "取消固定窗口" : "固定窗口"}
           variant="ghost"
         >
-          {pinned ? <PinOffIcon /> : <PinIcon />}
+          {pinned ? (
+            <span
+              aria-hidden="true"
+              className="icon-[lucide--pin-off] size-4"
+            />
+          ) : (
+            <span aria-hidden="true" className="icon-[lucide--pin] size-4" />
+          )}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -81,7 +87,7 @@ function QuickAppInner(): JSX.Element {
               />
             }
           >
-            <LayersIcon />
+            <span aria-hidden="true" className="icon-[lucide--layers] size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-40">
             <DropdownMenuItem onClick={() => window.vadu.app.showSettings()}>
@@ -91,7 +97,10 @@ function QuickAppInner(): JSX.Element {
               disabled={source.length === 0}
               onClick={() => setSource("")}
             >
-              <EraserIcon />
+              <span
+                aria-hidden="true"
+                className="icon-[lucide--eraser] size-4"
+              />
               清空输入
             </DropdownMenuItem>
             <DropdownMenuSeparator />

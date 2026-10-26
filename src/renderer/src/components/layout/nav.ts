@@ -1,12 +1,4 @@
-import {
-  BlocksIcon,
-  BookTextIcon,
-  KeyboardIcon,
-  LanguagesIcon,
-  type LucideIcon,
-  ServerIcon,
-  SettingsIcon,
-} from "lucide-react";
+import type { IconClass } from "@renderer/lib/icons";
 
 export type SectionId =
   | "translate"
@@ -20,7 +12,8 @@ export type NavItem = {
   id: SectionId;
   label: string;
   description: string;
-  icon: LucideIcon;
+  /** Iconify 类名，构建期由 @iconify/tailwind4 内联成 data URI，运行时无请求 */
+  icon: IconClass;
 };
 
 export type NavGroup = { label: string; items: NavItem[] };
@@ -30,13 +23,13 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       {
         description: "输入原文、选择 profile、查看流式译文",
-        icon: LanguagesIcon,
+        icon: "icon-[lucide--languages]",
         id: "translate",
         label: "翻译面板",
       },
       {
         description: "全局术语条目，翻译前由 core 统一注入",
-        icon: BookTextIcon,
+        icon: "icon-[lucide--book-text]",
         id: "glossary",
         label: "术语表",
       },
@@ -47,13 +40,13 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       {
         description: "已安装插件的状态、权限与来源",
-        icon: BlocksIcon,
+        icon: "icon-[lucide--blocks]",
         id: "plugins",
         label: "插件",
       },
       {
         description: "profile 与其 endpoint、模型、密钥",
-        icon: ServerIcon,
+        icon: "icon-[lucide--server]",
         id: "providers",
         label: "服务商",
       },
@@ -64,13 +57,13 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       {
         description: "启动行为、主题、默认 profile、历史条数",
-        icon: SettingsIcon,
+        icon: "icon-[lucide--settings]",
         id: "general",
         label: "通用",
       },
       {
         description: "全局与局内快捷键的录制、清除与冲突提示",
-        icon: KeyboardIcon,
+        icon: "icon-[lucide--keyboard]",
         id: "shortcuts",
         label: "快捷键",
       },

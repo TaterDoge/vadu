@@ -8,7 +8,6 @@ import {
   DropdownMenuTrigger,
 } from "@renderer/components/ui/dropdown-menu";
 import { type StyleName, useStyle } from "@renderer/lib/style";
-import { FrameIcon, PaletteIcon } from "lucide-react";
 
 const STYLES: { value: StyleName; label: string }[] = [
   { label: "Nova · 圆角 Geist", value: "nova" },
@@ -30,7 +29,11 @@ export function StyleSwitcher(): React.ReactNode {
           />
         }
       >
-        {style === "lyra" ? <FrameIcon /> : <PaletteIcon />}
+        {style === "lyra" ? (
+          <span aria-hidden="true" className="icon-[lucide--frame] size-4" />
+        ) : (
+          <span aria-hidden="true" className="icon-[lucide--palette] size-4" />
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-40">
         <DropdownMenuRadioGroup
@@ -39,7 +42,11 @@ export function StyleSwitcher(): React.ReactNode {
         >
           <DropdownMenuLabel>组件风格</DropdownMenuLabel>
           {STYLES.map((item) => (
-            <DropdownMenuRadioItem key={item.value} value={item.value}>
+            <DropdownMenuRadioItem
+              className="text-nowrap"
+              key={item.value}
+              value={item.value}
+            >
               {item.label}
             </DropdownMenuRadioItem>
           ))}

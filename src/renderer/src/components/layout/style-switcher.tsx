@@ -35,7 +35,7 @@ export function StyleSwitcher(): React.ReactNode {
           <span aria-hidden="true" className="icon-[lucide--palette] size-4" />
         )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-40">
+      <DropdownMenuContent align="start" className="w-auto min-w-40">
         <DropdownMenuRadioGroup
           onValueChange={(value) => setStyle(value as StyleName)}
           value={style}

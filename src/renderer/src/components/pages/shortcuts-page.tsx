@@ -10,6 +10,7 @@ import {
   ItemTitle,
 } from "@renderer/components/ui/item";
 import { Kbd, KbdGroup } from "@renderer/components/ui/kbd";
+import { StaggerList } from "@renderer/components/ui/stagger-list";
 import type { IconClass } from "@renderer/lib/icons";
 import { ALERT_ICON } from "@renderer/lib/icons";
 import { IS_MAC } from "@renderer/lib/platform";
@@ -38,6 +39,21 @@ function AcceleratorKeys({
         </Kbd>
       ))}
     </KbdGroup>
+  );
+}
+
+/** 提示条列表项：文案长短不一，进入靠外层 StaggerList */
+function HintAlert({
+  children,
+  variant,
+}: {
+  children: ReactNode;
+  variant?: "default" | "destructive";
+}): ReactNode {
+  return (
+    <Alert className="grid-cols-[auto_1fr] gap-x-2" variant={variant}>
+      {children}
+    </Alert>
   );
 }
 
@@ -131,7 +147,7 @@ function HotkeyItem({
     ? "正在录制，按下组合键（Esc 取消）"
     : description;
   return (
-    <>
+    <div className="flex flex-col gap-4">
       <Item
         className={recording ? "border-ring ring-3 ring-ring/50" : undefined}
         size="default"
@@ -170,12 +186,12 @@ function HotkeyItem({
       </Item>
 
       {hint ? (
-        <Alert className="grid-cols-[auto_1fr] gap-x-2">
+        <HintAlert variant="default">
           <span aria-hidden="true" className={ALERT_ICON} />
           <AlertDescription>{hint}</AlertDescription>
-        </Alert>
+        </HintAlert>
       ) : null}
-    </>
+    </div>
   );
 }
 
@@ -239,52 +255,56 @@ function ShortcutsPage(): ReactNode {
   );
 
   return (
+    // StaggerList 不渲染外层容器（每项各包一层），间距必须留在外层 div 上
     <div className="flex flex-col gap-4">
-      <h2 className="font-medium text-sm">全局快捷键</h2>
-      <HotkeyItem
-        accelerator={state?.accelerator ?? null}
-        description="按一次唤起并聚焦翻译窗口，再按一次隐藏到后台；应用设置窗口从托盘打开"
-        disabled={state === null}
-        icon="icon-[lucide--keyboard]"
-        onCapture={applyGlobal}
-        onClear={() => applyGlobal(null)}
-        title="唤起 / 隐藏翻译浮窗"
-      />
+      {/* 每次切入本分区重跑一场入场，与 dropdown-menu 的行入场同一套节奏 */}
+      <StaggerList>
+        <h2 className="font-medium text-sm">全局快捷键</h2>
+        <HotkeyItem
+          accelerator={state?.accelerator ?? null}
+          description="按一次唤起并聚焦翻译窗口，再按一次隐藏到后台；应用设置窗口从托盘打开"
+          disabled={state === null}
+          icon="icon-[lucide--keyboard]"
+          onCapture={applyGlobal}
+          onClear={() => applyGlobal(null)}
+          title="唤起 / 隐藏翻译浮窗"
+        />
 
-      <h2 className="font-medium text-sm">局内快捷键</h2>
-      <HotkeyItem
-        accelerator={inApp?.openSettings ?? null}
-        description="在翻译浮窗内打开设置页面，仅浮窗聚焦时生效（默认 ⌘,）"
-        disabled={inApp === null}
-        icon="icon-[lucide--settings]"
-        onCapture={(accelerator) => applyInApp("openSettings", accelerator)}
-        onClear={() => applyInApp("openSettings", null)}
-        title="浮窗内打开设置"
-      />
+        <h2 className="font-medium text-sm">局内快捷键</h2>
+        <HotkeyItem
+          accelerator={inApp?.openSettings ?? null}
+          description="在翻译浮窗内打开设置页面，仅浮窗聚焦时生效（默认 ⌘,）"
+          disabled={inApp === null}
+          icon="icon-[lucide--settings]"
+          onCapture={(accelerator) => applyInApp("openSettings", accelerator)}
+          onClear={() => applyInApp("openSettings", null)}
+          title="浮窗内打开设置"
+        />
 
-      <HotkeyItem
-        accelerator={inApp?.togglePin ?? null}
-        description="在翻译浮窗内切换图钉（固定窗口），仅浮窗聚焦时生效（默认 ⌘P）"
-        disabled={inApp === null}
-        icon="icon-[lucide--pin]"
-        onCapture={(accelerator) => applyInApp("togglePin", accelerator)}
-        onClear={() => applyInApp("togglePin", null)}
-        title="浮窗内切换固定窗口"
-      />
+        <HotkeyItem
+          accelerator={inApp?.togglePin ?? null}
+          description="在浮窗内切换图钉（固定窗口），仅浮窗聚焦时生效（默认 ⌘P）"
+          disabled={inApp === null}
+          icon="icon-[lucide--pin]"
+          onCapture={(accelerator) => applyInApp("togglePin", accelerator)}
+          onClear={() => applyInApp("togglePin", null)}
+          title="浮窗内切换固定窗口"
+        />
 
-      {hint ? (
-        <Alert className="grid-cols-[auto_1fr] gap-x-2">
-          <span aria-hidden="true" className={ALERT_ICON} />
-          <AlertDescription>{hint}</AlertDescription>
-        </Alert>
-      ) : null}
+        {hint ? (
+          <HintAlert>
+            <span aria-hidden="true" className={ALERT_ICON} />
+            <AlertDescription>{hint}</AlertDescription>
+          </HintAlert>
+        ) : null}
 
-      {error ? (
-        <Alert className="grid-cols-[auto_1fr] gap-x-2" variant="destructive">
-          <span aria-hidden="true" className={ALERT_ICON} />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
+        {error ? (
+          <HintAlert variant="destructive">
+            <span aria-hidden="true" className={ALERT_ICON} />
+            <AlertDescription>{error}</AlertDescription>
+          </HintAlert>
+        ) : null}
+      </StaggerList>
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
 import { IS_MAC } from "@renderer/lib/platform";
 import { cn } from "cn";
 
+import { StaggerList } from "../ui/stagger-list";
 import { NAV_GROUPS, type SectionId } from "./nav";
 import { StyleSwitcher } from "./style-switcher";
 
@@ -52,31 +53,33 @@ export function AppSidebar({
       </SidebarHeader>
 
       <SidebarContent>
-        {NAV_GROUPS.map((group) => (
-          <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.items.map((item) => (
-                  <SidebarMenuItem key={item.id}>
-                    <SidebarMenuButton
-                      isActive={section === item.id}
-                      onClick={() => onSectionChange(item.id)}
-                      tooltip={item.label}
-                    >
-                      {/* Iconify 是空 span + mask，shadcn 的 [&_svg]:size-4 选不中，尺寸要自己写 */}
-                      <span
-                        aria-hidden="true"
-                        className={cn(item.icon, "size-4 shrink-0")}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        <StaggerList>
+          {NAV_GROUPS.map((group) => (
+            <SidebarGroup key={group.label}>
+              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {group.items.map((item) => (
+                    <SidebarMenuItem key={item.id}>
+                      <SidebarMenuButton
+                        isActive={section === item.id}
+                        onClick={() => onSectionChange(item.id)}
+                        tooltip={item.label}
+                      >
+                        {/* Iconify 是空 span + mask，shadcn 的 [&_svg]:size-4 选不中，尺寸要自己写 */}
+                        <span
+                          aria-hidden="true"
+                          className={cn(item.icon, "size-4 shrink-0")}
+                        />
+                        <span>{item.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ))}
+        </StaggerList>
       </SidebarContent>
 
       <SidebarFooter

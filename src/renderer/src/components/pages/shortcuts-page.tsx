@@ -1,4 +1,10 @@
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Alert, AlertDescription } from "@renderer/components/ui/alert";
 import { Button } from "@renderer/components/ui/button";
 import {
@@ -11,14 +17,16 @@ import {
 } from "@renderer/components/ui/item";
 import { Kbd, KbdGroup } from "@renderer/components/ui/kbd";
 import { StaggerList } from "@renderer/components/ui/stagger-list";
+import { Switch } from "@renderer/components/ui/switch";
 import type { IconClass } from "@renderer/lib/icons";
 import { ALERT_ICON } from "@renderer/lib/icons";
 import { IS_MAC } from "@renderer/lib/platform";
 import { acceleratorFromEvent, formatAccelerator } from "@shared/hotkey";
-import type {
-  HotkeyState,
-  InAppHotkeyAction,
-  InAppHotkeyState,
+import {
+  DEFAULT_HOTKEYS,
+  type HotkeyState,
+  type InAppHotkeyAction,
+  type InAppHotkeyState,
 } from "@shared/ipc";
 import { cn } from "cn";
 
@@ -29,12 +37,16 @@ function AcceleratorKeys({
 }): ReactNode {
   const keys = accelerator ? formatAccelerator(accelerator, IS_MAC) : [];
   if (keys.length === 0) {
-    return <span className="text-muted-foreground text-sm">未设置</span>;
+    return <span className="px-1 text-muted-foreground text-xs">未设置</span>;
   }
   return (
+    // 悬停时底色由组合键容器接管，键帽要抬成背景色才不会糊成一片
     <KbdGroup>
       {keys.map((key) => (
-        <Kbd className="h-6 min-w-6 text-[0.7rem]" key={key}>
+        <Kbd
+          className="h-6 min-w-6 text-[0.7rem] group-hover/keys:bg-background"
+          key={key}
+        >
           {key}
         </Kbd>
       ))}
@@ -59,6 +71,7 @@ function HintAlert({
 
 /** 录制一次组合键；Esc 取消，录到的合法 accelerator 经 onCapture 交给调用方保存 */
 function useHotkeyRecorder(onCapture: (accelerator: string) => void): {
+  cancel: () => void;
   hint: string | null;
   recording: boolean;
   start: () => void;
@@ -121,67 +134,90 @@ function useHotkeyRecorder(onCapture: (accelerator: string) => void): {
     window.vadu.hotkey.suspend(true).catch((reason) => console.error(reason));
   }, []);
 
-  return { hint, recording, start };
+  return { cancel: stop, hint, recording, start };
 }
 
 function HotkeyItem({
   accelerator,
+  defaultAccelerator,
   description,
   disabled,
   icon,
-  onCapture,
-  onClear,
+  onChange,
   title,
 }: {
   accelerator: string | null;
+  /** 出厂默认绑定，同时决定是否显示重置按钮 */
+  defaultAccelerator: string;
   description: string;
   disabled: boolean;
   /** Iconify 类名，构建期由 @iconify/tailwind4 内联成 data URI */
   icon: IconClass;
-  onCapture: (accelerator: string) => void;
-  onClear: () => void;
+  onChange: (accelerator: string | null) => void;
   title: string;
 }): ReactNode {
-  const { hint, recording, start } = useHotkeyRecorder(onCapture);
-  const displayDescription = recording
-    ? "正在录制，按下组合键（Esc 取消）"
-    : description;
+  const { cancel, hint, recording, start } = useHotkeyRecorder(onChange);
+  const lastBound = useRef(accelerator);
+  useEffect(() => {
+    if (accelerator) {
+      lastBound.current = accelerator;
+    }
+  }, [accelerator]);
+
+  const modified = accelerator !== defaultAccelerator;
+  // shortcut: 关掉开关后只在本行内存里留着上次绑定，重载设置页后退回出厂值
+  const toggle = (enabled: boolean): void => {
+    onChange(enabled ? (lastBound.current ?? defaultAccelerator) : null);
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      <Item
-        className={recording ? "border-ring ring-3 ring-ring/50" : undefined}
-        size="default"
-        variant="outline"
-      >
+      <Item size="default" variant="outline">
         <ItemMedia variant="icon">
           <span aria-hidden="true" className={cn(icon, "size-4")} />
         </ItemMedia>
         <ItemContent>
           <ItemTitle>{title}</ItemTitle>
-          <ItemDescription>{displayDescription}</ItemDescription>
+          <ItemDescription>{description}</ItemDescription>
         </ItemContent>
         <ItemActions>
-          <AcceleratorKeys accelerator={accelerator} />
-          <Button
+          <button
+            aria-label={recording ? "取消录制" : `重新绑定「${title}」的快捷键`}
+            className={cn(
+              "group/keys inline-flex h-9 cursor-pointer items-center rounded-lg px-1.5 outline-none transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50",
+              recording && "bg-muted"
+            )}
+            disabled={disabled}
+            onClick={recording ? cancel : start}
+            type="button"
+          >
+            {recording ? (
+              <span className="px-1 text-muted-foreground text-xs">
+                按下快捷键
+              </span>
+            ) : (
+              <AcceleratorKeys accelerator={accelerator} />
+            )}
+          </button>
+          {modified && !recording ? (
+            <Button
+              aria-label={`把「${title}」恢复为默认快捷键`}
+              onClick={() => onChange(defaultAccelerator)}
+              size="icon-xs"
+              variant="ghost"
+            >
+              <span
+                aria-hidden="true"
+                className="icon-[lucide--rotate-ccw] size-3.5"
+              />
+            </Button>
+          ) : null}
+          <Switch
+            aria-label={`启用「${title}」`}
+            checked={accelerator !== null}
             disabled={disabled || recording}
-            onClick={start}
-            size="sm"
-            variant={recording ? "secondary" : "outline"}
-          >
-            {recording ? "录制中…" : "录制"}
-          </Button>
-          <Button
-            aria-label={`清除「${title}」快捷键`}
-            disabled={disabled || recording || !accelerator}
-            onClick={onClear}
-            size="icon-sm"
-            variant="ghost"
-          >
-            <span
-              aria-hidden="true"
-              className="icon-[lucide--trash-2] size-4"
-            />
-          </Button>
+            onCheckedChange={toggle}
+          />
         </ItemActions>
       </Item>
 
@@ -262,32 +298,32 @@ function ShortcutsPage(): ReactNode {
         <h2 className="font-medium text-sm">全局快捷键</h2>
         <HotkeyItem
           accelerator={state?.accelerator ?? null}
-          description="按一次唤起并聚焦翻译窗口，再按一次隐藏到后台；应用设置窗口从托盘打开"
+          defaultAccelerator={DEFAULT_HOTKEYS.global}
+          description="按一次唤起并聚焦翻译窗口，再按一次隐藏到后台"
           disabled={state === null}
           icon="icon-[lucide--keyboard]"
-          onCapture={applyGlobal}
-          onClear={() => applyGlobal(null)}
+          onChange={applyGlobal}
           title="唤起 / 隐藏翻译浮窗"
         />
 
         <h2 className="font-medium text-sm">局内快捷键</h2>
         <HotkeyItem
           accelerator={inApp?.openSettings ?? null}
-          description="在翻译浮窗内打开设置页面，仅浮窗聚焦时生效（默认 ⌘,）"
+          defaultAccelerator={DEFAULT_HOTKEYS.inApp.openSettings}
+          description="在翻译浮窗内打开设置页面，仅浮窗聚焦时生效"
           disabled={inApp === null}
           icon="icon-[lucide--settings]"
-          onCapture={(accelerator) => applyInApp("openSettings", accelerator)}
-          onClear={() => applyInApp("openSettings", null)}
+          onChange={(accelerator) => applyInApp("openSettings", accelerator)}
           title="浮窗内打开设置"
         />
 
         <HotkeyItem
           accelerator={inApp?.togglePin ?? null}
-          description="在浮窗内切换图钉（固定窗口），仅浮窗聚焦时生效（默认 ⌘P）"
+          defaultAccelerator={DEFAULT_HOTKEYS.inApp.togglePin}
+          description="在浮窗内切换图钉（固定窗口），仅浮窗聚焦时生效"
           disabled={inApp === null}
           icon="icon-[lucide--pin]"
-          onCapture={(accelerator) => applyInApp("togglePin", accelerator)}
-          onClear={() => applyInApp("togglePin", null)}
+          onChange={(accelerator) => applyInApp("togglePin", accelerator)}
           title="浮窗内切换固定窗口"
         />
 

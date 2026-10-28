@@ -31,6 +31,15 @@ export type InAppHotkeyState = {
   togglePin: string | null;
 };
 
+/** 出厂默认绑定：主进程读配置的兜底与设置页「重置」共用同一份，避免两处各写一份 */
+export const DEFAULT_HOTKEYS = {
+  global: "CommandOrControl+Shift+T",
+  inApp: {
+    openSettings: "CommandOrControl+,",
+    togglePin: "CommandOrControl+P",
+  },
+} satisfies { global: string; inApp: InAppHotkeyState };
+
 export type AppSettings = {
   defaultProfileId?: string;
   hotkey: string;

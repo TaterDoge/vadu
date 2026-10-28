@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { app } from "electron";
 
 import type { AppSettings, InAppHotkeyState } from "../../../shared/ipc";
+import { DEFAULT_HOTKEYS } from "../../../shared/ipc";
 
 type ConfigFile = { schemaVersion: 1; settings: AppSettings };
 
@@ -18,11 +19,8 @@ const SCHEMA_VERSION = 1;
 const DEFAULT_SETTINGS: AppSettings = {
   glossary: [],
   historyLimit: 50,
-  hotkey: "CommandOrControl+Shift+T",
-  inAppHotkeys: {
-    openSettings: "CommandOrControl+,",
-    togglePin: "CommandOrControl+P",
-  },
+  hotkey: DEFAULT_HOTKEYS.global,
+  inAppHotkeys: DEFAULT_HOTKEYS.inApp,
   showMainWindowOnStartup: false,
   theme: "system",
 };

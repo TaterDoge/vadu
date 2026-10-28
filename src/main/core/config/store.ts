@@ -9,21 +9,8 @@ import { join } from "node:path";
 
 import { app } from "electron";
 
-import type { AppSettings, InAppHotkeyState } from "../../../shared/ipc";
-import { DEFAULT_HOTKEYS } from "../../../shared/ipc";
-
-type ConfigFile = { schemaVersion: 1; settings: AppSettings };
-
-const SCHEMA_VERSION = 1;
-
-const DEFAULT_SETTINGS: AppSettings = {
-  glossary: [],
-  historyLimit: 50,
-  hotkey: DEFAULT_HOTKEYS.global,
-  inAppHotkeys: DEFAULT_HOTKEYS.inApp,
-  showMainWindowOnStartup: false,
-  theme: "system",
-};
+import type { AppSettings } from "../../../shared/ipc";
+import { DEFAULT_SETTINGS, mergeConfig, toSettings } from "./settings";
 
 function configPath(): string {
   return join(app.getPath("userData"), "config.json");
@@ -34,44 +21,23 @@ function legacyPath(): string {
   return join(app.getPath("userData"), "settings.json");
 }
 
-function pickInApp(
-  source: Partial<InAppHotkeyState> | undefined,
-  key: keyof InAppHotkeyState
-): string | null {
-  const value = source?.[key];
-  return typeof value === "string" || value === null
-    ? value
-    : DEFAULT_SETTINGS.inAppHotkeys[key];
+/** null = 文件存在但内容不可用（损坏 / 非对象），由调用方决定留档还是忽略 */
+function parseConfig(path: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
 }
 
-function toSettings(value: unknown): AppSettings {
-  const partial = (value ?? {}) as Partial<AppSettings>;
-  const inApp = partial.inAppHotkeys;
-  return {
-    ...DEFAULT_SETTINGS,
-    ...partial,
-    hotkey:
-      typeof partial.hotkey === "string"
-        ? partial.hotkey
-        : DEFAULT_SETTINGS.hotkey,
-    // 旧配置没有该字段；形状不对直接回默认，别让坏值混进运行时
-    inAppHotkeys: {
-      openSettings: pickInApp(inApp, "openSettings"),
-      togglePin: pickInApp(inApp, "togglePin"),
-    },
-    // 同上：旧配置缺字段时按默认走静默启动，坏值也不混进运行时
-    showMainWindowOnStartup:
-      typeof partial.showMainWindowOnStartup === "boolean"
-        ? partial.showMainWindowOnStartup
-        : DEFAULT_SETTINGS.showMainWindowOnStartup,
-  };
-}
-
-function writeAtomic(settings: AppSettings): void {
+function writeConfig(settings: AppSettings): void {
   const target = configPath();
-  const tmp = `${target}.tmp`;
-  const payload: ConfigFile = { schemaVersion: SCHEMA_VERSION, settings };
-  // 原子写：中途崩溃不会留下半截 config.json 被下次启动当成真实配置
+  // tmp 带 pid：即使锁失效被双开，两个实例也不会写同一个临时文件
+  const tmp = `${target}.${process.pid}.tmp`;
+  const payload = mergeConfig(parseConfig(target), settings);
   writeFileSync(tmp, JSON.stringify(payload, null, 2), "utf8");
   renameSync(tmp, target);
 }
@@ -81,14 +47,8 @@ function readLegacy(): AppSettings | null {
   if (!existsSync(path)) {
     return null;
   }
-  try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as {
-      hotkey?: unknown;
-    };
-    return toSettings({ hotkey: parsed.hotkey });
-  } catch {
-    return null;
-  }
+  const raw = parseConfig(path);
+  return raw ? toSettings({ hotkey: raw.hotkey }) : null;
 }
 
 export function readSettings(): AppSettings {
@@ -96,24 +56,24 @@ export function readSettings(): AppSettings {
   if (!existsSync(path)) {
     const migrated = readLegacy();
     if (migrated) {
-      writeAtomic(migrated);
+      writeConfig(migrated);
       rmSync(legacyPath(), { force: true });
       return migrated;
     }
     return { ...DEFAULT_SETTINGS };
   }
-  try {
-    const parsed = JSON.parse(
-      readFileSync(path, "utf8")
-    ) as Partial<ConfigFile>;
-    return toSettings(parsed.settings);
-  } catch {
+  const raw = parseConfig(path);
+  if (!raw) {
     // 留档而不是直接覆盖，否则下一次保存会永久吃掉用户配置
     renameSync(path, `${path}.corrupt`);
     return { ...DEFAULT_SETTINGS };
   }
+  return toSettings(raw.settings);
 }
 
-export function saveSettings(settings: AppSettings): void {
-  writeAtomic(settings);
+/** 读→合并→原子写。调用方只提交要改的字段，整对象提交会冲掉别处刚写的设置 */
+export function updateSettings(patch: Partial<AppSettings>): AppSettings {
+  const next = { ...readSettings(), ...patch };
+  writeConfig(next);
+  return next;
 }

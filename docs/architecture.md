@@ -88,6 +88,8 @@
 - `config.json`（`app.getPath("userData")`）：`{ schemaVersion, settings, profiles[] }`，原子写（写临时文件再 rename）。
 - `secrets.bin`：`safeStorage` 加密后的密钥表，结构 `{ [pluginId]: { [secretName]: base64 } }`。
 - 两者都由 `store.ts` / `secrets.ts` 独占，其它模块只拿接口。
+- **写入只能走 `updateSettings(patch)`**：它会读→合并→原子写。`settings` 与 `profiles` 同居一个文件，任何「拿整个 `AppSettings` 盖回去」的写法都会静默抹掉 `profiles`。
+- 形状清洗（旧版本字段、手改的坏值）集中在 `config/settings.ts` 的 `toSettings()`，纯函数、有单测；`store.ts` 只管磁盘 IO。
 
 **密钥存储必须用异步 API。** `safeStorage` 的同步 API（`isEncryptionAvailable` / `encryptString` / `decryptString`）自 Electron 45 起弃用、46 移除，本项目从第一天就用异步形态：
 

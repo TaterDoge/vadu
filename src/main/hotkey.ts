@@ -1,5 +1,6 @@
 import { globalShortcut } from "electron";
 
+import { VaduError } from "../shared/errors";
 import { isSupportedAccelerator } from "../shared/hotkey";
 import {
   type HotkeyState,
@@ -7,7 +8,7 @@ import {
   type InAppHotkeyAction,
   type InAppHotkeyState,
 } from "../shared/ipc";
-import { readSettings, saveSettings } from "./core/config/store";
+import { readSettings, updateSettings } from "./core/config/store";
 
 let onTrigger: () => void = () => undefined;
 let state: HotkeyState = { accelerator: null, registered: false };
@@ -37,16 +38,14 @@ export function initHotkey(trigger: () => void): HotkeyState {
 
 export function applyHotkey(accelerator: string | null): HotkeyState {
   if (accelerator !== null && !isSupportedAccelerator(accelerator)) {
-    throw new Error(`不支持的快捷键: ${accelerator}`);
+    throw new VaduError("INVALID_CONFIG", `不支持的快捷键: ${accelerator}`);
   }
   if (state.accelerator) {
     globalShortcut.unregister(state.accelerator);
   }
-  // OS 级 hotkey 会吞掉按键，录制时必须先让出，恢复后才能注册
-  globalShortcut.setSuspended(false);
   state = { accelerator, registered: false };
   registerCurrent();
-  saveSettings({ ...readSettings(), hotkey: state.accelerator ?? "" });
+  updateSettings({ hotkey: state.accelerator });
   return state;
 }
 
@@ -68,26 +67,21 @@ export function getInAppHotkeyState(): InAppHotkeyState {
 }
 
 export function applyInAppHotkey(
-  action: string,
+  action: InAppHotkeyAction,
   accelerator: string | null
 ): InAppHotkeyState {
-  if (!IN_APP_HOTKEY_ACTIONS.includes(action as InAppHotkeyAction)) {
-    throw new Error(`未知的局内快捷键: ${action}`);
+  if (!IN_APP_HOTKEY_ACTIONS.includes(action)) {
+    throw new VaduError("INVALID_CONFIG", `未知的局内快捷键: ${action}`);
   }
   if (accelerator !== null && !isSupportedAccelerator(accelerator)) {
-    throw new Error(`不支持的快捷键: ${accelerator}`);
+    throw new VaduError("INVALID_CONFIG", `不支持的快捷键: ${accelerator}`);
   }
-  const settings = readSettings();
-  saveSettings({
-    ...settings,
-    inAppHotkeys: {
-      ...settings.inAppHotkeys,
-      [action as InAppHotkeyAction]: accelerator,
-    },
-  });
+  const current = readSettings().inAppHotkeys;
+  updateSettings({ inAppHotkeys: { ...current, [action]: accelerator } });
   return getInAppHotkeyState();
 }
 
+// 挂起状态的拥有方是录制器，这里只转发，不在保存时顺手恢复
 export function setHotkeySuspended(suspended: boolean): void {
   globalShortcut.setSuspended(suspended);
 }

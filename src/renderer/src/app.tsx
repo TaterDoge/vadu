@@ -1,4 +1,4 @@
-import { type JSX, useState } from "react";
+import { type ComponentType, type JSX, useState } from "react";
 import { IS_MAC } from "@renderer/lib/platform";
 
 import { AppSidebar } from "./components/layout/app-sidebar";
@@ -11,8 +11,23 @@ import { TooltipProvider } from "./components/ui/tooltip";
 import { StyleProvider } from "./lib/style";
 import { ThemeProvider } from "./lib/theme";
 
+/** 已实现的分区；其余分区保留在导航里做后续里程碑入口，先渲染占位 */
+const PAGES: Partial<Record<SectionId, ComponentType>> = {
+  general: GeneralPage,
+  shortcuts: ShortcutsPage,
+};
+
+function NotReady(): JSX.Element {
+  return (
+    <p className="text-muted-foreground text-sm">
+      这个分区还没接上，等对应里程碑落地后可用。
+    </p>
+  );
+}
+
 function App(): JSX.Element {
   const [section, setSection] = useState<SectionId>(DEFAULT_SECTION);
+  const Page = PAGES[section];
 
   return (
     <ThemeProvider>
@@ -25,8 +40,7 @@ function App(): JSX.Element {
             ) : null}
             <AppSidebar onSectionChange={setSection} section={section} />
             <PageFrame section={section}>
-              {section === "shortcuts" ? <ShortcutsPage /> : null}
-              {section === "general" ? <GeneralPage /> : null}
+              {Page ? <Page /> : <NotReady />}
             </PageFrame>
           </SidebarProvider>
         </TooltipProvider>

@@ -8,7 +8,10 @@ import {
   useState,
 } from "react";
 
-/** 与 AppSettings.theme 保持同一套取值，后续接 vadu:config:saveSettings 时可直接落盘 */
+/**
+ * 主题真值目前只存在渲染层 localStorage（`AppSettings.theme` 是接 config 通道后的落盘点）。
+ * 在那之前不要再从主进程读它，否则会出现两个互相矛盾的值。
+ */
 export type Theme = "system" | "light" | "dark";
 type ResolvedTheme = "light" | "dark";
 

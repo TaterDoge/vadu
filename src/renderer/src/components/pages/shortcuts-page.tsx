@@ -81,6 +81,7 @@ function useHotkeyRecorder(onCapture: (accelerator: string) => void): {
 
   const stop = useCallback((): void => {
     setRecording(false);
+    setHint(null);
     window.vadu.hotkey.suspend(false).catch((reason) => console.error(reason));
   }, []);
 
@@ -114,7 +115,12 @@ function useHotkeyRecorder(onCapture: (accelerator: string) => void): {
       onCapture(accelerator);
     };
     window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
+    // 点空白处与 Esc 同义：结束录制并收起提示
+    window.addEventListener("pointerdown", stop, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("pointerdown", stop, true);
+    };
   }, [recording, stop, onCapture]);
 
   // 录制中途切走分区会让 suspend 永远不恢复，整个应用再也唤不起来；

@@ -32,22 +32,46 @@ export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: Serialize
 
 原因：Electron 的 `ipcRenderer.invoke` 在 handler 抛错时，渲染层拿到的 `Error.message` 会被拼上一串 `"Error invoking remote method ..."` 前缀，且 `code` 等自定义字段全部丢失。用 `IpcResult` 可以带结构化错误，也让 TS 强制调用方处理失败分支。
 
+错误形状与错误码是契约，定义在 `src/shared/errors.ts`，**不在业务代码里手写**：
+
+```ts
+type PluginErrorCode =
+  | "AUTH_FAILED" | "RATE_LIMITED" | "NETWORK" | "TIMEOUT"
+  | "INVALID_CONFIG" | "UNSUPPORTED_LANGUAGE" | "PERMISSION_DENIED"
+  | "PLUGIN_LOAD_FAILED" | "PLUGIN_CRASH" | "ABORTED" | "INTERNAL";
+
+type SerializedError = {
+  code: PluginErrorCode;
+  message: string;
+  pluginId?: string;
+  retryable: boolean;
+};
+```
+
+集合与语义只在 [plugin-spec.md §7](./plugin-spec.md#7-错误) 定义一份，`src/shared/errors.ts` 是代码侧的同一份。
+
+`retryable` 由 core 判定：`NETWORK` / `TIMEOUT` / `RATE_LIMITED` 为 true，其余 false。需要错误码穿过 IPC 时抛 `VaduError`，其余 `Error` 一律降级为 `INTERNAL`。
+
 主进程侧统一包装函数（`src/main/ipc/index.ts`）：
 
 ```ts
 export function handle<TArg, TResult>(
-  channel: string,
-  fn: (arg: TArg) => Promise<TResult>
+  channel: IpcChannel, // = (typeof IPC)[keyof typeof IPC]，禁止裸字符串
+  fn: (arg: TArg, ctx: { sender: WebContents }) => Promise<TResult>
 ): void {
-  ipcMain.handle(channel, async (_event, arg: TArg): Promise<IpcResult<TResult>> => {
+  ipcMain.handle(channel, async (event, arg: TArg): Promise<IpcResult<TResult>> => {
     try {
-      return { ok: true, data: await fn(arg) };
+      return { ok: true, data: await fn(arg, { sender: event.sender }) };
     } catch (error) {
+      // 只记通道与错误码：入参可能含密钥，绝不落日志
+      console.error(`[ipc] ${channel} ${toSerializedError(error).code}`);
       return { ok: false, error: toSerializedError(error) };
     }
   });
 }
 ```
+
+`ctx.sender` 供 M2 的流式推流按发起窗口定向发送用（见 §5），现有通道忽略即可。
 
 ## 3. 通道表
 
@@ -163,7 +187,7 @@ export type Profile = {
 
 export type AppSettings = {
   defaultProfileId?: string;
-  hotkey: string;          // 全局快捷键，如 "CommandOrControl+Shift+T"
+  hotkey: string | null;   // 全局快捷键，如 "CommandOrControl+Shift+T"；null = 用户解绑
   inAppHotkeys: {
     // 局内快捷键：窗口聚焦时生效，渲染层用 TanStack Hotkeys 自行监听，不经 globalShortcut
     openSettings: string | null; // 浮窗内打开设置，默认 "CommandOrControl+,"

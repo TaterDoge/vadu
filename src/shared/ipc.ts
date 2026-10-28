@@ -1,3 +1,7 @@
+import type { SerializedError } from "./errors";
+
+export type { SerializedError } from "./errors";
+
 export const IPC = {
   getHotkey: "vadu:app:getHotkey",
   getInAppHotkey: "vadu:app:getInAppHotkey",
@@ -13,11 +17,15 @@ export const IPC = {
   toggleQuickWindow: "vadu:app:toggleQuickWindow",
 } as const;
 
-export type SerializedError = { code: string; message?: string };
-
 export type IpcResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: SerializedError };
+
+/** 通道名的字面量联合：注册与调用都靠它收口，避免裸字符串 */
+export type IpcChannel = (typeof IPC)[keyof typeof IPC];
+
+/** 渲染层只关心这三档，其余平台按非 mac 处理 */
+export type AppPlatform = "darwin" | "win32" | "linux";
 
 export type HotkeyState = { accelerator: string | null; registered: boolean };
 
@@ -42,7 +50,8 @@ export const DEFAULT_HOTKEYS = {
 
 export type AppSettings = {
   defaultProfileId?: string;
-  hotkey: string;
+  /** null = 用户解绑了全局热键 */
+  hotkey: string | null;
   /** 局内快捷键（窗口聚焦时生效，渲染层自行监听），不经 globalShortcut */
   inAppHotkeys: InAppHotkeyState;
   /** 启动时是否弹出主窗；关掉后只能从托盘 / Dock 唤起 */
@@ -54,6 +63,8 @@ export type AppSettings = {
 };
 
 export type VaduApi = {
+  /** 由 preload 注入：渲染层不再拿 window.electron，避免直通 ipcRenderer */
+  platform: AppPlatform;
   app: {
     toggleQuickWindow: () => Promise<IpcResult<null>>;
     showSettings: () => Promise<IpcResult<null>>;

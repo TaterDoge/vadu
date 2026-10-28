@@ -44,6 +44,7 @@
 - 渲染层组件用 `@renderer/*` 别名；UI 基础件来自 shadcn（`base-nova` 风格，`@base-ui/react` 内核），不要另起一套设计系统。
 - 主进程与 preload 用 `tsconfig.node.json` 的规则，渲染层用 `tsconfig.web.json`；新增跨环境目录要同时进两个 tsconfig 的 `include`。
 - 不给 `window` 加未在 `src/preload/index.d.ts` 声明的能力。`contextIsolation` 保持开启，`nodeIntegration` 保持关闭。
+- 不要设置 ring 样式
 
 ## 安全红线
 

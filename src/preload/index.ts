@@ -1,18 +1,22 @@
-import { electronAPI } from "@electron-toolkit/preload";
 import { contextBridge, ipcRenderer } from "electron";
 
-import {
-  type HotkeyState,
-  IPC,
-  type InAppHotkeyAction,
-  type InAppHotkeyState,
-  type IpcResult,
-  type VaduApi,
+import type {
+  AppPlatform,
+  HotkeyState,
+  InAppHotkeyAction,
+  InAppHotkeyState,
+  IpcResult,
+  VaduApi,
 } from "../shared/ipc";
+import { IPC } from "../shared/ipc";
 
-// Custom APIs for renderer
-const api = {};
+/** shared 一层只认三档平台；其它（freebsd 等）按非 mac 走 */
+const platform: AppPlatform =
+  process.platform === "darwin" || process.platform === "win32"
+    ? process.platform
+    : "linux";
 
+// 只暴露显式声明过的能力：不投 electronAPI，渲染层拿不到任意通道的 ipcRenderer
 const vadu: VaduApi = {
   app: {
     getQuickWindowPinned: (): Promise<IpcResult<boolean>> =>
@@ -45,24 +49,7 @@ const vadu: VaduApi = {
     suspend: (suspended: boolean): Promise<IpcResult<null>> =>
       ipcRenderer.invoke(IPC.setHotkeySuspended, { suspended }),
   },
+  platform,
 };
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
-if (process.contextIsolated) {
-  try {
-    contextBridge.exposeInMainWorld("electron", electronAPI);
-    contextBridge.exposeInMainWorld("api", api);
-    contextBridge.exposeInMainWorld("vadu", vadu);
-  } catch (error) {
-    console.error(error);
-  }
-} else {
-  // @ts-expect-error (define in dts)
-  window.electron = electronAPI;
-  // @ts-expect-error (define in dts)
-  window.api = api;
-  // @ts-expect-error (define in dts)
-  window.vadu = vadu;
-}
+contextBridge.exposeInMainWorld("vadu", vadu);

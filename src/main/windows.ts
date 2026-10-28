@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { is } from "@electron-toolkit/utils";
 import { BrowserWindow, shell } from "electron";
@@ -34,9 +35,51 @@ function loadRenderer(win: BrowserWindow, hash?: string): void {
   win.loadFile(join(import.meta.dirname, "../renderer/index.html"), { hash });
 }
 
-function denyExternalOpen(win: BrowserWindow): void {
-  win.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url);
+function isHttpUrl(url: string): boolean {
+  try {
+    const { protocol } = new URL(url);
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 开发态放行 HMR 同源，生产态只放行打包后的 index.html。
+ * 不能直接放行 `file://`：那等于允许导航到本机任意 HTML，而新文档会带上 preload。
+ */
+function allowedPrefix(): string {
+  const devUrl = process.env.ELECTRON_RENDERER_URL;
+  if (is.dev && devUrl) {
+    try {
+      return new URL(devUrl).origin;
+    } catch {
+      // 启动参数被写坏时退回最严格的 file:// 口径
+    }
+  }
+  return pathToFileURL(join(import.meta.dirname, "../renderer/index.html"))
+    .href;
+}
+
+/**
+ * 拦截两类外跳。`setWindowOpenHandler` 只管 window.open / target=_blank；
+ * 顶层导航走 `will-navigate`，不拦就等于让远程页面在带 preload 的窗口里加载。
+ */
+function guardNavigation(win: BrowserWindow): void {
+  const allowed = allowedPrefix();
+  win.webContents.on("will-navigate", (event, url) => {
+    if (url.startsWith(allowed)) {
+      return;
+    }
+    event.preventDefault();
+    if (isHttpUrl(url)) {
+      shell.openExternal(url);
+    }
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (isHttpUrl(url)) {
+      shell.openExternal(url);
+    }
     return { action: "deny" };
   });
 }
@@ -65,7 +108,7 @@ function createMainWindow(): BrowserWindow {
   win.on("ready-to-show", () => {
     win.show();
   });
-  denyExternalOpen(win);
+  guardNavigation(win);
   loadRenderer(win);
   return win;
 }
@@ -108,7 +151,7 @@ function createQuickWindow(): BrowserWindow {
     win.show();
     win.focus();
   });
-  denyExternalOpen(win);
+  guardNavigation(win);
   loadRenderer(win, "/quick");
   return win;
 }

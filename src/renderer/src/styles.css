@@ -208,6 +208,22 @@ html[data-style="lyra"] {
   body {
     @apply bg-background text-foreground;
   }
+  /* 全局细滚动条。用相对前景色的半透明灰，深浅主题自动跟着变，不用另写一套 dark 规则 */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--foreground) 20%, transparent);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklch, var(--foreground) 35%, transparent);
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
   html {
     @apply font-sans;
   }

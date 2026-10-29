@@ -5,7 +5,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -18,7 +17,7 @@ import { IS_MAC } from "@renderer/lib/platform";
 import { cn } from "cn";
 
 import { StaggerList } from "../ui/stagger-list";
-import { NAV_GROUPS, type SectionId } from "./nav";
+import { NAV_ITEMS, type SectionId } from "./nav";
 import { StyleSwitcher } from "./style-switcher";
 
 type AppSidebarProps = {
@@ -35,50 +34,49 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="icon">
-      {/* macOS 红黄绿按钮浮在窗口左上角，让出 h-7 拖拽带的高度 */}
+      {/* macOS 无原生标题栏按钮：顶部让出 h-7 拖拽带，别让内容落进拖拽区 */}
       <SidebarHeader className={cn(IS_MAC && "pt-7")}>
         <div className="flex h-10 items-center gap-2 overflow-hidden px-2">
           <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary font-semibold text-primary-foreground text-xs">
             v
           </div>
-          {collapsed ? null : (
-            <div className="min-w-0 leading-tight">
-              <div className="truncate font-medium text-sm">vadu</div>
-              <div className="truncate text-muted-foreground text-xs">
-                管理面板
-              </div>
+          {/* 交给 primitive 的折叠动画：折叠时与分组标签一起收起，而不是直接消失 */}
+          <div
+            className="min-w-0 leading-tight group-data-[collapsible=icon]:hidden"
+            data-sidebar="sidebar-title"
+          >
+            <div className="truncate font-medium text-sm">vadu</div>
+            <div className="truncate text-muted-foreground text-xs">
+              管理面板
             </div>
-          )}
+          </div>
         </div>
       </SidebarHeader>
 
       <SidebarContent>
         <StaggerList>
-          {NAV_GROUPS.map((group) => (
-            <SidebarGroup key={group.label}>
-              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {group.items.map((item) => (
-                    <SidebarMenuItem key={item.id}>
-                      <SidebarMenuButton
-                        isActive={section === item.id}
-                        onClick={() => onSectionChange(item.id)}
-                        tooltip={item.label}
-                      >
-                        {/* Iconify 是空 span + mask，shadcn 的 [&_svg]:size-4 选不中，尺寸要自己写 */}
-                        <span
-                          aria-hidden="true"
-                          className={cn(item.icon, "size-4 shrink-0")}
-                        />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          ))}
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {NAV_ITEMS.map((item) => (
+                  <SidebarMenuItem key={item.id}>
+                    <SidebarMenuButton
+                      isActive={section === item.id}
+                      onClick={() => onSectionChange(item.id)}
+                      tooltip={item.label}
+                    >
+                      {/* Iconify 是空 span + mask，shadcn 的 [&_svg]:size-4 选不中，尺寸要自己写 */}
+                      <span
+                        aria-hidden="true"
+                        className={cn(item.icon, "size-4 shrink-0")}
+                      />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
         </StaggerList>
       </SidebarContent>
 

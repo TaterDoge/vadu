@@ -7,7 +7,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@renderer/components/ui/dropdown-menu";
-import { Textarea } from "@renderer/components/ui/textarea";
 import { useInAppHotkeys } from "@renderer/hooks/use-in-app-hotkeys";
 import {
   useEscapeToHide,
@@ -15,6 +14,8 @@ import {
 } from "@renderer/hooks/use-quick-window";
 import { ThemeProvider } from "@renderer/lib/theme";
 import { useHotkeys } from "@tanstack/react-hotkeys";
+
+import { QuickInput } from "./components/quick-input";
 
 function QuickAppInner(): JSX.Element {
   const [source, setSource] = useState("");
@@ -57,7 +58,7 @@ function QuickAppInner(): JSX.Element {
   return (
     <div className="flex h-svh flex-col bg-background text-foreground">
       {/* frame:false 无边框窗口，顶栏整体可拖拽 */}
-      <div className="drag-region flex h-12 shrink-0 items-center justify-between px-3">
+      <div className="drag-region flex h-8 shrink-0 items-center justify-between px-3">
         <Button
           aria-label={pinned ? "取消固定窗口" : "固定窗口"}
           className="no-drag"
@@ -93,16 +94,6 @@ function QuickAppInner(): JSX.Element {
             <DropdownMenuItem onClick={() => window.vadu.app.showSettings()}>
               打开设置
             </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={source.length === 0}
-              onClick={() => setSource("")}
-            >
-              <span
-                aria-hidden="true"
-                className="icon-[lucide--eraser] size-4"
-              />
-              清空输入
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => window.vadu.app.toggleQuickWindow()}
@@ -114,10 +105,9 @@ function QuickAppInner(): JSX.Element {
         </DropdownMenu>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-2 px-2 pb-2">
-        {/* 每次唤起都自动聚焦，焦点环会常亮成噪音；只留边框变色表示就绪 */}
-        <Textarea
-          className="min-h-0 flex-1 resize-none focus-visible:ring-0"
-          onChange={(event) => setSource(event.target.value)}
+        {/* 每次唤起都自动聚焦，焦点环常亮成噪音；输入区靠 bg-muted 的底色成块，不再画边框 */}
+        <QuickInput
+          onChange={setSource}
           placeholder="输入要翻译的文本"
           ref={inputRef}
           value={source}

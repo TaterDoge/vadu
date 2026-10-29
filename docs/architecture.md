@@ -144,7 +144,7 @@ src/
 │   └── index.d.ts
 └── renderer/src/
     ├── app.tsx              # 壳：ThemeProvider + SidebarProvider + 分区切换（当前是本地 state）
-    ├── lib/                 # 渲染层通用能力（主题、shadcn style 切换）
+    ├── lib/                 # 渲染层通用能力（主题、主题色、shadcn style 切换）
     ├── hooks/
     └── components/
         ├── ui/                # shadcn 生成件；只改样式不改结构

@@ -10,8 +10,8 @@ import {
 import { type StyleName, useStyle } from "@renderer/lib/style";
 
 const STYLES: { value: StyleName; label: string }[] = [
-  { label: "Nova · 圆角 Geist", value: "nova" },
-  { label: "Lyra · 直角等宽", value: "lyra" },
+  { label: "圆角", value: "nova" },
+  { label: "直角", value: "lyra" },
 ];
 
 export function StyleSwitcher(): React.ReactNode {

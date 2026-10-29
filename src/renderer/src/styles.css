@@ -128,6 +128,63 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* 主题色只换强调色 token。规则挂在 [data-accent] 而非 html[data-accent]：外观页的色块预览
+   用同一个属性取自己的 --primary，色值不用在 TS 里再抄一遍。
+   light-dark() 按 color-scheme 选值（ThemeProvider 已把它写在 html 上），深浅两套只写一份。
+   本块必须留在 .dark 之后：两者 specificity 相同，靠源码顺序才压得过深色默认值。
+   neutral 不参与覆盖，直接沿用 :root / .dark 的灰，focus 环与旧外观完全一致。 */
+[data-accent]:not([data-accent="neutral"]) {
+  --primary: var(--accent-color);
+  --ring: var(--accent-color);
+  --sidebar-primary: var(--accent-color);
+}
+
+/* neutral 只在色块预览里需要值：html 上它与 :root/.dark 同值，选着别的色时又不该继承成那个色 */
+[data-accent="neutral"] {
+  --primary: light-dark(oklch(0.205 0 0), oklch(0.922 0 0));
+}
+
+[data-accent="blue"] {
+  --accent-color: light-dark(
+    oklch(0.546 0.245 262.881),
+    oklch(0.623 0.214 259.815)
+  );
+  --primary-foreground: light-dark(oklch(0.985 0 0), oklch(0.145 0 0));
+}
+
+[data-accent="emerald"] {
+  --accent-color: light-dark(
+    oklch(0.596 0.145 163.225),
+    oklch(0.696 0.17 162.48)
+  );
+  --primary-foreground: light-dark(oklch(0.985 0 0), oklch(0.145 0 0));
+}
+
+[data-accent="amber"] {
+  --accent-color: light-dark(
+    oklch(0.666 0.179 58.318),
+    oklch(0.769 0.188 70.08)
+  );
+  /* 黄色系背景上白字对比不够，深浅两套都用深字 */
+  --primary-foreground: oklch(0.145 0 0);
+}
+
+[data-accent="rose"] {
+  --accent-color: light-dark(
+    oklch(0.586 0.253 17.585),
+    oklch(0.712 0.194 13.428)
+  );
+  --primary-foreground: light-dark(oklch(0.985 0 0), oklch(0.145 0 0));
+}
+
+[data-accent="violet"] {
+  --accent-color: light-dark(
+    oklch(0.541 0.281 293.009),
+    oklch(0.702 0.183 293.541)
+  );
+  --primary-foreground: light-dark(oklch(0.985 0 0), oklch(0.145 0 0));
+}
+
 /* lyra 与 nova 的组件代码只差圆角、字号、字体三项 token，不用维护两套组件。
    未分层写在 @layer 外：这条规则要压过 @layer base 里 @apply font-sans 内联出来的写死字体 */
 html[data-style="lyra"] {

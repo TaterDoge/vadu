@@ -6,14 +6,9 @@ import { BrowserWindow, shell } from "electron";
 
 import icon from "../../resources/icon.png?asset";
 
-// macOS 隐藏标题栏，只保留红黄绿三个原生按钮；渲染层顶部留出 28px 拖拽带对齐
+// macOS 隐藏标题栏并关掉红黄绿按钮：窗口靠渲染层顶部拖拽带移动，关窗走 Cmd+W 或托盘
 const mainTitleBarOptions =
-  process.platform === "darwin"
-    ? {
-        titleBarStyle: "hidden" as const,
-        trafficLightPosition: { x: 16, y: 12 },
-      }
-    : {};
+  process.platform === "darwin" ? { titleBarStyle: "hidden" as const } : {};
 
 let quitting = false;
 let mainWindow: BrowserWindow | null = null;
@@ -62,6 +57,27 @@ function allowedPrefix(): string {
 }
 
 /**
+ * 每个窗口自己绑 Cmd/Ctrl+W 关窗：macOS 默认菜单不该被当成唯一入口，
+ * 红黄绿隐藏后更不能赌它还在。浮窗的 close 拦截会把「关」降级成隐藏，符合失焦即收起的交互。
+ */
+function enableCloseShortcut(win: BrowserWindow): void {
+  // macOS 的 Ctrl+W 是输入框删词，只认 Cmd；其它平台认 Ctrl
+  const modifier = process.platform === "darwin" ? "meta" : "control";
+  win.webContents.on("before-input-event", (event, input) => {
+    if (
+      input.type === "keyDown" &&
+      input.code === "KeyW" &&
+      input[modifier] &&
+      !input.shift &&
+      !input.alt
+    ) {
+      event.preventDefault();
+      win.close();
+    }
+  });
+}
+
+/**
  * 拦截两类外跳。`setWindowOpenHandler` 只管 window.open / target=_blank；
  * 顶层导航走 `will-navigate`，不拦就等于让远程页面在带 preload 的窗口里加载。
  */
@@ -100,6 +116,12 @@ function createMainWindow(): BrowserWindow {
   });
   mainWindow = win;
 
+  // 主窗不再有原生按钮，Cmd+W / 托盘退出是唯一出口
+  if (process.platform === "darwin") {
+    win.setWindowButtonVisibility(false);
+  }
+  enableCloseShortcut(win);
+
   win.on("closed", () => {
     if (mainWindow === win) {
       mainWindow = null;
@@ -133,6 +155,7 @@ function createQuickWindow(): BrowserWindow {
     },
   });
   quickWindow = win;
+  enableCloseShortcut(win);
 
   // 失焦即收起（Bob/Raycast 交互）；固定或 DevTools 开着时不收，方便调试
   win.on("blur", () => {

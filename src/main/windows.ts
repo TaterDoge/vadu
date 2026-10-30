@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { is } from "@electron-toolkit/utils";
-import { BrowserWindow, shell } from "electron";
+import { BrowserWindow, screen, shell } from "electron";
 
 import icon from "../../resources/icon.png?asset";
 
@@ -13,6 +13,8 @@ const mainTitleBarOptions =
 let quitting = false;
 let mainWindow: BrowserWindow | null = null;
 let quickWindow: BrowserWindow | null = null;
+/** 内容为空时的设计稿高度，内容变高后这个值只当下限用 */
+const QUICK_WINDOW_MIN_HEIGHT = 340;
 /** 置顶固定中：失焦不收起，关闭固定时恢复默认置顶层级 */
 let quickWindowPinned = false;
 
@@ -143,7 +145,7 @@ function createQuickWindow(): BrowserWindow {
     alwaysOnTop: true,
     frame: false,
     fullscreenable: false,
-    height: 340,
+    height: QUICK_WINDOW_MIN_HEIGHT,
     resizable: false,
     show: false,
     skipTaskbar: true,
@@ -222,6 +224,30 @@ export function toggleQuickWindow(): void {
   }
   quickWindow.show();
   quickWindow.focus();
+}
+
+/**
+ * 浮窗高度跟随内容，上限是屏幕可用高度。窗口被拖到工作区外时「上边缘到工作区底」
+ * 可能反而比工作区高，所以两者取小；超出上限的部分退回页面滚动。
+ */
+export function setQuickWindowContentHeight(height: number): void {
+  if (!quickWindow || quickWindow.isDestroyed()) {
+    return;
+  }
+  const bounds = quickWindow.getBounds();
+  const { workArea } = screen.getDisplayMatching(bounds);
+  const available = Math.min(
+    workArea.height,
+    workArea.y + workArea.height - bounds.y
+  );
+  // 窗口被拖到工作区下方时 available 可能 ≤ 0，而 setContentSize 不接非正数
+  const next = Math.min(
+    Math.max(Math.round(height), QUICK_WINDOW_MIN_HEIGHT),
+    Math.max(available, 1)
+  );
+  if (next !== bounds.height) {
+    quickWindow.setContentSize(bounds.width, next);
+  }
 }
 
 /** 浮窗「图钉」：固定时不失焦收起，且抬到 screen-saver 层级 */

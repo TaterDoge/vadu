@@ -11,6 +11,8 @@ export const IPC = {
   setHotkey: "vadu:app:setHotkey",
   setHotkeySuspended: "vadu:app:setHotkeySuspended",
   setInAppHotkey: "vadu:app:setInAppHotkey",
+  // 浮窗高度由渲染层内容决定：渲染层量高度，主进程负责夹进屏幕
+  setQuickWindowContentHeight: "vadu:app:setQuickWindowContentHeight",
   setQuickWindowPinned: "vadu:app:setQuickWindowPinned",
   setShowMainWindowOnStartup: "vadu:app:setShowMainWindowOnStartup",
   showSettings: "vadu:app:showSettings",
@@ -72,6 +74,7 @@ export type VaduApi = {
     setShowMainWindowOnStartup: (
       enabled: boolean
     ) => Promise<IpcResult<boolean>>;
+    setQuickWindowContentHeight: (height: number) => Promise<IpcResult<null>>;
     setQuickWindowPinned: (pinned: boolean) => Promise<IpcResult<boolean>>;
     getQuickWindowPinned: () => Promise<IpcResult<boolean>>;
   };

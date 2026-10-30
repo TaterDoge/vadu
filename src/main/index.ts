@@ -22,6 +22,7 @@ import { createTray } from "./tray";
 import {
   getQuickWindowPinned,
   markQuitting,
+  setQuickWindowContentHeight,
   setQuickWindowPinned,
   showMainWindow,
   toggleQuickWindow,
@@ -70,6 +71,13 @@ function start(): void {
       showMainWindow();
       return Promise.resolve(null);
     });
+    handle<{ height: number }, null>(
+      IPC.setQuickWindowContentHeight,
+      ({ height }) => {
+        setQuickWindowContentHeight(height);
+        return Promise.resolve(null);
+      }
+    );
     handle<{ pinned: boolean }, boolean>(
       IPC.setQuickWindowPinned,
       ({ pinned }) => {

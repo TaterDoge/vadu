@@ -23,6 +23,8 @@ const vadu: VaduApi = {
       ipcRenderer.invoke(IPC.getQuickWindowPinned),
     getShowMainWindowOnStartup: (): Promise<IpcResult<boolean>> =>
       ipcRenderer.invoke(IPC.getShowMainWindowOnStartup),
+    setQuickWindowContentHeight: (height: number): Promise<IpcResult<null>> =>
+      ipcRenderer.invoke(IPC.setQuickWindowContentHeight, { height }),
     setQuickWindowPinned: (pinned: boolean): Promise<IpcResult<boolean>> =>
       ipcRenderer.invoke(IPC.setQuickWindowPinned, { pinned }),
     setShowMainWindowOnStartup: (

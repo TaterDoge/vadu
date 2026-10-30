@@ -229,6 +229,7 @@ UI 回填规则：
 | `vadu:app:setHotkey` | invoke | `{ accelerator: string \| null }` | `HotkeyState` |
 | `vadu:app:setHotkeySuspended` | invoke | `{ suspended: boolean }` | `null` |
 | `vadu:app:toggleQuickWindow` | invoke | — | `null` |
+| `vadu:app:setQuickWindowContentHeight` | invoke | `{ height: number }` | `null` |
 | `vadu:app:setQuickWindowPinned` | invoke | `{ pinned: boolean }` | `null` |
 | `vadu:app:getQuickWindowPinned` | invoke | — | `boolean` |
 | `vadu:app:showSettings` | invoke | — | `null` |
@@ -250,6 +251,8 @@ export type HotkeyState = { accelerator: string | null; registered: boolean };
 `toggleQuickWindow` 显示/收起翻译浮窗，全局热键与渲染层（Esc 收起）共用同一入口。翻译窗与主窗共用 `index.html`，以 `#/quick` hash 区分根组件，由 `src/main/windows.ts` 管理窗口生命周期。
 
 `setQuickWindowPinned` 切换浮窗「图钉」状态：固定中失焦不收起，并抬到 `screen-saver` 置顶层级；取消固定恢复默认置顶与失焦收起。状态仅存主进程内存（会话级），不持久化到 `AppSettings`。
+
+`setQuickWindowContentHeight` 让浮窗高度跟随渲染层内容：渲染层用 `ResizeObserver` 量「顶栏 + 输入区 + 结果区」的自然高度（不量被 `min-h-svh` 约束的根节点，否则自我反馈），主进程把高度夹到 `[340, min(屏幕可用高度, 窗口上边缘到工作区底)]` 并 `setContentSize`。因此窗口不会因内容变长出滚动条；顶到屏幕底后才退回页面滚动，不会把内容裁掉。
 
 `getQuickWindowPinned` 回读上面这个主进程内存状态。渲染层 `pinned` 只是本地 `useState`，渲染层重载（HMR / `Ctrl+R`）会把它重置为 `false`，而主进程仍固定中；浮窗挂载时必须回读，否则图标与实际置顶层级错位，用户点一下会以为「没效果」（实际是方向反了）。
 

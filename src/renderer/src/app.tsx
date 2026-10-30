@@ -6,6 +6,7 @@ import { DEFAULT_SECTION, type SectionId } from "./components/layout/nav";
 import { PageFrame } from "./components/layout/page-frame";
 import { AppearancePage } from "./components/pages/appearance-page";
 import { GeneralPage } from "./components/pages/general-page";
+import { ProvidersPage } from "./components/pages/providers-page";
 import { ShortcutsPage } from "./components/pages/shortcuts-page";
 import { SidebarProvider } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -17,6 +18,7 @@ import { ThemeProvider } from "./lib/theme";
 const PAGES: Partial<Record<SectionId, ComponentType>> = {
   appearance: AppearancePage,
   general: GeneralPage,
+  providers: ProvidersPage,
   shortcuts: ShortcutsPage,
 };
 
@@ -43,9 +45,7 @@ function App(): JSX.Element {
                 <div className="drag-region fixed inset-x-0 top-0 z-50 h-7" />
               ) : null}
               <AppSidebar onSectionChange={setSection} section={section} />
-              <PageFrame section={section}>
-                {Page ? <Page /> : <NotReady />}
-              </PageFrame>
+              <PageFrame>{Page ? <Page /> : <NotReady />}</PageFrame>
             </SidebarProvider>
           </TooltipProvider>
         </AccentProvider>

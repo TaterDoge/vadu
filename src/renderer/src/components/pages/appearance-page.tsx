@@ -35,15 +35,15 @@ const ACCENT_LABELS: Record<AccentName, string> = {
   violet: "紫",
 };
 
-const THEME_OPTIONS: { label: string; value: Theme }[] = [
-  { label: "跟随系统", value: "system" },
-  { label: "明亮", value: "light" },
-  { label: "暗色", value: "dark" },
+const THEME_OPTIONS: { icon: string; label: string; value: Theme }[] = [
+  { icon: "icon-[lucide--monitor]", label: "跟随系统", value: "system" },
+  { icon: "icon-[lucide--sun]", label: "明亮", value: "light" },
+  { icon: "icon-[lucide--moon]", label: "暗色", value: "dark" },
 ];
 
-const STYLE_OPTIONS: { label: string; value: StyleName }[] = [
-  { label: "圆角", value: "nova" },
-  { label: "直角", value: "lyra" },
+const STYLE_OPTIONS: { icon: string; label: string; value: StyleName }[] = [
+  { icon: "icon-[lucide--squircle]", label: "圆角", value: "nova" },
+  { icon: "icon-[lucide--square]", label: "直角", value: "lyra" },
 ];
 
 function AppearancePage(): ReactNode {
@@ -72,11 +72,30 @@ function AppearancePage(): ReactNode {
             value={theme}
           >
             <SelectTrigger aria-label="主题" className="w-28">
-              <SelectValue />
+              <SelectValue>
+                {(value: Theme | null) => {
+                  const option = THEME_OPTIONS.find(
+                    (item) => item.value === value
+                  );
+                  return option ? (
+                    <>
+                      <span
+                        aria-hidden="true"
+                        className={cn(option.icon, "size-4")}
+                      />
+                      {option.label}
+                    </>
+                  ) : null;
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {THEME_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
+                  <span
+                    aria-hidden="true"
+                    className={cn(option.icon, "size-4")}
+                  />
                   {option.label}
                 </SelectItem>
               ))}
@@ -150,11 +169,30 @@ function AppearancePage(): ReactNode {
             value={style}
           >
             <SelectTrigger aria-label="组件风格" className="w-24">
-              <SelectValue />
+              <SelectValue>
+                {(value: StyleName | null) => {
+                  const option = STYLE_OPTIONS.find(
+                    (item) => item.value === value
+                  );
+                  return option ? (
+                    <>
+                      <span
+                        aria-hidden="true"
+                        className={cn(option.icon, "size-4")}
+                      />
+                      {option.label}
+                    </>
+                  ) : null;
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {STYLE_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
+                  <span
+                    aria-hidden="true"
+                    className={cn(option.icon, "size-4")}
+                  />
                   {option.label}
                 </SelectItem>
               ))}

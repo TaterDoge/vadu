@@ -8,6 +8,8 @@ import {
   useState,
 } from "react";
 
+import { useStorageSync } from "./use-storage-sync";
+
 /** 主题色只换强调色 token（见 styles.css 的 [data-accent]），深浅两套值由 light-dark() 按 color-scheme 选中 */
 export const ACCENT_NAMES = [
   "neutral",
@@ -41,15 +43,25 @@ export function AccentProvider({
 }): ReactNode {
   const [accent, setStoredAccent] = useState<AccentName>(readStoredAccent);
 
+  const applyAccent = useCallback((next: AccentName): void => {
+    setStoredAccent(next);
+    document.documentElement.dataset.accent = next;
+  }, []);
+
+  useStorageSync(STORAGE_KEY, readStoredAccent, applyAccent);
+
   // layout effect：被动 effect 在首帧之后才跑，浅色主题下已存色会先画一帧中性再变
   useLayoutEffect(() => {
     document.documentElement.dataset.accent = accent;
   }, [accent]);
 
-  const setAccent = useCallback((next: AccentName): void => {
-    setStoredAccent(next);
-    localStorage.setItem(STORAGE_KEY, next);
-  }, []);
+  const setAccent = useCallback(
+    (next: AccentName): void => {
+      applyAccent(next);
+      localStorage.setItem(STORAGE_KEY, next);
+    },
+    [applyAccent]
+  );
 
   const value = useMemo<AccentContextValue>(
     () => ({ accent, setAccent }),

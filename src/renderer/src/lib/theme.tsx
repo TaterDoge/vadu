@@ -8,6 +8,8 @@ import {
   useState,
 } from "react";
 
+import { useStorageSync } from "./use-storage-sync";
+
 /**
  * 主题真值目前只存在渲染层 localStorage（`AppSettings.theme` 是接 config 通道后的落盘点）。
  * 在那之前不要再从主进程读它，否则会出现两个互相矛盾的值。
@@ -31,6 +33,20 @@ function readStoredTheme(): Theme {
   return stored === "light" || stored === "dark" ? stored : "system";
 }
 
+function resolveTheme(theme: Theme, systemDark: boolean): ResolvedTheme {
+  if (theme === "system") {
+    return systemDark ? "dark" : "light";
+  }
+  return theme;
+}
+
+/** 写 html：原生滚动条与表单控件不读 class，必须靠 color-scheme 才跟着变 */
+function paintTheme(next: ResolvedTheme): void {
+  const root = document.documentElement;
+  root.classList.toggle("dark", next === "dark");
+  root.style.colorScheme = next;
+}
+
 export function ThemeProvider({
   children,
 }: {
@@ -50,20 +66,26 @@ export function ThemeProvider({
     return () => query.removeEventListener("change", onChange);
   }, []);
 
-  const systemResolved: ResolvedTheme = systemDark ? "dark" : "light";
-  const resolved: ResolvedTheme = theme === "system" ? systemResolved : theme;
+  const applyTheme = useCallback((next: Theme): void => {
+    setStoredTheme(next);
+    paintTheme(resolveTheme(next, window.matchMedia(DARK_QUERY).matches));
+  }, []);
+
+  useStorageSync(STORAGE_KEY, readStoredTheme, applyTheme);
+
+  const resolved = resolveTheme(theme, systemDark);
 
   useEffect(() => {
-    const root = document.documentElement;
-    root.classList.toggle("dark", resolved === "dark");
-    // 原生滚动条与表单控件不读 class，必须靠 color-scheme 才跟着变
-    root.style.colorScheme = resolved;
+    paintTheme(resolved);
   }, [resolved]);
 
-  const setTheme = useCallback((next: Theme): void => {
-    setStoredTheme(next);
-    localStorage.setItem(STORAGE_KEY, next);
-  }, []);
+  const setTheme = useCallback(
+    (next: Theme): void => {
+      applyTheme(next);
+      localStorage.setItem(STORAGE_KEY, next);
+    },
+    [applyTheme]
+  );
 
   const value = useMemo<ThemeContextValue>(
     () => ({ resolved, setTheme, theme }),

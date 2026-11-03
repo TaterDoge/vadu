@@ -1,0 +1,77 @@
+{
+  "apiVersion": 1,
+  "id": "vadu.ai",
+  "name": "AI 翻译",
+  "version": "0.1.0",
+  "kind": "translator",
+  "main": "index.js",
+  "description": "通过任意 OpenAI 兼容端点做翻译",
+  "author": "vadu",
+  "capabilities": {
+    "glossary": true,
+    "models": true,
+    "streaming": true
+  },
+  "permissions": ["net:*"],
+  "config": {
+    "type": "object",
+    "required": ["baseURL", "model", "apiKey"],
+    "properties": {
+      "baseURL": {
+        "type": "string",
+        "title": "接口地址 (Base URL)",
+        "placeholder": "https://api.openai.com/v1",
+        "required": true
+      },
+      "apiKey": {
+        "type": "secret",
+        "title": "API Key",
+        "required": true
+      },
+      "model": {
+        "type": "string",
+        "title": "模型",
+        "placeholder": "gpt-4.1-mini",
+        "required": true
+      }
+    }
+  },
+  "presets": [
+    {
+      "id": "openai",
+      "label": "OpenAI",
+      "config": {
+        "baseURL": "https://api.openai.com/v1",
+        "model": "gpt-4.1-mini"
+      },
+      "models": ["gpt-4.1-mini", "gpt-4o-mini"]
+    },
+    {
+      "id": "deepseek",
+      "label": "DeepSeek",
+      "config": {
+        "baseURL": "https://api.deepseek.com/v1",
+        "model": "deepseek-chat"
+      },
+      "models": ["deepseek-chat", "deepseek-reasoner"]
+    },
+    {
+      "id": "moonshot",
+      "label": "Moonshot / Kimi",
+      "config": {
+        "baseURL": "https://api.moonshot.cn/v1",
+        "model": "moonshot-v1-8k"
+      },
+      "models": ["moonshot-v1-8k", "moonshot-v1-32k"]
+    },
+    {
+      "id": "ollama",
+      "label": "本地 Ollama",
+      "config": {
+        "baseURL": "http://127.0.0.1:11434/v1",
+        "model": "qwen3:8b"
+      },
+      "models": []
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import {
   DEFAULT_SETTINGS,
   SCHEMA_VERSION,
   mergeConfig,
+  mergeProfiles,
   toSettings,
 } from "./settings";
 
@@ -78,6 +79,36 @@ describe("toSettings", () => {
   test("未知字段原样保留，避免旧版本写入的配置被抹掉", () => {
     const settings = toSettings({ extra: "keep" });
     assert.equal((settings as Record<string, unknown>).extra, "keep");
+  });
+});
+
+describe("mergeProfiles", () => {
+  const profile = {
+    allowedOrigins: ["https://api.openai.com"],
+    config: { baseURL: "https://api.openai.com/v1", model: "gpt-4.1-mini" },
+    createdAt: 1,
+    enabled: true,
+    id: "p1",
+    name: "默认",
+    pluginId: "vadu.ai",
+  };
+
+  test("保留 settings 与未知顶层字段，只替换 profiles", () => {
+    const merged = mergeProfiles(
+      { extra: "keep", schemaVersion: 1, settings: { theme: "dark" } },
+      [profile]
+    );
+    assert.equal(merged.schemaVersion, SCHEMA_VERSION);
+    assert.deepEqual(merged.settings, { theme: "dark" });
+    assert.equal(merged.extra, "keep");
+    assert.deepEqual(merged.profiles, [profile]);
+  });
+
+  test("无旧文件也能写", () => {
+    assert.deepEqual(mergeProfiles(null, [profile]), {
+      profiles: [profile],
+      schemaVersion: SCHEMA_VERSION,
+    });
   });
 });
 

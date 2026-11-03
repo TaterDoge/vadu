@@ -11,6 +11,7 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+  - out/main/plugins/**   # 插件目录解包到 app.asar.unpacked，避开 asar 内动态 import 的问题
 win:
   executableName: vadu
 nsis:

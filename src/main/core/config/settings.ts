@@ -7,6 +7,7 @@ import {
   type AppSettings,
   DEFAULT_HOTKEYS,
   type InAppHotkeyState,
+  type Profile,
 } from "../../../shared/ipc";
 
 export const SCHEMA_VERSION = 1;
@@ -98,4 +99,12 @@ export function mergeConfig(
   settings: AppSettings
 ): Record<string, unknown> {
   return { ...(existing ?? {}), schemaVersion: SCHEMA_VERSION, settings };
+}
+
+/** 同上：只替换 profiles 数组，settings 与未知顶层字段原样保留 */
+export function mergeProfiles(
+  existing: Record<string, unknown> | null,
+  profiles: Profile[]
+): Record<string, unknown> {
+  return { ...(existing ?? {}), profiles, schemaVersion: SCHEMA_VERSION };
 }

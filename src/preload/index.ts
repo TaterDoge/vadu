@@ -5,10 +5,17 @@ import type {
   HotkeyState,
   InAppHotkeyAction,
   InAppHotkeyState,
+  IpcChannel,
   IpcResult,
+  PluginDescriptor,
+  Profile,
+  SecretStorageState,
+  TranslateEvent,
+  TranslateParams,
   VaduApi,
 } from "../shared/ipc";
 import { IPC } from "../shared/ipc";
+import type { ModelInfo } from "../shared/plugin";
 
 /** shared 一层只认三档平台；其它（freebsd 等）按非 mac 走 */
 const platform: AppPlatform =
@@ -16,11 +23,27 @@ const platform: AppPlatform =
     ? process.platform
     : "linux";
 
+/** 订阅封装：返回退订函数，不把 ipcRenderer.on 透传给渲染层 */
+function subscribe<T>(
+  channel: IpcChannel,
+  fn: (payload: T) => void
+): () => void {
+  const listener = (_event: Electron.IpcRendererEvent, payload: T): void => {
+    fn(payload);
+  };
+  ipcRenderer.on(channel, listener);
+  return () => {
+    ipcRenderer.removeListener(channel, listener);
+  };
+}
+
 // 只暴露显式声明过的能力：不投 electronAPI，渲染层拿不到任意通道的 ipcRenderer
 const vadu: VaduApi = {
   app: {
     getQuickWindowPinned: (): Promise<IpcResult<boolean>> =>
       ipcRenderer.invoke(IPC.getQuickWindowPinned),
+    getSecretStorage: (): Promise<IpcResult<SecretStorageState>> =>
+      ipcRenderer.invoke(IPC.getSecretStorage),
     getShowMainWindowOnStartup: (): Promise<IpcResult<boolean>> =>
       ipcRenderer.invoke(IPC.getShowMainWindowOnStartup),
     setQuickWindowContentHeight: (height: number): Promise<IpcResult<null>> =>
@@ -35,6 +58,12 @@ const vadu: VaduApi = {
       ipcRenderer.invoke(IPC.showSettings),
     toggleQuickWindow: (): Promise<IpcResult<null>> =>
       ipcRenderer.invoke(IPC.toggleQuickWindow),
+  },
+  config: {
+    listProfiles: (pluginId?: string): Promise<IpcResult<Profile[]>> =>
+      ipcRenderer.invoke(IPC.config.listProfiles, pluginId ? { pluginId } : {}),
+    saveProfile: (profile: Profile): Promise<IpcResult<Profile>> =>
+      ipcRenderer.invoke(IPC.config.saveProfile, profile),
   },
   hotkey: {
     get: (): Promise<IpcResult<HotkeyState>> =>
@@ -52,6 +81,41 @@ const vadu: VaduApi = {
       ipcRenderer.invoke(IPC.setHotkeySuspended, { suspended }),
   },
   platform,
+  plugins: {
+    list: (): Promise<IpcResult<PluginDescriptor[]>> =>
+      ipcRenderer.invoke(IPC.plugins.list),
+    listModels: (
+      pluginId: string,
+      profileId: string,
+      config: Record<string, unknown>
+    ): Promise<IpcResult<ModelInfo[]>> =>
+      ipcRenderer.invoke(IPC.plugins.listModels, {
+        config,
+        pluginId,
+        profileId,
+      }),
+  },
+  secrets: {
+    has: (profileId: string, name: string): Promise<IpcResult<boolean>> =>
+      ipcRenderer.invoke(IPC.secrets.has, { name, profileId }),
+    set: (
+      profileId: string,
+      name: string,
+      value: string
+    ): Promise<IpcResult<null>> =>
+      ipcRenderer.invoke(IPC.secrets.set, { name, profileId, value }),
+  },
+  translate: {
+    cancel: (requestId: string): void => {
+      ipcRenderer.send(IPC.translate.cancel, { requestId });
+    },
+    onEvent: (fn: (event: TranslateEvent) => void): (() => void) =>
+      subscribe<TranslateEvent>(IPC.translate.event, fn),
+    start: (
+      params: TranslateParams
+    ): Promise<IpcResult<{ requestId: string }>> =>
+      ipcRenderer.invoke(IPC.translate.start, params),
+  },
 };
 
 contextBridge.exposeInMainWorld("vadu", vadu);

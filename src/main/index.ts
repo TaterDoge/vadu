@@ -7,7 +7,9 @@ import {
   type InAppHotkeyAction,
   type InAppHotkeyState,
 } from "../shared/ipc";
+import { initSecrets } from "./core/config/secrets";
 import { readSettings, updateSettings } from "./core/config/store";
+import { registry } from "./core/plugin/registry";
 import {
   applyHotkey,
   applyInAppHotkey,
@@ -18,6 +20,10 @@ import {
   setHotkeySuspended,
 } from "./hotkey";
 import { handle } from "./ipc";
+import { registerConfigIpc } from "./ipc/config";
+import { registerPluginsIpc } from "./ipc/plugins";
+import { registerSecretsIpc } from "./ipc/secrets";
+import { registerTranslateIpc } from "./ipc/translate";
 import { createTray } from "./tray";
 import {
   getQuickWindowPinned,
@@ -39,9 +45,28 @@ function start(): void {
 
   // This method will be called when Electron has finished
   // initialization and is ready to create browser windows.
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     // Set app user model id for windows; must match electron-builder appId
     electronApp.setAppUserModelId("com.vadu.app");
+
+    // 密钥解密与插件加载失败都不阻断启动：失败时插件列表显示原因
+    try {
+      await initSecrets();
+    } catch {
+      console.error("[secrets] 初始化失败，使用会话内存");
+    }
+    try {
+      await registry.discover();
+    } catch (error) {
+      console.error(
+        `[bootstrap] ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+
+    registerConfigIpc();
+    registerPluginsIpc();
+    registerSecretsIpc();
+    registerTranslateIpc();
 
     // Default open or close DevTools by F12 in development
     // and ignore CommandOrControl + R in production.

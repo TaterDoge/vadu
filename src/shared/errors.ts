@@ -47,9 +47,12 @@ export class VaduError extends Error {
   constructor(
     code: PluginErrorCode,
     message: string,
-    options: { pluginId?: string; retryable?: boolean } = {}
+    options: { pluginId?: string; retryable?: boolean; cause?: unknown } = {}
   ) {
-    super(message);
+    super(
+      message,
+      options.cause === undefined ? undefined : { cause: options.cause }
+    );
     this.name = "VaduError";
     this.code = code;
     this.pluginId = options.pluginId;

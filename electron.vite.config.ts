@@ -1,4 +1,5 @@
-import { resolve } from "node:path";
+import { copyFileSync, mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -14,8 +15,32 @@ const devCspUnsafeInlineScripts: Plugin = {
     html.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'"),
 };
 
+// 内置插件必须保持独立模块，被打进主 bundle 就无法被动态 import()
+const copyPluginManifests: Plugin = {
+  name: "copy-plugin-manifests",
+  writeBundle() {
+    const manifest = resolve("src/main/plugins/ai/manifest.json");
+    const target = resolve("out/main/plugins/ai/manifest.json");
+    mkdirSync(dirname(target), { recursive: true });
+    copyFileSync(manifest, target);
+  },
+};
+
 export default defineConfig({
-  main: {},
+  main: {
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve("src/main/index.ts"),
+          "plugins/ai/index": resolve("src/main/plugins/ai/index.ts"),
+        },
+        output: {
+          entryFileNames: "[name].js",
+        },
+      },
+    },
+    plugins: [copyPluginManifests],
+  },
   preload: {},
   renderer: {
     plugins: [react(), tailwindcss(), devCspUnsafeInlineScripts],

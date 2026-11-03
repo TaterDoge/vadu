@@ -63,7 +63,7 @@ my-plugin/
 | 字段 | 必填 | 类型 | 语义 |
 | --- | --- | --- | --- |
 | `apiVersion` | 是 | 整数 | 契约版本。当前 `1`。与宿主不匹配则**拒绝加载** |
-| `id` | 是 | string | 全局唯一，反向域名，小写，仅 `[a-z0-9._-]`。profile 与密钥都挂在它下面 |
+| `id` | 是 | string | 插件身份全局唯一，反向域名，小写，仅 `[a-z0-9._-]`。profile 通过 pluginId 关联插件，密钥按 profileId 隔离 |
 | `name` | 是 | string | 界面展示名 |
 | `version` | 是 | string | 插件自身 semver |
 | `kind` | 是 | `"translator"` | 能力种类。当前只实现 `translator` |
@@ -145,12 +145,18 @@ type ConfigSchema = {
 
 规则：
 
-1. `secret` 字段的值**永远不会**出现在 `req.config` 里，也不会进入渲染层的 profile 数据（只有"已设置/未设置"状态）。插件只能通过 `runtime.secrets.get(name)` 取。
+1. `secret` 字段的值**永远不会**出现在 `req.config` 里，也不会进入渲染层的 profile 数据（只有"已设置/未设置"状态）。插件只能通过 `runtime.secrets.get(name)` 取。宿主按 `profileId` 分桶，runtime 绑定本次调用的 profile，同插件不同 profile 的同名密钥彼此隔离。
 2. 校验由 core 在保存 profile 时执行：类型、`enum` 成员、`minimum`/`maximum`、`required`。不通过则拒绝保存并返回字段级错误。插件自己不需要重复校验，但 `validateConfig()` 可用于语义校验（如 key 是否有效）。
 3. 未知字段忽略，不报错——插件可以在 manifest 升级时增加字段。
-4. `x-widget: "model-picker"` 的渲染行为：下拉框 + 刷新按钮；刷新调用 `plugin.listModels(当前表单值)`；失败降级为普通文本输入。
+4. `x-widget: "model-picker"` 的字段渲染为下拉框 + 刷新按钮；当前实现的统一「获取模型列表」组件位于表单底部（一次只服务当前 profile），语义相同：刷新调用 `plugin.listModels(当前表单值)`；失败降级为普通文本输入。
 
-   刷新时的密钥来源：**只用已保存的密钥**，不用输入框里的未保存值（那些值本来就不应该经过渲染层与主进程的这条路径，否则等于新开一条传密钥的通道）。因此：从未保存过密钥时点击刷新，直接提示"请先保存密钥"，不发请求。
+   刷新条件（由宿主强制）：
+
+   - **profile 必须已保存**：`profileId` 指向已落盘 profile，新 profile 首次保存前不发请求，UI 提示「先保存配置」。
+   - **密钥只用已保存的**：不读输入框里的未保存值（那些值本来就不应该经过渲染层与主进程的这条路径，否则等于新开一条传密钥的通道）。对应 secret 字段从未保存过密钥时直接提示「请先保存 API Key」，不发请求。
+   - **origin 只允许已确认的**：请求经受控 `runtime.fetch`，只发往 `allowedOrigins`；未确认 origin 返回 `PERMISSION_DENIED`。
+
+   返回的 `ModelInfo[]` 宿主去重并截断到 500 条，适配器侧截断到 200 条；单次调用超时 30s。
 5. 字段顺序 = `properties` 的书写顺序。
 6. `type: "json"` 只接受可解析的 JSON 对象（不允许数组/标量），值直接以对象形式存进 profile。用于 `extra` 这类厂商特有参数；插件读到的已经是对象，不需要自己 `JSON.parse`。
 7. 密钥存储能力不是插件能干预的：Linux 无密钥环时宿主可能拒绝落盘改为会话内存，插件只需处理好 `runtime.secrets.get()` 返回 `undefined`。

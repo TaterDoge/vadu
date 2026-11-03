@@ -125,7 +125,7 @@ data: {"choices":[{"delta":{"content":"好"}}]}
 data: [DONE]
 ```
 
-按行读，`data: ` 前缀剥离，`[DONE]` 结束，取 `choices[0].delta.content`。空 content（首帧只有 `role`）跳过。`choices[0].finish_reason` 非空后停止。
+EOF 时 flush UTF-8 decoder 并提交残余 data 帧；缺少 `[DONE]`/finish_reason 或 UTF-8/JSON 截断视为错误，不把半句当成功。按行读，`data: ` 前缀剥离，`[DONE]` 结束，取 `choices[0].delta.content`。空 content（首帧只有 `role`）跳过。`choices[0].finish_reason` 非空后停止。
 
 ### anthropic
 
@@ -158,6 +158,8 @@ data: {...}
 - **首字节超时 20s，总计超时 120s**。流式请求不能用单一总超时覆盖一切；首字节超时才是用户真正感知的"卡住"。
 - **不自动重试流式请求**。已经向用户显示了半句话之后再重来会闪烁，且部分厂商按 token 计费会重复扣。重试只在"首个 chunk 之前失败"时允许，且最多 1 次、仅对 `NETWORK` / `TIMEOUT` / `429`。
 - 取消一律通过 `AbortSignal` 下传到 `runtime.fetch`。适配器在 `catch` 里判断 `signal.aborted` 后抛 `code = "ABORTED"`，由宿主静默处理。
+
+> **本阶段状态（实现切片）**：仅 `openai` 适配器已交付。超时已实现（首输出 20s / 总计 120s，宿主层 watchdog）；**当前不自动重试**流式请求、**无缓存**。设置页为「服务商列表 + 表单」左右布局：左侧按插件 profile 列出服务商（搜索、按启用/未启用过滤、独立滚动，底部固定「新增自定义 OpenAI」，新服务商出现在列表顶部），右侧由插件 `configSchema` 动态生成表单，底部是「获取模型列表」组件。保存前由主进程向发起窗口绑定的原生对话框展示未确认 origin 与 API Key/原文发送风险，默认拒绝；保存串行化，渲染层传入的 allowedOrigins 不参与授权，origin 白名单随 profile 持久化，受控 `runtime.fetch` 只发往已确认 origin；密钥按 profileId 经 `safeStorage` 异步 API 加密落盘，Linux `basic_text`/加密不可用时仅会话内存并明确告知，不提供明文落盘选项。服务商启用开关随 profile 持久化（`enabled`），仅影响设置页列表过滤，翻译不受影响。
 
 ## 6. core 侧的译文校验
 

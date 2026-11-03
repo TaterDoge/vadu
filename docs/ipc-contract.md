@@ -82,6 +82,7 @@ export function handle<TArg, TResult>(
 | `vadu:plugins:list` | invoke | — | `PluginDescriptor[]` |
 | `vadu:plugins:rescan` | invoke | — | `PluginDescriptor[]` |
 | `vadu:plugins:setEnabled` | invoke | `{ pluginId: string; enabled: boolean }` | `PluginDescriptor` |
+| `vadu:plugins:listModels` | invoke | `{ pluginId: string; profileId: string; config: Record<string, unknown> }` | `ModelInfo[]` |
 | `vadu:plugins:changed` | send（main→renderer） | `PluginDescriptor[]` | — |
 | `vadu:plugins:install` | invoke | —（主进程自己弹目录选择框，见 §5）（M3） | `PluginDescriptor` |
 | `vadu:plugins:uninstall` | invoke | `{ pluginId: string }`（M3） | `void` |
@@ -123,6 +124,8 @@ export type PluginDescriptor = {
 
 ```ts
 export type TranslateParams = {
+  /** 渲染层预生成并先订阅事件，避免 start 应答前丢失事件 */
+  requestId: string;
   pluginId: string;
   profileId: string;
   text: string;
@@ -156,6 +159,7 @@ export type TranslateWarning = "PLACEHOLDER_MISMATCH" | "EMPTY_OUTPUT" | "OUTPUT
 **协议约束**
 
 1. `start` 只负责登记并立刻返回 `requestId`，**不等待翻译完成**。所有结果经 `vadu:translate:event` 推送。
+   - **requestId 由渲染层预生成并先订阅事件，再发 `start`**：事件永远不早于订阅，避免丢首帧。`start` 入参必须带该 `requestId`。
 2. 每个 `requestId` 的事件序列：`delta*` → `done`，或 `delta*` → `error`。`done` / `error` 之后不再有该 `requestId` 的事件。
 3. 取消后不再发送任何该 `requestId` 的事件（包括 `error`）。渲染层发出 `cancel` 后立即丢弃后续事件，但**保留已收到的 delta**并在面板上标记"已取消"——不做回滚（见 [architecture.md ADR-009](./architecture.md#7-架构决策记录)）。
 4. 同一窗口可并发多个 `requestId`，渲染层按 `requestId` 分派到各自的面板。
@@ -182,6 +186,10 @@ export type Profile = {
   name: string;            // 用户可读名，如「DeepSeek-快速」
   preset?: string;         // 创建时选用的 preset id
   config: Record<string, unknown>; // 不含 secret 字段
+  /** 已向用户确认过的 origin；宿主受控 fetch 只允许发往这里 */
+  allowedOrigins: string[];
+  /** 服务商开关：关闭后保留配置；翻译与浮窗可选项过滤该服务商，旧 profile 无此字段默认启用 */
+  enabled: boolean;
   createdAt: number;
 };
 
@@ -202,12 +210,30 @@ export type AppSettings = {
 };
 ```
 
+保存 profile 时主进程串行校验；新 id 由宿主生成，已有 id 不可更改 pluginId。渲染层的 allowedOrigins 被忽略；新 origin 必须通过绑定 sender 窗口的原生确认对话框，默认取消并展示密钥与原文发往该地址的风险。配置值必须通过插件 `configSchema` 清洗：未知字段忽略、secret 字段剔除、类型/enum/min/max/required 违规即拒绝保存。`enabled` 只接受布尔，缺省视为 `true`（旧 profile 无此字段时按启用处理）。
+
+### 模型列表（`vadu:plugins:listModels`）
+
+设置页右下「获取模型列表」组件的唯一数据通道，语义：
+
+- 入参 `profileId` 必须指向已完成保存的 profile（新 profile 首次保存前不可获取，UI 提示「先保存配置」）。
+- **密钥只从该 profile 已保存的密钥桶读取**，绝不使用渲染层输入框里的未保存值。对应 secret 字段未保存过密钥时直接返回 `AUTH_FAILED` 提示「请先保存 API Key」，不发请求。
+- origin 约束与翻译相同：请求经受控 `runtime.fetch`，只允许发往 `allowedOrigins` 里已确认的地址；未确认 origin 返回 `PERMISSION_DENIED`。
+- `config` 由渲染层传当前表单值（含未保存修改），宿主只做形状与字段数校验，不落盘。
+- 返回 `ModelInfo[]`，宿主去重并截断到 500 条；适配器侧截断到 200 条。
+- 超时 30s，错误归一化与翻译一致（`TIMEOUT` / `NETWORK` / `AUTH_FAILED` …）。
+- `ModelInfo = { id: string; label?: string }`，来自 `src/shared/plugin.ts`。
+
 ### 密钥
 
 | 通道 | 方向 | 入参 | 返回 |
 | --- | --- | --- | --- |
-| `vadu:secret:set` | invoke | `{ pluginId: string; name: string; value: string }` | `void` |
-| `vadu:secret:clear` | invoke | `{ pluginId: string }` | `void` |
+| `vadu:secret:has` | invoke | `{ profileId: string; name: string }` | `boolean` |
+| `vadu:secret:set` | invoke | `{ profileId: string; name: string; value: string }` | `void` |
+
+清除单个密钥使用 `vadu:secret:set`，传对应 `profileId`、`name` 和空字符串 `value`；不另设 `secret:clear` 通道。
+
+`vadu:secret:has` 只返回「该 profile 是否已保存某密钥」的布尔值，不暴露密钥任何片段，用于设置页表单占位与模型列表前置判断；`PluginDescriptor.secretsSet` 是跨 profile 的聚合快照，不得用于当前 profile 的保存状态。
 
 **没有 `secret:get` 通道，永远不要加。** 也**不提供掩码 / 片段回显**：返回 key 的任何一部分都需要把密钥送进渲染层，收益只是让用户认出是哪个 key——用 profile 名区分即可。
 
@@ -217,7 +243,7 @@ UI 回填规则：
 - 编辑已有 profile：输入框始终为空，placeholder 显示 `已设置（留空则不修改）` 或 `未设置`，数据来自 `PluginDescriptor.secretsSet`。
 - 用户只提交空值 = 不修改；提交非空值 = 覆盖。
 - 保存能力经 `vadu:app:getSecretStorage` 查询，返回 `{ available: boolean; backend?: string; plaintext: boolean }`。
-- 明文降级（Linux 无密钥环）时 UI 必须显示警告并让用户显式选择"仅本次会话使用"，不静默落盘。
+- Linux 无安全密钥环或加密不可用时，宿主自动仅会话内存保存，UI 明确提示重启后需重新填写；不提供明文落盘选项。
 
 ### 应用
 
@@ -269,6 +295,7 @@ const vadu = {
     list: () => call(IPC.plugins.list),
     rescan: () => call(IPC.plugins.rescan),
     setEnabled: (pluginId: string, enabled: boolean) => call(IPC.plugins.setEnabled, { enabled, pluginId }),
+    listModels: (pluginId: string, profileId: string, config: Record<string, unknown>) => call(IPC.plugins.listModels, { pluginId, profileId, config }),
     onChanged: (fn: (plugins: PluginDescriptor[]) => void) => subscribe(IPC.plugins.changed, fn),
   },
   translate: {

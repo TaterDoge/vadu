@@ -67,7 +67,7 @@
 | `manifest.ts` | 手写校验 manifest 形状；`apiVersion` 兼容判定 |
 | `loader.ts` | 双源发现（内置 + `userData/plugins`），动态 `import()`，逐个隔离失败 |
 | `registry.ts` | 内存插件表：已加载/已禁用/加载失败三种状态；变更事件 |
-| `host.ts` | 调用包装：构造 `PluginRuntime`、注入受控 `fetch`、超时、取消、错误归一化 |
+| `host.ts` | 调用包装：构造 `PluginRuntime`、注入受控 `fetch`、超时、取消、错误归一化；模型列表获取（`listModels`）走同一条受控路径 |
 
 加载失败的插件**不阻断启动**：记录错误，在 UI 的插件列表里显示为"加载失败 + 原因"，继续加载其它插件。
 
@@ -86,29 +86,29 @@
 ### core/config — 持久化
 
 - `config.json`（`app.getPath("userData")`）：`{ schemaVersion, settings, profiles[] }`，原子写（写临时文件再 rename）。
-- `secrets.bin`：`safeStorage` 加密后的密钥表，结构 `{ [pluginId]: { [secretName]: base64 } }`。
+- `secrets.bin`：`safeStorage` 加密后的密钥表，结构 `{ version: 1, entries: { [profileId]: { [secretName]: { cipher: base64 } } } }`；runtime 只读取本次 profile 的密钥。
 - 两者都由 `store.ts` / `secrets.ts` 独占，其它模块只拿接口。
 - **写入只能走 `updateSettings(patch)`**：它会读→合并→原子写。`settings` 与 `profiles` 同居一个文件，任何「拿整个 `AppSettings` 盖回去」的写法都会静默抹掉 `profiles`。
-- 形状清洗（旧版本字段、手改的坏值）集中在 `config/settings.ts` 的 `toSettings()`，纯函数、有单测；`store.ts` 只管磁盘 IO。
+- 形状清洗（旧版本字段、手改的坏值）集中在 `config/settings.ts` 的 `toSettings()`，纯函数、有单测；`store.ts` 只管磁盘 IO。profile 配置再经 `config/validate.ts` 按插件 `configSchema` 清洗（未知字段忽略、secret 剔除、类型/enum/min/max/required 校验），`enabled` 缺省视为 `true`。
 
 **密钥存储必须用异步 API。** `safeStorage` 的同步 API（`isEncryptionAvailable` / `encryptString` / `decryptString`）自 Electron 45 起弃用、46 移除，本项目从第一天就用异步形态：
 
 ```ts
 await safeStorage.isAsyncEncryptionAvailable();
 const cipher = await safeStorage.encryptStringAsync(plain);
-const { plainText, shouldReEncrypt } = await safeStorage.decryptStringAsync(cipher);
+const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(cipher);
 ```
 
-`shouldReEncrypt === true`（密钥环轮换）时必须立即回写新密文，否则某次系统更新后用户的 key 会全部解不开。
+`shouldReEncrypt === true`（密钥环轮换）时宿主将新密文排入串行写队列（失败不阻断启动），否则某次系统更新后用户的 key 会全部解不开。
 
 **Linux 降级**：`safeStorage.getSelectedStorageBackend()` 返回 `basic_text` 表示没有可用的密钥环（GNOME Keyring / KWallet 都没装），此时密文是用硬编码口令加密的，**等同明文**。行为规定：
 
 | 情况 | 行为 |
 | --- | --- |
 | 加密可用且非 `basic_text` | 正常加密落盘 |
-| `basic_text` 或加密不可用 | 默认**不落盘**，密钥仅存本次会话内存；UI 明确告知原因，并提供一个"仍然保存（不安全）"的显式选项 |
+| `basic_text` 或加密不可用 | **不落盘**，密钥仅存本次会话内存；UI 明确告知原因，不提供明文落盘选项 |
 
-绝不静默降级。用户必须知道自己填的 key 是明文躺在磁盘上的。
+绝不静默降级或写明文。密钥写入成功后才更新内存；持久化失败保留原内存/磁盘并向调用方报错。坏文件或解密失败时保留原文件，启动继续使用会话模式。
 
 ## 4. 目录结构
 
@@ -210,11 +210,11 @@ asarUnpack:
 ```ts
 // core/plugin/loader.ts
 const appRoot = app.getAppPath(); // 开发态 = 项目根；打包态 = <resources>/app.asar
-const builtinRoot = join(appRoot, "main/plugins").replace(`${sep}app.asar${sep}`, `${sep}app.asar.unpacked${sep}`);
+const builtinRoot = join(appRoot, "out/main/plugins").replace(`${sep}app.asar${sep}`, `${sep}app.asar.unpacked${sep}`);
 const userRoot = join(app.getPath("userData"), "plugins");
 ```
 
-注意：打包态的 `out/main/` 在 asar 里对应 `app.asar/main/`（electron-builder 把 `out/**` 映射为 asar 根），所以是 `main/plugins` 而不是 `out/main/plugins`。这个路径映射写错了插件会在开发态正常、打包后静默消失。
+注意：electron-builder 保留 `out/**` 路径；主入口是 `out/main/index.js`，插件位于 `app.asar.unpacked/out/main/plugins`。
 
 ## 5. 关键数据流
 

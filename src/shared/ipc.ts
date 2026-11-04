@@ -6,6 +6,7 @@ export type { ModelInfo } from "./plugin";
 
 export const IPC = {
   config: {
+    deleteProfile: "vadu:config:deleteProfile",
     listProfiles: "vadu:config:listProfiles",
     saveProfile: "vadu:config:saveProfile",
   },
@@ -267,6 +268,7 @@ export type VaduApi = {
     onEvent: (fn: (event: TranslateEvent) => void) => () => void;
   };
   config: {
+    deleteProfile: (profileId: string) => Promise<IpcResult<null>>;
     listProfiles: (pluginId?: string) => Promise<IpcResult<Profile[]>>;
     saveProfile: (profile: Profile) => Promise<IpcResult<Profile>>;
   };

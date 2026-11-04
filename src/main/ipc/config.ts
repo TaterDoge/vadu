@@ -3,7 +3,12 @@ import { randomUUID } from "node:crypto";
 import { VaduError } from "../../shared/errors";
 import type { Profile } from "../../shared/ipc";
 import { IPC } from "../../shared/ipc";
-import { readProfiles, saveProfile } from "../core/config/store";
+import { clearProfileSecrets } from "../core/config/secrets";
+import {
+  readProfiles,
+  deleteProfile as removeProfile,
+  saveProfile,
+} from "../core/config/store";
 import { validateConfigAgainstSchema } from "../core/config/validate";
 import { registry } from "../core/plugin/registry";
 import { normalizeBaseUrl, originOf } from "../core/url";
@@ -95,4 +100,25 @@ export function registerConfigIpc(): void {
     saveQueue = operation;
     return operation;
   });
+
+  handle<{ profileId?: string }, null>(
+    IPC.config.deleteProfile,
+    (raw, { sender }) => {
+      const operation = saveQueue
+        .catch(() => undefined)
+        .then(async () => {
+          if (sender.isDestroyed()) {
+            throw new VaduError("ABORTED", "窗口已关闭");
+          }
+          if (!isRecord(raw) || typeof raw.profileId !== "string") {
+            throw new VaduError("INVALID_CONFIG", "profileId 非法");
+          }
+          removeProfile(raw.profileId);
+          await clearProfileSecrets(raw.profileId);
+          return null;
+        });
+      saveQueue = operation;
+      return operation;
+    }
+  );
 }

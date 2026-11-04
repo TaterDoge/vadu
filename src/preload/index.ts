@@ -60,6 +60,8 @@ const vadu: VaduApi = {
       ipcRenderer.invoke(IPC.toggleQuickWindow),
   },
   config: {
+    deleteProfile: (profileId: string): Promise<IpcResult<null>> =>
+      ipcRenderer.invoke(IPC.config.deleteProfile, { profileId }),
     listProfiles: (pluginId?: string): Promise<IpcResult<Profile[]>> =>
       ipcRenderer.invoke(IPC.config.listProfiles, pluginId ? { pluginId } : {}),
     saveProfile: (profile: Profile): Promise<IpcResult<Profile>> =>

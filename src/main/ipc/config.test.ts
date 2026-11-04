@@ -24,9 +24,10 @@ const SCHEMA = {
 test("config IPC 自动登记 origin，忽略 renderer 授权，保存串行且不可换插件", async () => {
   const handlers = new Map<
     string,
-    (raw: unknown, ctx: unknown) => Promise<Profile>
+    (raw: unknown, ctx: unknown) => Promise<unknown>
   >();
   const profiles: Profile[] = [];
+  const clearedSecrets: string[] = [];
   let sequence = 0;
   const exports: Record<string, unknown> = {};
   const source = readFileSync(join(import.meta.dirname, "config.ts"), "utf8");
@@ -40,7 +41,19 @@ test("config IPC 自动登记 origin，忽略 renderer 授权，保存串行且�
     "../../../shared/errors": { VaduError },
     "../../shared/errors": { VaduError },
     "../../shared/ipc": { IPC },
+    "../core/config/secrets": {
+      clearProfileSecrets: (profileId: string) => {
+        clearedSecrets.push(profileId);
+        return Promise.resolve();
+      },
+    },
     "../core/config/store": {
+      deleteProfile: (id: string) => {
+        const index = profiles.findIndex((entry) => entry.id === id);
+        if (index >= 0) {
+          profiles.splice(index, 1);
+        }
+      },
       readProfiles: () => profiles,
       saveProfile: (profile: Profile) => {
         const index = profiles.findIndex((entry) => entry.id === profile.id);
@@ -62,7 +75,7 @@ test("config IPC 自动登记 origin，忽略 renderer 授权，保存串行且�
     "./index": {
       handle: (
         channel: string,
-        handler: (raw: unknown, ctx: unknown) => Promise<Profile>
+        handler: (raw: unknown, ctx: unknown) => Promise<unknown>
       ) => handlers.set(channel, handler),
     },
     "node:crypto": {
@@ -84,8 +97,16 @@ test("config IPC 自动登记 origin，忽略 renderer 授权，保存串行且�
     },
   });
   (exports.registerConfigIpc as () => void)();
-  const save = handlers.get(IPC.config.saveProfile);
+  const save = handlers.get(IPC.config.saveProfile) as (
+    raw: unknown,
+    ctx: unknown
+  ) => Promise<Profile>;
+  const remove = handlers.get(IPC.config.deleteProfile) as (
+    raw: unknown,
+    ctx: unknown
+  ) => Promise<null>;
   assert.ok(save);
+  assert.ok(remove);
   const ctx = { sender: { isDestroyed: () => false } };
   const input = {
     allowedOrigins: ["https://renderer.invalid"],
@@ -148,4 +169,15 @@ test("config IPC 自动登记 origin，忽略 renderer 授权，保存串行且�
     2,
     "并发保存不应丢 profile"
   );
+
+  // 删除必须同时掉 profile 与其密钥，否则密钥桶会残留成孤儿
+  await remove({ profileId: first.id }, ctx);
+  assert.deepEqual(
+    profiles.map((profile) => profile.id),
+    [savedProfile.id, second.id]
+  );
+  assert.deepEqual(clearedSecrets, [first.id]);
+  await assert.rejects(remove({ profileId: 1 }, ctx), {
+    code: "INVALID_CONFIG",
+  });
 });

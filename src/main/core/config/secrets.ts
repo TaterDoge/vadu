@@ -172,6 +172,12 @@ export function clearSecret(profileId: string, name: string): Promise<void> {
   });
 }
 
+export function clearProfileSecrets(profileId: string): Promise<void> {
+  return enqueueMutation((snapshot) => {
+    snapshot.delete(profileId);
+  });
+}
+
 export function getSecret(profileId: string, name: string): string | undefined {
   return memory.get(profileId)?.get(name);
 }

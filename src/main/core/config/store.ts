@@ -128,6 +128,15 @@ export function readProfiles(): Profile[] {
     .filter((profile): profile is Profile => profile !== null);
 }
 
+export function deleteProfile(id: string): void {
+  const raw = parseConfig(configPath());
+  if (!raw && existsSync(configPath())) {
+    throw new VaduError("INVALID_CONFIG", "配置文件损坏，请先恢复配置");
+  }
+  const profiles = readProfiles().filter((entry) => entry.id !== id);
+  writeConfigRaw(mergeProfiles(raw, profiles));
+}
+
 export function saveProfile(profile: Profile): Profile {
   const raw = parseConfig(configPath());
   if (!raw && existsSync(configPath())) {

@@ -1,21 +1,21 @@
 import { type ComponentType, type JSX, useState } from "react";
+import { SidebarProvider } from "@renderer/components/ui/sidebar";
+import { TooltipProvider } from "@renderer/components/ui/tooltip";
+import { AccentProvider } from "@renderer/lib/accent";
 import { IS_MAC } from "@renderer/lib/platform";
+import { StyleProvider } from "@renderer/lib/style";
+import { ThemeProvider } from "@renderer/lib/theme";
 
-import { AppSidebar } from "./components/layout/app-sidebar";
-import { DEFAULT_SECTION, type SectionId } from "./components/layout/nav";
-import { PageFrame } from "./components/layout/page-frame";
-import { AppearancePage } from "./components/pages/appearance-page";
-import { GeneralPage } from "./components/pages/general-page";
-import { ProvidersPage } from "./components/pages/providers-page";
-import { ShortcutsPage } from "./components/pages/shortcuts-page";
-import { SidebarProvider } from "./components/ui/sidebar";
-import { TooltipProvider } from "./components/ui/tooltip";
-import { AccentProvider } from "./lib/accent";
-import { StyleProvider } from "./lib/style";
-import { ThemeProvider } from "./lib/theme";
+import { AppSidebar } from "./components/app-sidebar";
+import { DEFAULT_SECTION, type SectionId } from "./components/nav";
+import { PageFrame } from "./components/page-frame";
+import { AppearancePage } from "./settings/appearance";
+import { GeneralPage } from "./settings/general";
+import { ProvidersPage } from "./settings/providers";
+import { ShortcutsPage } from "./settings/shortcuts";
 
 /** 已实现的分区；其余分区保留在导航里做后续里程碑入口，先渲染占位 */
-const PAGES: Partial<Record<SectionId, ComponentType>> = {
+const SECTIONS: Partial<Record<SectionId, ComponentType>> = {
   appearance: AppearancePage,
   general: GeneralPage,
   providers: ProvidersPage,
@@ -32,7 +32,7 @@ function NotReady(): JSX.Element {
 
 function App(): JSX.Element {
   const [section, setSection] = useState<SectionId>(DEFAULT_SECTION);
-  const Page = PAGES[section];
+  const Section = SECTIONS[section];
 
   return (
     <ThemeProvider>
@@ -45,7 +45,7 @@ function App(): JSX.Element {
                 <div className="drag-region fixed inset-x-0 top-0 z-50 h-7" />
               ) : null}
               <AppSidebar onSectionChange={setSection} section={section} />
-              <PageFrame>{Page ? <Page /> : <NotReady />}</PageFrame>
+              <PageFrame>{Section ? <Section /> : <NotReady />}</PageFrame>
             </SidebarProvider>
           </TooltipProvider>
         </AccentProvider>

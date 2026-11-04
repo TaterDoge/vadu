@@ -13,10 +13,10 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@renderer/components/ui/sidebar";
+import { StaggerList } from "@renderer/components/ui/stagger-list";
 import { IS_MAC } from "@renderer/lib/platform";
 import { cn } from "cn";
 
-import { StaggerList } from "../ui/stagger-list";
 import { NAV_ITEMS, type SectionId } from "./nav";
 import { StyleSwitcher } from "./style-switcher";
 

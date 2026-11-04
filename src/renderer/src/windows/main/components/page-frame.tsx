@@ -10,7 +10,7 @@ export function PageFrame({ children }: PageFrameProps): React.ReactNode {
     <SidebarInset className="min-w-0">
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {/* 子页面根节点就是本体：撑满滚动槽的剩余高度，滚动交给外层 */}
-        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col p-4 *:min-h-0 *:flex-1">
+        <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col p-4 *:min-h-0 *:flex-1">
           {children}
         </div>
       </div>

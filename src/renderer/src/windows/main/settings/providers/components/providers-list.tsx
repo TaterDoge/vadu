@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@renderer/components/ui/dropdown-menu";
 import { Input } from "@renderer/components/ui/input";
+import { StaggerList } from "@renderer/components/ui/stagger-list";
 import { Switch } from "@renderer/components/ui/switch";
 import type { Profile } from "@shared/ipc";
 import { cn } from "cn";
@@ -215,34 +216,40 @@ function LeftPanel({
         className="-mx-1 flex flex-1 flex-col gap-1 overflow-y-auto px-1"
         ref={listRef}
       >
-        {draftName ? (
-          <DraftRow
-            name={draftName}
-            onSelect={onSelectDraft}
-            selected={selectedId === NEW_PROFILE_ID}
-          />
-        ) : null}
-        {hasPlugins ? null : (
-          <p className="text-muted-foreground text-sm">
-            没有可用的翻译插件，请检查应用安装状态。
-          </p>
-        )}
-        {hasPlugins
-          ? filtered.map((profile) => (
-              <ProviderRow
-                key={profile.id}
-                onSelect={() => onSelect(profile.id)}
-                onToggle={(enabled) => onToggleEnabled(profile, enabled)}
-                profile={profile}
-                saving={saving}
-                selected={selectedId === profile.id}
-                subtitle={resolvePluginName(profile)}
-              />
-            ))
-          : null}
-        {hasPlugins && !draftName && filtered.length === 0 ? (
-          <p className="text-muted-foreground text-sm">没有匹配的服务商。</p>
-        ) : null}
+        {/* 每项都带稳定 key：条件行增删不能让后面的行换索引重放入场 */}
+        <StaggerList>
+          {draftName ? (
+            <DraftRow
+              key="draft"
+              name={draftName}
+              onSelect={onSelectDraft}
+              selected={selectedId === NEW_PROFILE_ID}
+            />
+          ) : null}
+          {hasPlugins ? null : (
+            <p className="text-muted-foreground text-sm" key="no-plugins">
+              没有可用的翻译插件，请检查应用安装状态。
+            </p>
+          )}
+          {hasPlugins
+            ? filtered.map((profile) => (
+                <ProviderRow
+                  key={profile.id}
+                  onSelect={() => onSelect(profile.id)}
+                  onToggle={(enabled) => onToggleEnabled(profile, enabled)}
+                  profile={profile}
+                  saving={saving}
+                  selected={selectedId === profile.id}
+                  subtitle={resolvePluginName(profile)}
+                />
+              ))
+            : null}
+          {hasPlugins && !draftName && filtered.length === 0 ? (
+            <p className="text-muted-foreground text-sm" key="empty">
+              没有匹配的服务商。
+            </p>
+          ) : null}
+        </StaggerList>
       </div>
       <Button
         className="w-full"

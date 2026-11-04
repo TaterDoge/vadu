@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@renderer/components/ui/select";
+import { StaggerList } from "@renderer/components/ui/stagger-list";
 import { Switch } from "@renderer/components/ui/switch";
 import { ALERT_ICON } from "@renderer/lib/icons";
 import type { ConfigField, ConfigSchema, PluginDescriptor } from "@shared/ipc";
@@ -319,135 +320,149 @@ function EditorForm({
   );
   return (
     <form className="flex flex-col gap-4" onSubmit={onSave}>
-      {pending ? (
-        <div className="flex items-center justify-between gap-2 rounded-lg border p-2.5">
-          <span className="text-muted-foreground text-sm">有未保存的更改</span>
-          <div className="flex gap-2">
-            <Button onClick={onConfirmDiscard} size="sm" type="button">
-              放弃并切换
-            </Button>
-            <Button
-              onClick={onCancelDiscard}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              取消
-            </Button>
+      {/* 每项都带稳定 key：保存/错误/提示条的出现不能让后面的行换索引重放入场 */}
+      <StaggerList>
+        {pending ? (
+          <div
+            className="flex items-center justify-between gap-2 rounded-lg border p-2.5"
+            key="pending"
+          >
+            <span className="text-muted-foreground text-sm">
+              有未保存的更改
+            </span>
+            <div className="flex gap-2">
+              <Button onClick={onConfirmDiscard} size="sm" type="button">
+                放弃并切换
+              </Button>
+              <Button
+                onClick={onCancelDiscard}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                取消
+              </Button>
+            </div>
           </div>
-        </div>
-      ) : null}
-      {secretAvailable ? null : (
-        <Alert>
-          <span aria-hidden="true" className={ALERT_ICON} />
-          <AlertDescription>
-            当前系统无安全密钥环，API Key
-            仅本次会话有效，重启后需重新填写（不会写入磁盘）。
-          </AlertDescription>
-        </Alert>
-      )}
-      <div className="flex items-center gap-2">
-        <h3 className="font-medium text-sm">
-          {isNew ? "新增自定义 OpenAI" : "编辑服务商"}
-        </h3>
-        {dirty ? (
-          <span className="text-muted-foreground text-xs">未保存</span>
         ) : null}
-      </div>
-      {showPluginName && plugin ? (
-        <p className="-mt-2 text-muted-foreground text-xs">{plugin.name}</p>
-      ) : null}
-      <Field className="gap-1.5">
-        <FieldLabel htmlFor="profile-name">名称</FieldLabel>
-        <Input
-          disabled={saving}
-          id="profile-name"
-          onChange={(event) => onPatch({ name: event.target.value })}
-          value={editor.name}
-        />
-      </Field>
-      {basicFields.map(([key, field]) => {
-        if (
-          key === "model" &&
-          field.type === "string" &&
-          !field.enum &&
-          plugin?.capabilities.models
-        ) {
+        {secretAvailable ? null : (
+          <Alert key="secret-alert">
+            <span aria-hidden="true" className={ALERT_ICON} />
+            <AlertDescription>
+              当前系统无安全密钥环，API Key
+              仅本次会话有效，重启后需重新填写（不会写入磁盘）。
+            </AlertDescription>
+          </Alert>
+        )}
+        <div className="flex items-center gap-2" key="title">
+          <h3 className="font-medium text-sm">
+            {isNew ? "新增自定义 OpenAI" : "编辑服务商"}
+          </h3>
+          {dirty ? (
+            <span className="text-muted-foreground text-xs">未保存</span>
+          ) : null}
+        </div>
+        {showPluginName && plugin ? (
+          <p className="-mt-2 text-muted-foreground text-xs" key="plugin-name">
+            {plugin.name}
+          </p>
+        ) : null}
+        <Field className="gap-1.5" key="name">
+          <FieldLabel htmlFor="profile-name">名称</FieldLabel>
+          <Input
+            disabled={saving}
+            id="profile-name"
+            onChange={(event) => onPatch({ name: event.target.value })}
+            value={editor.name}
+          />
+        </Field>
+        {basicFields.map(([key, field]) => {
+          if (
+            key === "model" &&
+            field.type === "string" &&
+            !field.enum &&
+            plugin?.capabilities.models
+          ) {
+            return (
+              <ModelPicker
+                config={mergeJsonFields(editor, schema)}
+                description={field.description}
+                disabled={saving}
+                hasSavedKey={hasSavedKey}
+                key={key}
+                model={String(editor.config.model ?? "")}
+                onModelChange={(model) =>
+                  onPatch({ config: { ...editor.config, model } })
+                }
+                placeholder={field.placeholder}
+                pluginId={plugin.id}
+                profileId={selectedId ?? ""}
+                required={
+                  field.required === true || schema?.required?.includes(key)
+                }
+                title={field.title}
+              />
+            );
+          }
           return (
-            <ModelPicker
-              config={mergeJsonFields(editor, schema)}
-              description={field.description}
+            <FieldRow
               disabled={saving}
-              hasSavedKey={hasSavedKey}
+              editor={editor}
+              field={field}
               key={key}
-              model={String(editor.config.model ?? "")}
-              onModelChange={(model) =>
-                onPatch({ config: { ...editor.config, model } })
-              }
-              placeholder={field.placeholder}
-              pluginId={plugin.id}
-              profileId={selectedId ?? ""}
-              required={
-                field.required === true || schema?.required?.includes(key)
-              }
-              title={field.title}
+              keyName={key}
+              onPatch={onPatch}
+              saved={secretHas[key] === true}
             />
           );
-        }
-        return (
-          <FieldRow
-            disabled={saving}
-            editor={editor}
-            field={field}
-            key={key}
-            keyName={key}
-            onPatch={onPatch}
-            saved={secretHas[key] === true}
-          />
-        );
-      })}
-      {advancedFields.length > 0 ? (
-        <CollapsibleRoot className="flex flex-col gap-4">
-          <CollapsibleTrigger className="group">
-            <span
-              aria-hidden="true"
-              className="icon-[lucide--chevron-down] size-4 transition-transform group-data-panel-open:rotate-180 motion-reduce:transition-none"
-            />
-            <span>高级选项</span>
-          </CollapsibleTrigger>
-          <CollapsiblePanel>
-            {advancedFields.map(([key, field]) => (
-              <FieldRow
-                disabled={saving}
-                editor={editor}
-                field={field}
-                key={key}
-                keyName={key}
-                onPatch={onPatch}
-                saved={secretHas[key] === true}
+        })}
+        {advancedFields.length > 0 ? (
+          <CollapsibleRoot className="flex flex-col gap-4" key="advanced">
+            <CollapsibleTrigger className="group">
+              <span
+                aria-hidden="true"
+                className="icon-[lucide--chevron-down] size-4 transition-transform group-data-panel-open:rotate-180 motion-reduce:transition-none"
               />
-            ))}
-          </CollapsiblePanel>
-        </CollapsibleRoot>
-      ) : null}
-      {error ? (
-        <Alert className="grid-cols-[auto_1fr] gap-x-2" variant="destructive">
-          <span aria-hidden="true" className={ALERT_ICON} />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {info ? (
-        <Alert className="grid-cols-[auto_1fr] gap-x-2">
-          <span aria-hidden="true" className={ALERT_ICON} />
-          <AlertDescription>{info}</AlertDescription>
-        </Alert>
-      ) : null}
-      <div className="flex items-center justify-between gap-2">
-        <Button disabled={saving || editor.name.trim() === ""} type="submit">
-          {saving ? "保存中…" : "保存"}
-        </Button>
-        {deleteControls}
-      </div>
+              <span>高级选项</span>
+            </CollapsibleTrigger>
+            <CollapsiblePanel>
+              {advancedFields.map(([key, field]) => (
+                <FieldRow
+                  disabled={saving}
+                  editor={editor}
+                  field={field}
+                  key={key}
+                  keyName={key}
+                  onPatch={onPatch}
+                  saved={secretHas[key] === true}
+                />
+              ))}
+            </CollapsiblePanel>
+          </CollapsibleRoot>
+        ) : null}
+        {error ? (
+          <Alert
+            className="grid-cols-[auto_1fr] gap-x-2"
+            key="error"
+            variant="destructive"
+          >
+            <span aria-hidden="true" className={ALERT_ICON} />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+        {info ? (
+          <Alert className="grid-cols-[auto_1fr] gap-x-2" key="info">
+            <span aria-hidden="true" className={ALERT_ICON} />
+            <AlertDescription>{info}</AlertDescription>
+          </Alert>
+        ) : null}
+        <div className="flex items-center justify-between gap-2" key="actions">
+          <Button disabled={saving || editor.name.trim() === ""} type="submit">
+            {saving ? "保存中…" : "保存"}
+          </Button>
+          {deleteControls}
+        </div>
+      </StaggerList>
     </form>
   );
 }

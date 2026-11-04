@@ -4,7 +4,7 @@ import { describe, test } from "node:test";
 import { validateManifest } from "./manifest";
 
 const BASE = {
-  apiVersion: 1,
+  apiVersion: 2,
   id: "vadu.ai",
   kind: "translator",
   main: "index.js",
@@ -24,7 +24,7 @@ describe("validateManifest", () => {
   });
 
   test("apiVersion 不匹配拒绝", () => {
-    const result = validateManifest({ ...BASE, apiVersion: 2 });
+    const result = validateManifest({ ...BASE, apiVersion: 1 });
     assert.equal(result.ok, false);
   });
 

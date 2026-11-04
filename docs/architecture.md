@@ -143,17 +143,19 @@ src/
 │   ├── index.ts              # contextBridge 暴露 window.vadu
 │   └── index.d.ts
 └── renderer/src/
-    ├── app.tsx              # 壳：ThemeProvider + SidebarProvider + 分区切换（当前是本地 state）
-    ├── lib/                 # 渲染层通用能力（主题、主题色、shadcn style 切换）
+    ├── main.tsx             # 根入口：单 bundle 双窗口，按 location.hash 选窗口根组件
+    ├── windows/
+    │   ├── main/            # 主窗：index.tsx 是壳，components/ 是侧边栏与页面骨架，settings/ 是各设置分区（一个分区一个目录，index.tsx 是入口，页面私有的子组件/纯逻辑放同目录）
+    │   └── quick/           # 翻译浮窗（独立窗口）：index.tsx 是入口，components/ 是其专属子件
+    ├── lib/                  # 渲染层通用能力（主题、主题色、shadcn style 切换）
     ├── hooks/
     └── components/
-        ├── ui/                # shadcn 生成件；只改样式不改结构
-        ├── layout/            # 侧边栏、页面骨架、分区登记、style 切换器
-        ├── quick/             # 翻译浮窗专属（输入区、输入工具条）
-        └── pages/             # 各分区页面内容（一个分区一个文件）
+        └── ui/                # shadcn 生成件；只改样式不改结构，跨窗口复用
 ```
 
-图标分两套：业务组件（`layout/`、`pages/`、`quick/`）用 Iconify 类名 `icon-[lucide--*]`，由 `@iconify/tailwind4` 在构建期把 SVG 内联成 CSS `data:` URI（运行时零网络、零 JS，受 `img-src data:` 约束）；`components/ui/` 是 shadcn 生成件，保持 `lucide-react` 不动。类名类型见 `lib/icons.ts`。
+目录按**归属**分层，不按文件类型：窗口私有的壳、分区、子件都留在 `windows/<窗口>/` 里，只有真正跨窗口复用的才上提到 `components/`；否则后续拆分时不知道该往哪放。
+
+图标分两套：业务组件（`windows/`）用 Iconify 类名 `icon-[lucide--*]`，由 `@iconify/tailwind4` 在构建期把 SVG 内联成 CSS `data:` URI（运行时零网络、零 JS，受 `img-src data:` 约束）；`components/ui/` 是 shadcn 生成件，保持 `lucide-react` 不动。类名类型见 `lib/icons.ts`。
 
 插件目录在运行时有两个来源：
 

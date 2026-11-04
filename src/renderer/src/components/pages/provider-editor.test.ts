@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import type { ModelInfo } from "@shared/ipc";
+
 import {
   draftLabel,
   ensureDraftVisible,
+  filterModels,
   isModelRequestInvalid,
+  mergeJsonFields,
   mergeSecretRetry,
   modelDisplayLabel,
   modelsConfigSignature,
@@ -85,6 +89,77 @@ describe("modelsConfigSignature", () => {
       extra: { top_p: 0.9 },
     });
     assert.equal(a, b);
+  });
+});
+
+describe("filterModels", () => {
+  const models: ModelInfo[] = [
+    { id: "auto/gpt-6-astra", label: "翻译优选" },
+    { id: "auto/deepseek-v4.1-flash" },
+  ];
+
+  test("空查询返回全部", () => {
+    assert.deepEqual(filterModels(models, "   "), models);
+  });
+
+  test("按 id 搜索不区分大小写", () => {
+    const result = filterModels(models, "  DEEPSEEK  ");
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, "auto/deepseek-v4.1-flash");
+  });
+
+  test("按 label 搜索", () => {
+    const result = filterModels(models, "翻译");
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, "auto/gpt-6-astra");
+  });
+
+  test("无匹配返回空数组", () => {
+    assert.deepEqual(filterModels(models, "nope"), []);
+  });
+});
+
+describe("mergeJsonFields", () => {
+  const schema = {
+    properties: {
+      baseURL: { title: "Base URL", type: "string" as const },
+      extra: { title: "提供商选项", type: "json" as const },
+      headers: { title: "请求头", type: "json" as const },
+    },
+    type: "object" as const,
+  };
+
+  test("可解析的 json 字段并入配置，基础字段保留", () => {
+    const config = mergeJsonFields(
+      {
+        config: { baseURL: "https://x/v1" },
+        jsonText: { extra: '{"top_p":0.9}', headers: '{"X-Trace":"1"}' },
+      },
+      schema
+    );
+    assert.deepEqual(config, {
+      baseURL: "https://x/v1",
+      extra: { top_p: 0.9 },
+      headers: { "X-Trace": "1" },
+    });
+  });
+
+  test("空文本或非法 JSON 按未填处理，不影响其他字段", () => {
+    const config = mergeJsonFields(
+      {
+        config: { baseURL: "https://x/v1" },
+        jsonText: { extra: "", headers: "{bad" },
+      },
+      schema
+    );
+    assert.deepEqual(config, { baseURL: "https://x/v1" });
+  });
+
+  test("无 schema 时原样返回 config", () => {
+    assert.deepEqual(
+      mergeJsonFields({ config: { baseURL: "https://x/v1" }, jsonText: {} }),
+      { baseURL: "https://x/v1" }
+    );
   });
 });
 

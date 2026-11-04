@@ -1,16 +1,19 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@renderer/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@renderer/components/ui/select";
+  Combobox,
+  ComboboxContent,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+} from "@renderer/components/ui/combobox";
+import { Input } from "@renderer/components/ui/input";
 import type { ModelInfo } from "@shared/ipc";
 import { cn } from "cn";
 
 import {
+  filterModels,
   isModelRequestInvalid,
   modelDisplayLabel,
   modelsConfigSignature,
@@ -20,50 +23,69 @@ const NEW_PROFILE_ID = "__new__";
 
 type ModelPickerProps = {
   config: Record<string, unknown>;
+  description?: string;
   disabled?: boolean;
   hasSavedKey: boolean;
   model: string;
   onModelChange: (model: string) => void;
+  placeholder?: string;
   pluginId: string;
   profileId: string;
+  required?: boolean;
+  title?: string;
 };
 
-/**
- * 模型列表获取组件（渲染层唯一入口）：只把「已保存的 profileId + 表单配置」
- * 交给主进程，密钥只从已保存的密钥桶读取，origin 走受控 fetch 白名单。
- * 失败降级为手动输入（模型字段本身仍是文本输入框）。
- */
+// 密钥只从已保存的 profile 读取，手动输入不依赖模型列表。
 function ModelPicker({
   config,
+  description,
   disabled = false,
   hasSavedKey,
   model,
   onModelChange,
+  placeholder,
   pluginId,
   profileId,
-}: ModelPickerProps): ReactNode {
-  const [models, setModels] = useState<ModelInfo[]>([]);
+  required = false,
+  title = "模型",
+}: ModelPickerProps) {
+  const [cached, setCached] = useState<ModelInfo[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const configSig = modelsConfigSignature(config);
   const seqRef = useRef(0);
   const profileIdRef = useRef(profileId);
   const pluginIdRef = useRef(pluginId);
   const configSigRef = useRef(configSig);
 
-  // 切换服务商或影响模型列表的配置变化时递增请求序号并丢弃旧结果
+  // 切换服务商或请求配置时丢弃旧响应，避免把上一接口的模型填入当前配置。
   useEffect(() => {
     seqRef.current += 1;
     profileIdRef.current = profileId;
     pluginIdRef.current = pluginId;
     configSigRef.current = configSig;
-    setModels([]);
+    setCached(null);
     setError(null);
     setBusy(false);
+    setQuery("");
+    setOpen(false);
   }, [configSig, pluginId, profileId]);
 
+  function handleOpenChange(next: boolean): void {
+    setOpen(next);
+    if (!next) {
+      setQuery("");
+      return;
+    }
+    if (cached === null && !busy) {
+      refresh();
+    }
+  }
+
   const refresh = async (): Promise<void> => {
-    if (busy) {
+    if (busy || disabled) {
       return;
     }
     if (!profileId || profileId === NEW_PROFILE_ID) {
@@ -105,67 +127,154 @@ function ModelPicker({
       }
       setBusy(false);
       if (!result.ok) {
-        setModels([]);
         setError(result.error.message);
         return;
       }
-      setModels(result.data);
+      setCached(result.data);
     } catch (reason) {
       if (isModelRequestInvalid(ctx, refs)) {
         return;
       }
       setBusy(false);
-      setModels([]);
       setError(String(reason));
     }
   };
 
+  const filtered = filterModels(cached ?? [], query);
+  const controlId = "field-model";
+  const showLoading = busy && cached === null;
+  const showError = error !== null && !showLoading;
+  const hasList = cached !== null;
+  const showEmpty = hasList && cached.length === 0 && !busy && !error;
+  const showNoMatch = hasList && cached.length > 0 && filtered.length === 0;
+  const showList = hasList && filtered.length > 0;
+
   return (
-    <div className="flex flex-col gap-2 rounded-lg border p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-sm">获取模型列表</span>
-        <Button
-          aria-label="刷新模型列表"
-          disabled={busy || disabled}
-          onClick={refresh}
-          size="icon-sm"
-          type="button"
-          variant="outline"
-        >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "icon-[lucide--refresh-cw] size-4",
-              busy && "animate-spin motion-reduce:animate-none"
-            )}
-          />
-        </Button>
+    <Combobox
+      autoHighlight
+      disabled={disabled}
+      filter={null}
+      inputValue={query}
+      items={filtered.map((entry) => entry.id)}
+      onInputValueChange={(value, details) => {
+        if (
+          details.reason === "input-change" ||
+          details.reason === "input-clear"
+        ) {
+          setQuery(value);
+        }
+      }}
+      onOpenChange={handleOpenChange}
+      onValueChange={(next) => {
+        if (typeof next === "string") {
+          onModelChange(next);
+          setOpen(false);
+          setQuery("");
+        }
+      }}
+      open={open}
+      value={model}
+    >
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <label className="font-medium text-sm" htmlFor={controlId}>
+            {title}
+            {required ? <span className="text-destructive"> *</span> : null}
+          </label>
+          <ComboboxTrigger
+            render={<Button size="sm" type="button" variant="outline" />}
+          >
+            <span aria-hidden="true" className="icon-[lucide--list] size-4" />
+            <span>选择模型</span>
+          </ComboboxTrigger>
+        </div>
+        <Input
+          disabled={disabled}
+          id={controlId}
+          onChange={(event) => onModelChange(event.target.value)}
+          placeholder={placeholder ?? "输入或选择模型"}
+          value={model}
+        />
+        {description ? (
+          <p className="text-muted-foreground text-xs">{description}</p>
+        ) : null}
       </div>
-      <Select
-        disabled={models.length === 0 || disabled}
-        onValueChange={(value) => {
-          if (value !== null) {
-            onModelChange(value);
-          }
-        }}
-        value={model}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="选择模型（或手动在上方输入）" />
-        </SelectTrigger>
-        <SelectContent>
-          {models.map((entry) => (
-            <SelectItem key={entry.id} value={entry.id}>
-              {modelDisplayLabel(entry)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {error ? <p className="text-destructive text-xs">{error}</p> : null}
-      <p className="text-muted-foreground text-xs">
-        模型列表来自已保存的接口与密钥；获取失败时可直接手动输入模型名。
-      </p>
-    </div>
+      <ComboboxContent align="end">
+        <div className="flex items-center gap-1.5 border-b p-2">
+          <ComboboxInput aria-label="搜索模型" placeholder="搜索模型…" />
+          <Button
+            aria-label="刷新模型列表"
+            disabled={busy || disabled}
+            onClick={refresh}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                "icon-[lucide--refresh-cw] size-3.5",
+                busy && "animate-spin motion-reduce:animate-none"
+              )}
+            />
+          </Button>
+        </div>
+        {showLoading ? (
+          <p
+            aria-live="polite"
+            className="flex items-center gap-1.5 px-2.5 py-3 text-muted-foreground text-sm"
+          >
+            <span
+              aria-hidden="true"
+              className="icon-[lucide--refresh-cw] size-3.5 animate-spin motion-reduce:animate-none"
+            />
+            正在加载模型列表…
+          </p>
+        ) : null}
+        {showError ? (
+          <p className="px-2.5 py-3 text-destructive text-sm" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {showEmpty ? (
+          <p
+            aria-live="polite"
+            className="px-2.5 py-3 text-muted-foreground text-sm"
+          >
+            没有可用模型。
+          </p>
+        ) : null}
+        {showNoMatch ? (
+          <p
+            aria-live="polite"
+            className="px-2.5 py-3 text-muted-foreground text-sm"
+          >
+            无匹配模型。
+          </p>
+        ) : null}
+        {showList ? (
+          <ComboboxList>
+            {filtered.map((entry) => (
+              <ComboboxItem key={entry.id} value={entry.id}>
+                <span
+                  className="flex min-w-0 flex-1 flex-col gap-0.5"
+                  title={entry.id}
+                >
+                  <span className="wrap-anywhere">
+                    {modelDisplayLabel(entry)}
+                  </span>
+                  {entry.label && entry.label !== entry.id ? (
+                    <span className="wrap-anywhere text-muted-foreground text-xs">
+                      {entry.id}
+                    </span>
+                  ) : null}
+                </span>
+              </ComboboxItem>
+            ))}
+          </ComboboxList>
+        ) : null}
+      </ComboboxContent>
+    </Combobox>
   );
 }
 

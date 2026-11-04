@@ -3,7 +3,7 @@
  * 未保存的修改（dirty），否则重试会丢失密钥提交。
  */
 
-import type { ConfigSchema } from "@shared/ipc";
+import type { ConfigSchema, ModelInfo } from "@shared/ipc";
 
 export type FilterState = "all" | "enabled" | "disabled";
 
@@ -47,6 +47,49 @@ export function modelDisplayLabel(info: {
   label?: string;
 }): string {
   return info.label ?? info.id;
+}
+
+/** 模型浮层搜索：按 id 或 label 不区分大小写过滤，空查询返回全部 */
+export function filterModels(models: ModelInfo[], query: string): ModelInfo[] {
+  const q = query.trim().toLowerCase();
+  if (q === "") {
+    return models;
+  }
+  return models.filter(
+    (entry) =>
+      entry.id.toLowerCase().includes(q) ||
+      (entry.label ?? "").toLowerCase().includes(q)
+  );
+}
+
+/**
+ * 即时请求（如模型列表）用的配置：把已填的 json 字段解析后并入 config。
+ * 解析失败按未填处理——列表仍应可用，保存时的严格校验由 buildConfigPayload 负责。
+ */
+export function mergeJsonFields(
+  editor: { config: Record<string, unknown>; jsonText: Record<string, string> },
+  schema?: ConfigSchema
+): Record<string, unknown> {
+  const config: Record<string, unknown> = { ...editor.config };
+  for (const [key, field] of Object.entries(schema?.properties ?? {})) {
+    if (field.type !== "json") {
+      continue;
+    }
+    const text = editor.jsonText[key] ?? "";
+    if (text.trim() === "") {
+      continue;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      parsed = undefined;
+    }
+    if (parsed !== undefined) {
+      config[key] = parsed;
+    }
+  }
+  return config;
 }
 
 /** 按 schema 判定模型列表前置校验所需的必填 secret 字段集合 */

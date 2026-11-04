@@ -9,6 +9,11 @@ import {
 import { Alert, AlertDescription } from "@renderer/components/ui/alert";
 import { Button } from "@renderer/components/ui/button";
 import {
+  Panel as CollapsiblePanel,
+  Root as CollapsibleRoot,
+  Trigger as CollapsibleTrigger,
+} from "@renderer/components/ui/collapsible";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuLabel,
@@ -46,6 +51,7 @@ import {
   type FilterState,
   draftLabel,
   ensureDraftVisible,
+  mergeJsonFields,
   mergeSecretRetry,
   requiredSecretNames,
 } from "./provider-editor";
@@ -397,7 +403,7 @@ function FieldControl({
           min={field.minimum}
           onChange={(event) => {
             const raw = event.target.value;
-            onChange(raw === "" ? "" : Number(raw));
+            onChange(raw === "" ? undefined : Number(raw));
           }}
           step={field.step}
           type="number"
@@ -709,6 +715,13 @@ function EditorForm({
   secretHas,
   showPluginName,
 }: EditorFormProps): ReactNode {
+  const fieldEntries = Object.entries(schema?.properties ?? {});
+  const basicFields = fieldEntries.filter(
+    ([, field]) => field["x-advanced"] !== true
+  );
+  const advancedFields = fieldEntries.filter(
+    ([, field]) => field["x-advanced"] === true
+  );
   return (
     <form className="flex flex-col gap-4" onSubmit={onSave}>
       {pending ? (
@@ -760,29 +773,69 @@ function EditorForm({
           value={editor.name}
         />
       </div>
-      {Object.entries(schema?.properties ?? {}).map(([key, field]) => (
-        <FieldRow
-          disabled={saving}
-          editor={editor}
-          field={field}
-          key={key}
-          keyName={key}
-          onPatch={onPatch}
-          saved={secretHas[key] === true}
-        />
-      ))}
-      {plugin?.capabilities.models ? (
-        <ModelPicker
-          config={editor.config}
-          disabled={saving}
-          hasSavedKey={hasSavedKey}
-          model={String(editor.config.model ?? "")}
-          onModelChange={(model) =>
-            onPatch({ config: { ...editor.config, model } })
-          }
-          pluginId={plugin.id}
-          profileId={selectedId ?? ""}
-        />
+      {basicFields.map(([key, field]) => {
+        if (
+          key === "model" &&
+          field.type === "string" &&
+          !field.enum &&
+          plugin?.capabilities.models
+        ) {
+          return (
+            <ModelPicker
+              config={mergeJsonFields(editor, schema)}
+              description={field.description}
+              disabled={saving}
+              hasSavedKey={hasSavedKey}
+              key={key}
+              model={String(editor.config.model ?? "")}
+              onModelChange={(model) =>
+                onPatch({ config: { ...editor.config, model } })
+              }
+              placeholder={field.placeholder}
+              pluginId={plugin.id}
+              profileId={selectedId ?? ""}
+              required={
+                field.required === true || schema?.required?.includes(key)
+              }
+              title={field.title}
+            />
+          );
+        }
+        return (
+          <FieldRow
+            disabled={saving}
+            editor={editor}
+            field={field}
+            key={key}
+            keyName={key}
+            onPatch={onPatch}
+            saved={secretHas[key] === true}
+          />
+        );
+      })}
+      {advancedFields.length > 0 ? (
+        <CollapsibleRoot className="flex flex-col gap-4">
+          <CollapsibleTrigger className="group">
+            <span
+              aria-hidden="true"
+              className="icon-[lucide--chevron-down] size-4 transition-transform group-data-panel-open:rotate-180 motion-reduce:transition-none"
+            />
+            <span>高级选项</span>
+          </CollapsibleTrigger>
+          <CollapsiblePanel>
+            {advancedFields.map(([key, field]) => (
+              <FieldRow
+                disabled={saving}
+                editor={editor}
+                field={field}
+                key={key}
+                keyName={key}
+                onPatch={onPatch}
+                saved={secretHas[key] === true}
+              />
+            ))}
+          </CollapsiblePanel>
+        </CollapsibleRoot>
       ) : null}
       {error ? (
         <Alert className="grid-cols-[auto_1fr] gap-x-2" variant="destructive">

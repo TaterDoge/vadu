@@ -205,6 +205,96 @@ describe("openAiTranslate", () => {
     assert.ok(messages[1]?.content.includes("<<<\nhello\n>>>"));
   });
 
+  test("temperature 取自配置，extra 合并且核心字段优先", async () => {
+    const calls: { init: RequestInit }[] = [];
+    const runtime = makeRuntime(async (_url, init) => {
+      calls.push({ init: init ?? {} });
+      return await jsonResponse({
+        choices: [{ message: { content: "你好" } }],
+      });
+    });
+    const req: TranslateRequest = {
+      ...REQ,
+      config: {
+        ...REQ.config,
+        extra: {
+          messages: [{ content: "x", role: "system" }],
+          model: "evil-model",
+          stream: false,
+          temperature: 0.9,
+          top_p: 0.5,
+        },
+        temperature: 0.7,
+      },
+    };
+    const { values } = await collect(
+      openAiTranslate({
+        apiKey: "sk-test",
+        opts: opts().opts,
+        req,
+        runtime,
+      })
+    );
+    assert.deepEqual(values, ["你好"]);
+    const body = JSON.parse(String(calls[0]?.init.body));
+    assert.equal(body.temperature, 0.7);
+    assert.equal(body.model, "gpt-4.1-mini");
+    assert.equal(body.stream, true);
+    assert.deepEqual(body.messages, buildMessages(REQ));
+    assert.equal(body.top_p, 0.5);
+  });
+
+  test("temperature 非有限数字回落 0.3", async () => {
+    const calls: { init: RequestInit }[] = [];
+    const runtime = makeRuntime(async (_url, init) => {
+      calls.push({ init: init ?? {} });
+      return await jsonResponse({ choices: [{ message: { content: "好" } }] });
+    });
+    await collect(
+      openAiTranslate({
+        apiKey: "sk-test",
+        opts: opts().opts,
+        req: { ...REQ, config: { ...REQ.config, temperature: "hot" } },
+        runtime,
+      })
+    );
+    assert.equal(JSON.parse(String(calls[0]?.init.body)).temperature, 0.3);
+  });
+
+  test("自定义请求头随 POST 发出，保留头被过滤", async () => {
+    const calls: { init: RequestInit }[] = [];
+    const runtime = makeRuntime(async (_url, init) => {
+      calls.push({ init: init ?? {} });
+      return await jsonResponse({ choices: [{ message: { content: "好" } }] });
+    });
+    const req: TranslateRequest = {
+      ...REQ,
+      config: {
+        ...REQ.config,
+        headers: {
+          authorization: "Bearer evil",
+          "Content-Type": "text/plain",
+          "X-Custom": "v1",
+          "X-Pad": "",
+        },
+      },
+    };
+    await collect(
+      openAiTranslate({
+        apiKey: "sk-test",
+        opts: opts().opts,
+        req,
+        runtime,
+      })
+    );
+    const headers = calls[0]?.init.headers as Record<string, string>;
+    assert.equal(headers.authorization, "Bearer sk-test");
+    assert.equal(headers["content-type"], "application/json");
+    assert.equal(headers["X-Custom"], "v1");
+    assert.equal("Authorization" in headers, false);
+    assert.equal("Content-Type" in headers, false);
+  });
+
   test("401 映射 AUTH_FAILED 且不泄漏 body 原文", async () => {
     const runtime = makeRuntime(async () =>
       jsonResponse(
@@ -304,6 +394,31 @@ describe("openAiListModels", () => {
     });
     assert.equal(models.length, 200);
     assert.equal(models[0]?.id, "model-0");
+  });
+
+  test("GET /models 携带自定义头且过滤保留头", async () => {
+    const calls: { init: RequestInit; url: string }[] = [];
+    const runtime = makeRuntime((url, init) => {
+      calls.push({ init: init ?? {}, url });
+      return Promise.resolve(jsonResponse({ data: [{ id: "gpt-4.1-mini" }] }));
+    });
+    await openAiListModels({
+      apiKey: "sk-test",
+      config: {
+        ...CONFIG,
+        headers: {
+          cookie: "session=1",
+          "X-API-Key": "nope",
+          "X-Vendor": "acme",
+        },
+      },
+      runtime,
+    });
+    const headers = calls[0]?.init.headers as Record<string, string>;
+    assert.equal(headers.authorization, "Bearer sk-test");
+    assert.equal(headers["X-Vendor"], "acme");
+    assert.equal("cookie" in headers, false);
+    assert.equal("X-API-Key" in headers, false);
   });
 
   test("带 query 的 baseURL 拼接 /models 保留查询参数", async () => {

@@ -20,7 +20,7 @@ my-plugin/
 
 ```json
 {
-  "apiVersion": 1,
+  "apiVersion": 2,
   "id": "vadu.ai",
   "name": "AI 翻译",
   "version": "0.1.0",
@@ -44,7 +44,7 @@ my-plugin/
       "baseURL": { "type": "string", "title": "接口地址", "placeholder": "https://api.openai.com/v1" },
       "apiKey": { "type": "secret", "title": "API Key", "required": true },
       "model": { "type": "string", "title": "模型", "x-widget": "model-picker", "required": true },
-      "temperature": { "type": "number", "title": "temperature", "default": 0.3, "minimum": 0, "maximum": 2 }
+      "temperature": { "type": "number", "title": "温度", "minimum": 0, "maximum": 2, "x-advanced": true }
     }
   },
   "presets": [
@@ -62,7 +62,7 @@ my-plugin/
 
 | 字段 | 必填 | 类型 | 语义 |
 | --- | --- | --- | --- |
-| `apiVersion` | 是 | 整数 | 契约版本。当前 `1`。与宿主不匹配则**拒绝加载** |
+| `apiVersion` | 是 | 整数 | 契约版本。当前 `2`。与宿主不匹配则**拒绝加载** |
 | `id` | 是 | string | 插件身份全局唯一，反向域名，小写，仅 `[a-z0-9._-]`。profile 通过 pluginId 关联插件，密钥按 profileId 隔离 |
 | `name` | 是 | string | 界面展示名 |
 | `version` | 是 | string | 插件自身 semver |
@@ -90,7 +90,7 @@ my-plugin/
 
 ```ts
 type ConfigField =
-  | {
+    | {
       type: "string";
       title: string;
       description?: string;
@@ -100,6 +100,8 @@ type ConfigField =
       enumLabels?: string[];
       required?: boolean;
       "x-widget"?: "model-picker";
+      /** 默认收进折叠的「高级选项」 */
+      "x-advanced"?: boolean;
     }
   | {
       type: "number";
@@ -110,12 +112,14 @@ type ConfigField =
       maximum?: number;
       step?: number;
       required?: boolean;
+      "x-advanced"?: boolean;
     }
   | {
       type: "boolean";
       title: string;
       description?: string;
       default?: boolean;
+      "x-advanced"?: boolean;
     }
   | {
       /** 值不写入 config.json，加密存 secrets.bin，插件用 runtime.secrets 读取 */
@@ -126,6 +130,7 @@ type ConfigField =
       required?: boolean;
       /** 该密钥对应的 HTTP header 提示，仅用于 UI 展示，不做注入 */
       header?: string;
+      "x-advanced"?: boolean;
     }
   | {
       /** 任意 JSON 对象，以 textarea 形式编辑，保存时校验可解析。厂商特有参数透传走这里 */
@@ -134,6 +139,7 @@ type ConfigField =
       description?: string;
       default?: Record<string, unknown>;
       required?: boolean;
+      "x-advanced"?: boolean;
     };
 
 type ConfigSchema = {
@@ -148,18 +154,19 @@ type ConfigSchema = {
 1. `secret` 字段的值**永远不会**出现在 `req.config` 里，也不会进入渲染层的 profile 数据（只有"已设置/未设置"状态）。插件只能通过 `runtime.secrets.get(name)` 取。宿主按 `profileId` 分桶，runtime 绑定本次调用的 profile，同插件不同 profile 的同名密钥彼此隔离。
 2. 校验由 core 在保存 profile 时执行：类型、`enum` 成员、`minimum`/`maximum`、`required`。不通过则拒绝保存并返回字段级错误。插件自己不需要重复校验，但 `validateConfig()` 可用于语义校验（如 key 是否有效）。
 3. 未知字段忽略，不报错——插件可以在 manifest 升级时增加字段。
-4. `x-widget: "model-picker"` 的字段渲染为下拉框 + 刷新按钮；当前实现的统一「获取模型列表」组件位于表单底部（一次只服务当前 profile），语义相同：刷新调用 `plugin.listModels(当前表单值)`；失败降级为普通文本输入。
+4. 当前实现按字段名 `model` 识别模型选择控件，`x-widget: "model-picker"` 尚未接入渲染层。对声明 `capabilities.models` 的插件，将无 `enum` 的字符串 `model` 字段渲染为可编辑输入框和右上「选择模型」按钮；其他类型和枚举字段沿用普通 schema 控件。按钮打开可搜索浮层，首次打开获取并缓存当前 profile/配置的模型列表，支持刷新；按模型 ID 或展示名搜索，选择后回填输入框并关闭。获取失败可重试或继续手动输入；切换 profile 或请求配置时丢弃缓存、搜索状态及过期响应。
 
    刷新条件（由宿主强制）：
 
    - **profile 必须已保存**：`profileId` 指向已落盘 profile，新 profile 首次保存前不发请求，UI 提示「先保存配置」。
    - **密钥只用已保存的**：不读输入框里的未保存值（那些值本来就不应该经过渲染层与主进程的这条路径，否则等于新开一条传密钥的通道）。对应 secret 字段从未保存过密钥时直接提示「请先保存 API Key」，不发请求。
-   - **origin 只允许已确认的**：请求经受控 `runtime.fetch`，只发往 `allowedOrigins`；未确认 origin 返回 `PERMISSION_DENIED`。
+   - **origin 只允许已登记的**：请求经受控 `runtime.fetch`，只发往 `allowedOrigins`（保存 profile 时自动登记该 profile 的 baseURL origin）；未登记 origin 返回 `PERMISSION_DENIED`。
 
    返回的 `ModelInfo[]` 宿主去重并截断到 500 条，适配器侧截断到 200 条；单次调用超时 30s。
 5. 字段顺序 = `properties` 的书写顺序。
-6. `type: "json"` 只接受可解析的 JSON 对象（不允许数组/标量），值直接以对象形式存进 profile。用于 `extra` 这类厂商特有参数；插件读到的已经是对象，不需要自己 `JSON.parse`。
-7. 密钥存储能力不是插件能干预的：Linux 无密钥环时宿主可能拒绝落盘改为会话内存，插件只需处理好 `runtime.secrets.get()` 返回 `undefined`。
+6. `"x-advanced": true` 的字段默认收进折叠的「高级选项」（渲染层放在基础字段之后、保存区之前，默认收起）；校验行为与普通字段完全一致，插件读到的是普通 profile 配置值。
+7. `type: "json"` 只接受可解析的 JSON 对象（不允许数组/标量），值直接以对象形式存进 profile。用于 `extra` 这类厂商特有参数；插件读到的已经是对象，不需要自己 `JSON.parse`。
+8. 密钥存储能力不是插件能干预的：Linux 无密钥环时宿主可能拒绝落盘改为会话内存，插件只需处理好 `runtime.secrets.get()` 返回 `undefined`。
 
 ## 4. presets
 
@@ -175,7 +182,7 @@ preset 是**只读模板**。用户新建 profile 时可选一个 preset 预填 
 
 ```ts
 // src/shared/plugin.ts 的对外形态
-export const PLUGIN_API_VERSION = 1;
+export const PLUGIN_API_VERSION = 2;
 
 /** profile 的配置值，键由 manifest.config.properties 定义；secret 字段不在此列 */
 export type PluginConfig = Record<string, unknown>;
@@ -264,7 +271,7 @@ net:<url-prefix>
 
 1. 解析目标 URL，取 `origin`（scheme + host + port）。
 2. 若 `manifest.permissions` 中没有任何 `net:` 前缀匹配该 origin，拒绝并抛 `PERMISSION_DENIED`。
-3. 不在清单内声明的动态端点（如用户自填 baseURL）无法被静态声明——因此 `ai` 类插件允许在 manifest 中用通配 `net:*`，此时宿主在安装/首次保存配置时把实际 origin **展示给用户**，用户确认后才启用该 profile。
+3. 不在清单内声明的动态端点（如用户自填 baseURL）无法被静态声明——因此 `ai` 类插件允许在 manifest 中用通配 `net:*`，此时宿主在保存 profile 时把 baseURL 的 origin 自动登记进该 profile 的 `allowedOrigins` 并随配置持久化。该白名单只是受控 fetch 的运行时边界，不是面向用户的安全闸门：宿主不为新 origin 弹确认框。
 
 > **重要，别误解**：这个校验约束的是"插件通过 `runtime.fetch` 发出的请求"，不是沙箱。插件若直接用 `globalThis.fetch` 可以绕过。权限声明的价值是让用户看见插件要访问哪里、并让正常实现的插件行为可审计，而不是阻止恶意代码。第三方插件视为完全可信，见 [architecture.md#ADR-001](./architecture.md#7-架构决策记录)。
 
@@ -302,7 +309,7 @@ throw err;
 
 ## 8. 版本兼容
 
-- `apiVersion` 是**整数**，当前为 `1`。
+- `apiVersion` 是**整数**，当前为 `2`。
 - 宿主只加载 `apiVersion === PLUGIN_API_VERSION` 的插件。>、< 一律拒绝，错误 `PLUGIN_LOAD_FAILED`，文案说明需要更新插件或宿主。
 - 不做运行时兼容层、不做字段级降级。契约一旦破坏性变更就 `+1`，并在插件列表里标出旧插件。
 - 非破坏性新增（如多一个可选 capability）也必须 `+1`：插件需要靠版本判断自己能否依赖该字段。
@@ -313,7 +320,7 @@ throw err;
 
 ```json
 {
-  "apiVersion": 1,
+  "apiVersion": 2,
   "id": "vadu.deeplexample",
   "name": "示例词典",
   "version": "1.0.0",

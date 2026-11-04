@@ -3,7 +3,7 @@
  * apiVersion 主版本不匹配即拒绝加载，不做运行时适配。
  */
 
-export const PLUGIN_API_VERSION = 1;
+export const PLUGIN_API_VERSION = 2;
 
 export type PluginConfig = Record<string, unknown>;
 

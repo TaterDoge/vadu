@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { buildChatCompletionUrl, normalizeBaseUrl } from "../../core/url";
-import { buildChatCompletionUrl as buildPluginUrl } from "./url";
+import {
+  buildModelsUrl,
+  buildChatCompletionUrl as buildPluginUrl,
+} from "./url";
 
 const SCHEME_ERROR_RE = /开头/;
 const CREDENTIALS_ERROR_RE = /用户名或密码/;
@@ -65,6 +68,26 @@ describe("buildChatCompletionUrl", () => {
     assert.equal(
       buildChatCompletionUrl("https://api.deepseek.com/v1"),
       "https://api.deepseek.com/v1/chat/completions"
+    );
+  });
+});
+
+describe("buildModelsUrl", () => {
+  test("baseURL 无路径时不产生 //models", () => {
+    assert.equal(
+      buildModelsUrl("http://localhost:3425"),
+      "http://localhost:3425/models"
+    );
+    assert.equal(
+      buildModelsUrl("http://localhost:3425/"),
+      "http://localhost:3425/models"
+    );
+  });
+
+  test("保留 /v1 前缀与查询参数", () => {
+    assert.equal(
+      buildModelsUrl("https://api.openai.com/v1/?api-version=2025-01-01"),
+      "https://api.openai.com/v1/models?api-version=2025-01-01"
     );
   });
 });

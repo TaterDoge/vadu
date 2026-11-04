@@ -33,7 +33,7 @@ vadu 的首选翻译形态。一个内置插件 `vadu.ai` 覆盖所有 AI 厂商
 
 > **适配器数量恒等于协议数量（3），与厂商数量无关。** 新增厂商只能加 preset 数据，不能加适配器、不能在适配器里写 `if (baseURL.includes(...))`。**
 
-适配器只做两件事：把 `TranslateRequest` 编成该协议的 HTTP body；把该协议的流解析成 `string` 增量。任何厂商特有的参数走 `profile.config.extra`（一个 JSON 对象输入框）原封不动透传进请求体，适配器**不做参数名映射**（`top_p` / `topP` / `reasoning_effort` 各协议就写各协议的写法，让用户自己填）。这样厂商差异永远不会变成代码分支。
+适配器只做两件事：把 `TranslateRequest` 编成该协议的 HTTP body；把该协议的流解析成 `string` 增量。任何厂商特有的参数走 `profile.config.extra`（一个 JSON 对象输入框）原封不动透传进请求体，适配器**不做参数名映射**（`top_p` / `topP` / `reasoning_effort` 各协议就写各协议的写法，让用户自己填）。这样厂商差异永远不会变成代码分支。自定义请求头走 `profile.config.headers`（JSON 对象），适配器清洗后并入请求头，保留头（authorization、content-type、cookie 等）与敏感名会被丢弃，不会覆盖认证头；上限 10 条、头名 ≤128 字符、值 ≤500 字符且仅可打印 ASCII。请求头值以明文存在 `config.json`，不要往里放密钥（密钥走 `secret` 字段与 `runtime.secrets`）。
 
 厂商差异只在两处落数据，不落代码：
 
@@ -110,7 +110,7 @@ function buildMessages(req: TranslateRequest): ChatMessage[] {
 - **只输出译文**：AI 默认喜欢解释"以下是翻译"，流式场景下这些前缀会先刷到屏幕上再被覆盖（做不到），必须用 prompt 抑制。
 - **`<<<` 包围原文**：降低原文里的指令被执行的几率。不是安全边界，只是降低误触发。
 - **占位符清单写死在 prompt 里**：软件界面文本（最常见场景）含大量 `{{name}}` / `%s`，翻译错一个就是运行时报错。翻译后 core 会做一次占位符校验（见 §6）。
-- **`temperature` 默认 0.3**：翻译要稳定不要创意。reasoning 类模型（`deepseek-reasoner`、thinking 档位）会显著变慢且翻译没有增益，UI 里不做推荐。
+- **`temperature` 默认 0.3**：翻译要稳定不要创意。reasoning 类模型（`deepseek-reasoner`、thinking 档位）会显著变慢且翻译没有增益，UI 里不做推荐。可在「高级选项」里的温度字段调整，留空回落默认 0.3。
 - 不支持 `response_format: json_object`，翻译输出就是纯文本。需要结构化（多段原文对应多段译文）时由 core 拆分多次调用，不做 JSON 模式。
 
 ## 4. 流式解析
@@ -159,7 +159,7 @@ data: {...}
 - **不自动重试流式请求**。已经向用户显示了半句话之后再重来会闪烁，且部分厂商按 token 计费会重复扣。重试只在"首个 chunk 之前失败"时允许，且最多 1 次、仅对 `NETWORK` / `TIMEOUT` / `429`。
 - 取消一律通过 `AbortSignal` 下传到 `runtime.fetch`。适配器在 `catch` 里判断 `signal.aborted` 后抛 `code = "ABORTED"`，由宿主静默处理。
 
-> **本阶段状态（实现切片）**：仅 `openai` 适配器已交付。超时已实现（首输出 20s / 总计 120s，宿主层 watchdog）；**当前不自动重试**流式请求、**无缓存**。设置页为「服务商列表 + 表单」左右布局：左侧按插件 profile 列出服务商（搜索、按启用/未启用过滤、独立滚动，底部固定「新增自定义 OpenAI」，新服务商出现在列表顶部），右侧由插件 `configSchema` 动态生成表单，底部是「获取模型列表」组件。保存前由主进程向发起窗口绑定的原生对话框展示未确认 origin 与 API Key/原文发送风险，默认拒绝；保存串行化，渲染层传入的 allowedOrigins 不参与授权，origin 白名单随 profile 持久化，受控 `runtime.fetch` 只发往已确认 origin；密钥按 profileId 经 `safeStorage` 异步 API 加密落盘，Linux `basic_text`/加密不可用时仅会话内存并明确告知，不提供明文落盘选项。服务商启用开关随 profile 持久化（`enabled`），仅影响设置页列表过滤，翻译不受影响。
+> **本阶段状态（实现切片）**：仅 `openai` 适配器已交付。超时已实现（首输出 20s / 总计 120s，宿主层 watchdog）；**当前不自动重试**流式请求、**无缓存**。设置页为「服务商列表 + 表单」左右布局：左侧按插件 profile 列出服务商（搜索、按启用/未启用过滤、独立滚动，底部固定「新增自定义 OpenAI」，新服务商出现在列表顶部），右侧由插件 `configSchema` 动态生成表单，模型字段保留手动输入，右上「选择模型」按钮打开可搜索列表，支持刷新与失败重试。保存串行化，渲染层传入的 allowedOrigins 不参与授权，保存时主进程自动把 baseURL 的 origin 登记进白名单并随 profile 持久化，受控 `runtime.fetch` 只发往已登记 origin；密钥按 profileId 经 `safeStorage` 异步 API 加密落盘，Linux `basic_text`/加密不可用时仅会话内存并明确告知，不提供明文落盘选项。服务商启用开关随 profile 持久化（`enabled`），仅影响设置页列表过滤，翻译不受影响。高级选项已可用：温度、提供商选项（extra）、请求头（headers）随 schema 的 `x-advanced` 字段收进表单折叠区（默认收起），参数真正进入模型请求。
 
 ## 6. core 侧的译文校验
 

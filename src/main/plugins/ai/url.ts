@@ -6,8 +6,19 @@
 const TRAILING_SLASH_RE = /\/+$/;
 const CHAT_COMPLETIONS_SUFFIX = "/chat/completions";
 
-export function normalizeBaseUrl(input: string): string {
-  const url = new URL(input.trim());
+function parseBase(input: string): URL {
+  try {
+    return new URL(input.trim());
+  } catch (cause) {
+    throw Object.assign(new Error("接口地址不是合法 URL"), {
+      cause,
+      code: "INVALID_CONFIG",
+    });
+  }
+}
+
+function normalizeBaseUrl(input: string): string {
+  const url = parseBase(input);
   let pathname = url.pathname.replace(TRAILING_SLASH_RE, "");
   if (pathname.endsWith(CHAT_COMPLETIONS_SUFFIX)) {
     pathname = pathname.slice(0, -CHAT_COMPLETIONS_SUFFIX.length);
@@ -16,7 +27,13 @@ export function normalizeBaseUrl(input: string): string {
 }
 
 export function buildChatCompletionUrl(base: string): string {
-  const url = new URL(normalizeBaseUrl(base));
+  const url = parseBase(normalizeBaseUrl(base));
   url.pathname = `${url.pathname.replace(TRAILING_SLASH_RE, "")}${CHAT_COMPLETIONS_SUFFIX}`;
+  return url.toString();
+}
+
+export function buildModelsUrl(base: string): string {
+  const url = parseBase(normalizeBaseUrl(base));
+  url.pathname = `${url.pathname.replace(TRAILING_SLASH_RE, "")}/models`;
   return url.toString();
 }

@@ -103,6 +103,8 @@ export type ConfigField =
       enumLabels?: string[];
       required?: boolean;
       "x-widget"?: "model-picker";
+      /** 默认收进折叠的「高级选项」 */
+      "x-advanced"?: boolean;
     }
   | {
       type: "number";
@@ -113,12 +115,14 @@ export type ConfigField =
       maximum?: number;
       step?: number;
       required?: boolean;
+      "x-advanced"?: boolean;
     }
   | {
       type: "boolean";
       title: string;
       description?: string;
       default?: boolean;
+      "x-advanced"?: boolean;
     }
   | {
       type: "secret";
@@ -127,6 +131,7 @@ export type ConfigField =
       placeholder?: string;
       required?: boolean;
       header?: string;
+      "x-advanced"?: boolean;
     }
   | {
       type: "json";
@@ -134,6 +139,7 @@ export type ConfigField =
       description?: string;
       default?: Record<string, unknown>;
       required?: boolean;
+      "x-advanced"?: boolean;
     };
 
 export type ConfigSchema = {
@@ -176,7 +182,7 @@ export type Profile = {
   name: string;
   preset?: string;
   config: Record<string, unknown>;
-  /** 已向用户展示确认过的 origin，宿主受控 fetch 只允许发往这里 */
+  /** 保存 profile 时自动登记的 origin；宿主受控 fetch 只允许发往这里 */
   allowedOrigins: string[];
   /** 服务商开关：关闭后保留配置；翻译与浮窗可选项过滤该服务商，旧 profile 无此字段默认启用 */
   enabled: boolean;

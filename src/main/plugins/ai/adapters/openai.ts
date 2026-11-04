@@ -5,8 +5,9 @@ import type {
   PluginRuntime,
   TranslateRequest,
 } from "../../../../shared/plugin";
+import { customRequestHeaders } from "../headers";
 import { buildMessages } from "../prompt";
-import { buildChatCompletionUrl, normalizeBaseUrl } from "../url";
+import { buildChatCompletionUrl, buildModelsUrl } from "../url";
 
 /**
  * OpenAI /chat/completions 适配器。一次调用本体：
@@ -35,6 +36,10 @@ function coded(code: string, message: string, status?: number): CodedError {
     error.status = status;
   }
   return error;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** 机器可读错误码白名单：短、无凭据、无原文；其余一律丢弃只留状态码 */
@@ -238,12 +243,16 @@ export async function openAiListModels(args: {
   runtime: PluginRuntime;
 }): Promise<ModelInfo[]> {
   const { apiKey, config, runtime } = args;
-  const url = new URL(normalizeBaseUrl(String(config.baseURL ?? "")));
-  url.pathname = `${url.pathname}/models`;
-  const response = await runtime.fetch(url.toString(), {
-    headers: { authorization: `Bearer ${apiKey}` },
-    method: "GET",
-  });
+  const response = await runtime.fetch(
+    buildModelsUrl(String(config.baseURL ?? "")),
+    {
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        ...customRequestHeaders(config.headers),
+      },
+      method: "GET",
+    }
+  );
   if (!response.ok) {
     const body = await readErrorBody(response);
     throw mapHttpError(response.status, extractErrorCode(body));
@@ -287,16 +296,25 @@ export async function* openAiTranslate(args: {
 }): AsyncGenerator<string> {
   const { runtime, req, opts, apiKey } = args;
   const url = buildChatCompletionUrl(String(req.config.baseURL ?? ""));
+  const extra = isRecord(req.config.extra) ? req.config.extra : {};
+  const configuredTemperature = req.config.temperature;
+  const temperature =
+    typeof configuredTemperature === "number" &&
+    Number.isFinite(configuredTemperature)
+      ? configuredTemperature
+      : 0.3;
   const response = await runtime.fetch(url, {
     body: JSON.stringify({
+      ...extra,
       messages: buildMessages(req),
       model: String(req.config.model ?? ""),
       stream: true,
-      temperature: 0.3,
+      temperature,
     }),
     headers: {
       authorization: `Bearer ${apiKey}`,
       "content-type": "application/json",
+      ...customRequestHeaders(req.config.headers),
     },
     method: "POST",
     signal: opts.signal,

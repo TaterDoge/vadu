@@ -1,7 +1,5 @@
 import { randomUUID } from "node:crypto";
 
-import { BrowserWindow, dialog } from "electron";
-
 import { VaduError } from "../../shared/errors";
 import type { Profile } from "../../shared/ipc";
 import { IPC } from "../../shared/ipc";
@@ -62,28 +60,6 @@ function validateProfile(raw: unknown): Profile {
   };
 }
 
-async function confirmOrigin(
-  raw: unknown,
-  sender: { isDestroyed: () => boolean }
-): Promise<void> {
-  const parent = BrowserWindow.fromWebContents(sender as never);
-  if (!parent) {
-    throw new VaduError("PERMISSION_DENIED", "无法确认来源窗口");
-  }
-  const result = await dialog.showMessageBox(parent, {
-    buttons: ["取消", "允许并保存"],
-    cancelId: 0,
-    defaultId: 0,
-    detail: `${raw}\nAPI Key 和待翻译文本将发送到此地址。仅在信任该地址时允许。`,
-    message: "允许翻译插件访问新地址？",
-    noLink: true,
-    type: "warning",
-  });
-  if (result.response !== 1 || sender.isDestroyed()) {
-    throw new VaduError("PERMISSION_DENIED", "未允许访问新地址");
-  }
-}
-
 let saveQueue: Promise<unknown> = Promise.resolve();
 
 export function registerConfigIpc(): void {
@@ -100,7 +76,7 @@ export function registerConfigIpc(): void {
   handle<unknown, Profile>(IPC.config.saveProfile, (raw, { sender }) => {
     const operation = saveQueue
       .catch(() => undefined)
-      .then(async () => {
+      .then(() => {
         if (sender.isDestroyed()) {
           throw new VaduError("ABORTED", "窗口已关闭");
         }
@@ -110,8 +86,8 @@ export function registerConfigIpc(): void {
             ? profile.config.baseURL
             : "";
         const origin = baseUrl === "" ? "" : originOf(baseUrl);
+        // 白名单只作受控 fetch 的运行时边界：保存时自动登记用户填写的地址，不再逐个弹窗确认
         if (origin !== "" && !profile.allowedOrigins.includes(origin)) {
-          await confirmOrigin(origin, sender);
           profile.allowedOrigins = [...profile.allowedOrigins, origin];
         }
         return saveProfile(profile);

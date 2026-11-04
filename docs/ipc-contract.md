@@ -186,7 +186,7 @@ export type Profile = {
   name: string;            // 用户可读名，如「DeepSeek-快速」
   preset?: string;         // 创建时选用的 preset id
   config: Record<string, unknown>; // 不含 secret 字段
-  /** 已向用户确认过的 origin；宿主受控 fetch 只允许发往这里 */
+  /** 保存 profile 时自动登记的 origin；宿主受控 fetch 只允许发往这里 */
   allowedOrigins: string[];
   /** 服务商开关：关闭后保留配置；翻译与浮窗可选项过滤该服务商，旧 profile 无此字段默认启用 */
   enabled: boolean;
@@ -210,15 +210,15 @@ export type AppSettings = {
 };
 ```
 
-保存 profile 时主进程串行校验；新 id 由宿主生成，已有 id 不可更改 pluginId。渲染层的 allowedOrigins 被忽略；新 origin 必须通过绑定 sender 窗口的原生确认对话框，默认取消并展示密钥与原文发往该地址的风险。配置值必须通过插件 `configSchema` 清洗：未知字段忽略、secret 字段剔除、类型/enum/min/max/required 违规即拒绝保存。`enabled` 只接受布尔，缺省视为 `true`（旧 profile 无此字段时按启用处理）。
+保存 profile 时主进程串行校验；新 id 由宿主生成，已有 id 不可更改 pluginId。渲染层的 allowedOrigins 被忽略；保存时主进程把 `config.baseURL` 的 origin 自动登记进 `allowedOrigins`（不弹窗、只作受控 fetch 的运行时边界）。配置值必须通过插件 `configSchema` 清洗：未知字段忽略、secret 字段剔除、类型/enum/min/max/required 违规即拒绝保存。`enabled` 只接受布尔，缺省视为 `true`（旧 profile 无此字段时按启用处理）。
 
 ### 模型列表（`vadu:plugins:listModels`）
 
-设置页右下「获取模型列表」组件的唯一数据通道，语义：
+服务商设置中模型字段「选择模型」浮层的唯一数据通道，语义：
 
 - 入参 `profileId` 必须指向已完成保存的 profile（新 profile 首次保存前不可获取，UI 提示「先保存配置」）。
 - **密钥只从该 profile 已保存的密钥桶读取**，绝不使用渲染层输入框里的未保存值。对应 secret 字段未保存过密钥时直接返回 `AUTH_FAILED` 提示「请先保存 API Key」，不发请求。
-- origin 约束与翻译相同：请求经受控 `runtime.fetch`，只允许发往 `allowedOrigins` 里已确认的地址；未确认 origin 返回 `PERMISSION_DENIED`。
+- origin 约束与翻译相同：请求经受控 `runtime.fetch`，只允许发往 `allowedOrigins` 里已登记的地址（保存 profile 时自动登记 baseURL origin）；未登记 origin 返回 `PERMISSION_DENIED`。
 - `config` 由渲染层传当前表单值（含未保存修改），宿主只做形状与字段数校验，不落盘。
 - 返回 `ModelInfo[]`，宿主去重并截断到 500 条；适配器侧截断到 200 条。
 - 超时 30s，错误归一化与翻译一致（`TIMEOUT` / `NETWORK` / `AUTH_FAILED` …）。

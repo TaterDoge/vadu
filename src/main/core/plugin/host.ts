@@ -1,6 +1,6 @@
 /**
  * 一次翻译调用的宿主包装：构造 PluginRuntime、受控 fetch、超时、错误归一化。
- * 插件实例按调用创建：runtime.fetch 需要绑定本次 profile 的已确认 origin，
+ * 插件实例按调用创建：runtime.fetch 需要绑定本次 profile 已登记的 origin，
  * 主实例复用在并发调用间会串权限。
  */
 

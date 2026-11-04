@@ -21,16 +21,13 @@ const SCHEMA = {
   type: "object" as const,
 };
 
-test("config IPC 原生确认默认拒绝，忽略 renderer 授权，保存串行且不可换插件", async () => {
+test("config IPC 自动登记 origin，忽略 renderer 授权，保存串行且不可换插件", async () => {
   const handlers = new Map<
     string,
     (raw: unknown, ctx: unknown) => Promise<Profile>
   >();
   const profiles: Profile[] = [];
-  const dialogs: Record<string, unknown>[] = [];
-  let response = 0;
   let sequence = 0;
-  const parent = {};
   const exports: Record<string, unknown> = {};
   const source = readFileSync(join(import.meta.dirname, "config.ts"), "utf8");
   const { outputText } = ts.transpileModule(source, {
@@ -68,16 +65,6 @@ test("config IPC 原生确认默认拒绝，忽略 renderer 授权，保存串�
         handler: (raw: unknown, ctx: unknown) => Promise<Profile>
       ) => handlers.set(channel, handler),
     },
-    electron: {
-      BrowserWindow: { fromWebContents: () => parent },
-      dialog: {
-        showMessageBox: (owner: unknown, options: Record<string, unknown>) => {
-          assert.equal(owner, parent);
-          dialogs.push(options);
-          return Promise.resolve({ response });
-        },
-      },
-    },
     "node:crypto": {
       randomUUID: () => {
         sequence += 1;
@@ -91,7 +78,7 @@ test("config IPC 原生确认默认拒绝，忽略 renderer 授权，保存串�
     Promise,
     require: (name: string) => {
       if (!(name in imports)) {
-        throw new Error("Unexpected import");
+        throw new Error(`Unexpected import: ${name}`);
       }
       return imports[name];
     },
@@ -101,7 +88,7 @@ test("config IPC 原生确认默认拒绝，忽略 renderer 授权，保存串�
   assert.ok(save);
   const ctx = { sender: { isDestroyed: () => false } };
   const input = {
-    allowedOrigins: ["https://untrusted.invalid"],
+    allowedOrigins: ["https://renderer.invalid"],
     config: {
       apiKey: "must-not-store",
       baseURL: "https://untrusted.invalid/v1",
@@ -111,25 +98,54 @@ test("config IPC 原生确认默认拒绝，忽略 renderer 授权，保存串�
     name: "test",
     pluginId: "vadu.ai",
   };
-  await assert.rejects(save(input, ctx), { code: "PERMISSION_DENIED" });
-  assert.equal(profiles.length, 0);
-  assert.equal(dialogs[0]?.defaultId, 0);
-  assert.equal(dialogs[0]?.cancelId, 0);
-  assert.ok(String(dialogs[0]?.detail).includes("https://untrusted.invalid"));
-  assert.ok(String(dialogs[0]?.detail).includes("API Key"));
-  response = 1;
+
   const savedProfile = await save(input, ctx);
   assert.notEqual(savedProfile.id, "renderer-id");
   assert.equal(savedProfile.config.apiKey, undefined);
-  await assert.rejects(
-    save({ ...savedProfile, pluginId: "other.plugin" }, ctx),
-    { code: "INVALID_CONFIG" }
+  // 只登记实际要访问的 origin，renderer 传入的其余值不参与
+  assert.deepEqual(
+    [...savedProfile.allowedOrigins],
+    ["https://untrusted.invalid"]
   );
-  const changed = {
+
+  // 同 origin 换路径不重复登记
+  const sameOrigin = {
+    ...savedProfile,
+    config: { baseURL: "https://untrusted.invalid/v2", model: "fake" },
+  };
+  const resaved = await save(sameOrigin, ctx);
+  assert.deepEqual([...resaved.allowedOrigins], ["https://untrusted.invalid"]);
+
+  // 新 origin 追加，不覆盖旧的
+  const nextOrigin = {
     ...savedProfile,
     config: { baseURL: "https://next.invalid/v1", model: "fake" },
   };
-  const before = dialogs.length;
-  await Promise.all([save(changed, ctx), save(changed, ctx)]);
-  assert.equal(dialogs.length, before + 1);
+  const moved = await save(nextOrigin, ctx);
+  assert.deepEqual(
+    [...moved.allowedOrigins],
+    ["https://untrusted.invalid", "https://next.invalid"]
+  );
+
+  await assert.rejects(
+    save({ ...savedProfile, pluginId: "other.plugin" }, ctx),
+    {
+      code: "INVALID_CONFIG",
+    }
+  );
+
+  // 并发两条新 profile：串行队列保证两条都落盘
+  const [first, second] = await Promise.all([
+    save({ ...input, id: "", name: "a" }, ctx),
+    save({ ...input, id: "", name: "b" }, ctx),
+  ]);
+  assert.deepEqual(
+    [...profiles.map((profile) => profile.id)],
+    [savedProfile.id, first.id, second.id]
+  );
+  assert.deepEqual(
+    profiles.filter((profile) => profile.name !== "test").length,
+    2,
+    "并发保存不应丢 profile"
+  );
 });

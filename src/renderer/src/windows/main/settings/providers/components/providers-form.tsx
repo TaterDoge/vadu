@@ -1,4 +1,5 @@
 import type { FormEvent, ReactNode } from "react";
+import { AlertDialog } from "@animate-ui/react/primitives/base-ui/alert-dialog";
 import { Alert, AlertDescription } from "@renderer/components/ui/alert";
 import { Button } from "@renderer/components/ui/button";
 import {
@@ -6,6 +7,11 @@ import {
   Root as CollapsibleRoot,
   Trigger as CollapsibleTrigger,
 } from "@renderer/components/ui/collapsible";
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+} from "@renderer/components/ui/field";
 import { Input } from "@renderer/components/ui/input";
 import {
   Item,
@@ -121,7 +127,7 @@ function FieldControl({
       );
     case "secret":
       return (
-        <div className="flex flex-col gap-1.5">
+        <>
           <Input
             disabled={disabled}
             id={controlId}
@@ -132,10 +138,10 @@ function FieldControl({
             type="password"
             value={secretValue}
           />
-          <span className="text-muted-foreground text-xs">
+          <FieldDescription className="text-xs">
             密钥加密后落盘，不会写入配置、日志或界面；提交后清空输入框。
-          </span>
-        </div>
+          </FieldDescription>
+        </>
       );
     case "json":
       return (
@@ -194,11 +200,11 @@ function FieldRow({
     }
   };
   return (
-    <div className="flex flex-col gap-1.5">
-      <label className="font-medium text-sm" htmlFor={controlId}>
+    <Field className="gap-1.5">
+      <FieldLabel htmlFor={controlId}>
         {field.title}
         {field.required ? <span className="text-destructive"> *</span> : null}
-      </label>
+      </FieldLabel>
       <FieldControl
         controlId={controlId}
         disabled={disabled}
@@ -215,9 +221,11 @@ function FieldRow({
         value={editor.config[keyName]}
       />
       {field.description ? (
-        <p className="text-muted-foreground text-xs">{field.description}</p>
+        <FieldDescription className="text-xs">
+          {field.description}
+        </FieldDescription>
       ) : null}
-    </div>
+    </Field>
   );
 }
 
@@ -230,6 +238,7 @@ type EditorFormProps = {
   isNew: boolean;
   onCancelDiscard: () => void;
   onConfirmDiscard: () => void;
+  onDelete: () => void;
   onPatch: (patch: Partial<EditorState>) => void;
   onSave: (event?: FormEvent) => void;
   pending: boolean;
@@ -251,6 +260,7 @@ function EditorForm({
   isNew,
   onCancelDiscard,
   onConfirmDiscard,
+  onDelete,
   onPatch,
   onSave,
   pending,
@@ -268,6 +278,44 @@ function EditorForm({
   );
   const advancedFields = fieldEntries.filter(
     ([, field]) => field["x-advanced"] === true
+  );
+  const deleteControls: ReactNode = isNew ? null : (
+    <AlertDialog.Root>
+      <AlertDialog.Trigger
+        render={
+          <Button disabled={saving} type="button" variant="destructive" />
+        }
+      >
+        删除
+      </AlertDialog.Trigger>
+      <AlertDialog.Portal>
+        <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/20 supports-backdrop-filter:backdrop-blur-xs" />
+        <AlertDialog.Popup className="fixed inset-0 z-50 m-auto flex h-fit w-[calc(100%-2rem)] max-w-md flex-col gap-4 rounded-xl border bg-popover p-6 text-popover-foreground shadow-lg outline-none">
+          <div className="flex flex-col gap-2">
+            <AlertDialog.Title className="font-heading font-medium text-base">
+              删除服务商？
+            </AlertDialog.Title>
+            <AlertDialog.Description className="text-muted-foreground text-sm">
+              删除后无法恢复，确定要删除「{editor.name}」吗？
+            </AlertDialog.Description>
+          </div>
+          <div className="flex justify-end gap-2">
+            <AlertDialog.Close
+              render={<Button type="button" variant="outline" />}
+            >
+              取消
+            </AlertDialog.Close>
+            <AlertDialog.Close
+              disabled={saving}
+              onClick={onDelete}
+              render={<Button type="button" variant="destructive" />}
+            >
+              确认删除
+            </AlertDialog.Close>
+          </div>
+        </AlertDialog.Popup>
+      </AlertDialog.Portal>
+    </AlertDialog.Root>
   );
   return (
     <form className="flex flex-col gap-4" onSubmit={onSave}>
@@ -309,17 +357,15 @@ function EditorForm({
       {showPluginName && plugin ? (
         <p className="-mt-2 text-muted-foreground text-xs">{plugin.name}</p>
       ) : null}
-      <div className="flex flex-col gap-1.5">
-        <label className="font-medium text-sm" htmlFor="profile-name">
-          名称
-        </label>
+      <Field className="gap-1.5">
+        <FieldLabel htmlFor="profile-name">名称</FieldLabel>
         <Input
           disabled={saving}
           id="profile-name"
           onChange={(event) => onPatch({ name: event.target.value })}
           value={editor.name}
         />
-      </div>
+      </Field>
       {basicFields.map(([key, field]) => {
         if (
           key === "model" &&
@@ -396,10 +442,11 @@ function EditorForm({
           <AlertDescription>{info}</AlertDescription>
         </Alert>
       ) : null}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2">
         <Button disabled={saving || editor.name.trim() === ""} type="submit">
           {saving ? "保存中…" : "保存"}
         </Button>
+        {deleteControls}
       </div>
     </form>
   );

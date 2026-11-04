@@ -423,6 +423,65 @@ function ProvidersPage(): ReactNode {
 
   const displayProfiles = useMemo(() => [...profiles].reverse(), [profiles]);
 
+  const onDelete = async (): Promise<void> => {
+    if (
+      !editor ||
+      saving ||
+      selectedId === null ||
+      selectedId === NEW_PROFILE_ID
+    ) {
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setInfo(null);
+    try {
+      const result = await window.vadu.config.deleteProfile(selectedId);
+      if (!result.ok) {
+        setError(result.error.message);
+        return;
+      }
+      const listResult = await window.vadu.config.listProfiles();
+      if (!listResult.ok) {
+        setError(listResult.error.message ?? listResult.error.code);
+        return;
+      }
+      const next = listResult.data;
+      setProfiles(next);
+      setPending(null);
+      setInfo("已删除");
+      // 删除后紧接着切到列表末条；这里只能用刚拿到的新列表，refs 里的快照还是删前的
+      const fallback = next.at(-1) ?? null;
+      if (fallback) {
+        const fallbackPlugin =
+          pluginsRef.current.find((entry) => entry.id === fallback.pluginId) ??
+          null;
+        const nextEditor = editorFromProfile(fallback, fallbackPlugin);
+        setSelectedId(fallback.id);
+        setBaseline(nextEditor);
+        setEditor(nextEditor);
+        loadSecretHas(
+          fallback.id,
+          secretFieldNames(fallbackPlugin?.configSchema),
+          secretHasSeqRef,
+          setSecretHas
+        ).catch(() => undefined);
+      } else {
+        const cleared = ensureDraftVisible();
+        const nextEditor = editorFromProfile(null, vaduAi);
+        setQuery(cleared.query);
+        setFilter(cleared.filter);
+        setSelectedId(NEW_PROFILE_ID);
+        setBaseline(nextEditor);
+        setEditor(nextEditor);
+      }
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const resolvePluginName = (profile: Profile): string | undefined => {
     if (plugins.length <= 1) {
       return undefined;
@@ -500,8 +559,10 @@ function ProvidersPage(): ReactNode {
             hasSavedKey={hasSavedKey}
             info={info}
             isNew={isNew}
+            key={selectedId ?? "new"}
             onCancelDiscard={cancelDiscard}
             onConfirmDiscard={confirmDiscard}
+            onDelete={onDelete}
             onPatch={updateEditor}
             onSave={onSave}
             pending={pending !== null}

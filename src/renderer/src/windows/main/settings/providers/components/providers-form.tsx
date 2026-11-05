@@ -30,8 +30,14 @@ import {
 import { StaggerList } from "@renderer/components/ui/stagger-list";
 import { Switch } from "@renderer/components/ui/switch";
 import { ALERT_ICON } from "@renderer/lib/icons";
-import type { ConfigField, ConfigSchema, PluginDescriptor } from "@shared/ipc";
+import type {
+  ConfigField,
+  ConfigSchema,
+  PluginDescriptor,
+  PluginKind,
+} from "@shared/ipc";
 
+import { KIND_ADD, KIND_LABEL } from "../kinds";
 import { ModelPicker } from "../model-picker";
 import { type EditorState, mergeJsonFields } from "../provider-editor";
 
@@ -230,6 +236,10 @@ function FieldRow({
   );
 }
 
+type EditorFormShellProps = EditorFormProps & {
+  kind: PluginKind;
+};
+
 type EditorFormProps = {
   dirty: boolean;
   editor: EditorState;
@@ -251,12 +261,13 @@ type EditorFormProps = {
   showPluginName: boolean;
 };
 
-function EditorForm({
+function EditorFormShell({
   dirty,
   editor,
   error,
   info,
   isNew,
+  kind,
   onCancelDiscard,
   onConfirmDiscard,
   onDelete,
@@ -270,7 +281,7 @@ function EditorForm({
   selectedId,
   secretHas,
   showPluginName,
-}: EditorFormProps): ReactNode {
+}: EditorFormShellProps): ReactNode {
   const fieldEntries = Object.entries(schema?.properties ?? {});
   const basicFields = fieldEntries.filter(
     ([, field]) => field["x-advanced"] !== true
@@ -354,7 +365,7 @@ function EditorForm({
         )}
         <div className="flex items-center gap-2" key="title">
           <h3 className="font-medium text-sm">
-            {isNew ? "新增自定义 OpenAI" : "编辑服务商"}
+            {isNew ? KIND_ADD[kind] : `编辑${KIND_LABEL[kind]}服务商`}
           </h3>
           {dirty ? (
             <span className="text-muted-foreground text-xs">未保存</span>
@@ -376,6 +387,7 @@ function EditorForm({
         </Field>
         {basicFields.map(([key, field]) => {
           if (
+            kind === "translator" &&
             key === "model" &&
             field.type === "string" &&
             !field.enum &&
@@ -465,4 +477,17 @@ function EditorForm({
   );
 }
 
-export { EditorForm };
+// 各 kind 只差一个常量，壳组件收 kind，外面按 kind 分派薄封装
+function TranslatorForm(props: EditorFormProps): ReactNode {
+  return <EditorFormShell {...props} kind="translator" />;
+}
+
+function OcrForm(props: EditorFormProps): ReactNode {
+  return <EditorFormShell {...props} kind="ocr" />;
+}
+
+function TtsForm(props: EditorFormProps): ReactNode {
+  return <EditorFormShell {...props} kind="tts" />;
+}
+
+export { OcrForm, TranslatorForm, TtsForm };

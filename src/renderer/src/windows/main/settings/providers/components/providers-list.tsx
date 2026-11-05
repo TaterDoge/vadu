@@ -15,11 +15,13 @@ import {
 import { Input } from "@renderer/components/ui/input";
 import { StaggerList } from "@renderer/components/ui/stagger-list";
 import { Switch } from "@renderer/components/ui/switch";
-import type { Profile } from "@shared/ipc";
+import type { PluginKind, Profile } from "@shared/ipc";
 import { cn } from "cn";
 
+import { KIND_ADD, KIND_EMPTY } from "../kinds";
 import { NEW_PROFILE_ID } from "../model-picker";
 import type { FilterState } from "../provider-editor";
+import { PluginIcon } from "./provider-icon";
 
 type RowProps = {
   index: number;
@@ -29,7 +31,6 @@ type RowProps = {
   reorderable: boolean;
   saving: boolean;
   selected: boolean;
-  subtitle?: string;
 };
 
 function ProviderRow({
@@ -40,7 +41,6 @@ function ProviderRow({
   reorderable,
   saving,
   selected,
-  subtitle,
 }: RowProps): ReactNode {
   const { ref, handleRef, isDragging } = useSortable({
     disabled: !reorderable || saving,
@@ -72,6 +72,7 @@ function ProviderRow({
           className="icon-[lucide--grip-vertical] size-3.5"
         />
       </Button>
+      <PluginIcon pluginId={profile.pluginId} />
       <Button
         aria-current={selected ? "true" : undefined}
         className="flex min-w-0 flex-1 flex-col items-start justify-center gap-0.5 px-0 text-left"
@@ -82,11 +83,6 @@ function ProviderRow({
         <span className="w-full truncate font-normal text-[0.6875rem] text-muted-foreground">
           {profile.name}
         </span>
-        {subtitle ? (
-          <span className="w-full truncate text-[0.6875rem] text-muted-foreground">
-            {subtitle}
-          </span>
-        ) : null}
       </Button>
       <span
         className={cn(
@@ -142,28 +138,48 @@ function DraftRow({ name, onSelect, selected }: DraftRowProps): ReactNode {
 }
 
 type LeftPanelProps = {
+  /** 新增按钮的非 saving 禁用条件（应用未就绪或该 kind 无插件），由父层判定 */
   addDisabled: boolean;
+  /** 当前 tab 的插件 kind，决定文案 */
+  kind: PluginKind;
+  /** 当前 kind 的 profile 总数（不受搜索/过滤影响），显示在标题旁 */
+  kindCount: number;
+  /** 列表滚动容器，父层用它把选中的草稿行滚回顶部 */
   listRef: RefObject<HTMLDivElement | null>;
+  /** 非 null 表示存在未保存的新建草稿，值即草稿行显示名 */
   draftName: string | null;
+  /** 启用状态过滤，非 "all" 时禁用拖拽排序 */
   filter: FilterState;
+  /** 已按 query 与 filter 过滤后的可见列表；拖拽只改这份顺序 */
   filtered: Profile[];
+  /** 当前 kind 是否至少有一个插件；为 false 时整表换成提示，不渲染 profile 行 */
   hasPlugins: boolean;
+  /** 点击新增按钮，进入草稿编辑态 */
   onAdd: () => void;
+  /** 切换启用状态过滤 */
   onFilterChange: (filter: FilterState) => void;
+  /** 搜索框输入变化（受控） */
   onQueryChange: (query: string) => void;
+  /** 拖拽结束后提交新的完整顺序，交由父层落盘 */
   onReorder: (ordered: Profile[]) => void;
+  /** 点击某行，请求切换到该 profile 的编辑态 */
   onSelect: (id: string) => void;
+  /** 点击草稿行，回到新建编辑态 */
   onSelectDraft: () => void;
+  /** 切换某 profile 的启用开关 */
   onToggleEnabled: (profile: Profile, enabled: boolean) => void;
-  profiles: Profile[];
+  /** 搜索关键词（受控），非空时禁用拖拽排序 */
   query: string;
-  resolvePluginName: (profile: Profile) => string | undefined;
+  /** 保存中，禁用拖拽、启用开关与新增按钮 */
   saving: boolean;
+  /** 当前选中项 id，可为 NEW_PROFILE_ID 表示草稿行被选中 */
   selectedId: string | null;
 };
 
 function LeftPanel({
   addDisabled,
+  kind,
+  kindCount,
   draftName,
   listRef,
   filter,
@@ -176,9 +192,7 @@ function LeftPanel({
   onSelect,
   onSelectDraft,
   onToggleEnabled,
-  profiles: allProfiles,
   query,
-  resolvePluginName,
   saving,
   selectedId,
 }: LeftPanelProps): ReactNode {
@@ -201,9 +215,7 @@ function LeftPanel({
     <aside className="flex min-h-0 flex-col gap-3 md:self-stretch">
       <div className="flex items-center justify-between gap-2">
         <h2 className="font-medium text-sm">服务商</h2>
-        <span className="text-muted-foreground text-xs">
-          {allProfiles.length}
-        </span>
+        <span className="text-muted-foreground text-xs">{kindCount}</span>
       </div>
       <div className="relative">
         <Input
@@ -259,7 +271,7 @@ function LeftPanel({
         </DropdownMenu>
       </div>
       <div
-        className="-mx-1 flex flex-1 flex-col overflow-y-auto px-1"
+        className="-mx-1 flex flex-1 flex-col overflow-y-auto overflow-x-clip px-1"
         ref={listRef}
       >
         {/* 每项都带稳定 key：条件行增删不能让后面的行换索引重放入场 */}
@@ -275,7 +287,7 @@ function LeftPanel({
             ) : null}
             {hasPlugins ? null : (
               <p className="text-muted-foreground text-sm" key="no-plugins">
-                没有可用的翻译插件，请检查应用安装状态。
+                {KIND_EMPTY[kind]}，请检查应用安装状态。
               </p>
             )}
             {hasPlugins
@@ -289,7 +301,6 @@ function LeftPanel({
                     reorderable={reorderable}
                     saving={saving}
                     selected={selectedId === profile.id}
-                    subtitle={resolvePluginName(profile)}
                   />
                 ))
               : null}
@@ -307,7 +318,7 @@ function LeftPanel({
         onClick={onAdd}
         variant="outline"
       >
-        新增自定义 OpenAI
+        {KIND_ADD[kind]}
       </Button>
     </aside>
   );

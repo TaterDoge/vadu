@@ -6,10 +6,17 @@ import {
   useRef,
   useState,
 } from "react";
-import type { PluginDescriptor, Profile } from "@shared/ipc";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@renderer/components/ui/tabs";
+import type { PluginDescriptor, PluginKind, Profile } from "@shared/ipc";
 
-import { EditorForm } from "./components/providers-form";
+import { OcrForm, TranslatorForm, TtsForm } from "./components/providers-form";
 import { LeftPanel } from "./components/providers-list";
+import { KIND_ADD, KIND_LABEL, KIND_ORDER } from "./kinds";
 import { NEW_PROFILE_ID } from "./model-picker";
 import {
   EMPTY_EDITOR,
@@ -25,7 +32,14 @@ import {
   secretFieldNames,
 } from "./provider-editor";
 
-const PLUGIN_ID = "vadu.ai";
+type PendingSwitch = { kind: PluginKind } | { id: string };
+
+function kindOfPlugin(
+  plugins: PluginDescriptor[],
+  pluginId: string
+): PluginKind | undefined {
+  return plugins.find((entry) => entry.id === pluginId)?.kind;
+}
 
 async function saveProfileWithSecrets(
   payload: Profile,
@@ -136,10 +150,7 @@ async function bootProviders(
       );
       return;
     }
-    const translators = pluginsResult.data.filter(
-      (entry) => entry.kind === "translator"
-    );
-    dispatch.setPlugins(translators);
+    dispatch.setPlugins(pluginsResult.data);
     const profilesResult = await window.vadu.config.listProfiles();
     if (!aliveRef.current) {
       return;
@@ -150,13 +161,22 @@ async function bootProviders(
       );
       return;
     }
-    const latest = profilesResult.data.at(-1);
     dispatch.setProfiles(profilesResult.data);
+    const translatorIds = new Set(
+      pluginsResult.data
+        .filter((entry) => entry.kind === "translator")
+        .map((entry) => entry.id)
+    );
+    // 默认只选翻译 kind 的最新 profile：末尾可能已经是语音/识别 profile
+    const latest =
+      profilesResult.data
+        .filter((entry) => translatorIds.has(entry.pluginId))
+        .at(-1) ?? null;
     if (!latest) {
       return;
     }
     const latestPlugin =
-      translators.find((entry) => entry.id === latest.pluginId) ?? null;
+      pluginsResult.data.find((entry) => entry.id === latest.pluginId) ?? null;
     const next = editorFromProfile(latest, latestPlugin);
     dispatch.setSelectedId(latest.id);
     dispatch.setBaseline(next);
@@ -256,7 +276,8 @@ function ProvidersPage(): ReactNode {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [pending, setPending] = useState<string | null>(null);
+  const [pending, setPending] = useState<PendingSwitch | null>(null);
+  const [kind, setKind] = useState<PluginKind>("translator");
   const [ready, setReady] = useState(false);
   const secretHasSeqRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -293,7 +314,8 @@ function ProvidersPage(): ReactNode {
     };
   }, []);
 
-  const vaduAi = plugins.find((entry) => entry.id === PLUGIN_ID) ?? null;
+  const firstPluginOfKind = (target: PluginKind): PluginDescriptor | null =>
+    plugins.find((entry) => entry.kind === target) ?? null;
 
   const startNew = (): void => {
     const cleared = ensureDraftVisible();
@@ -316,7 +338,7 @@ function ProvidersPage(): ReactNode {
     const plugin = profile
       ? (pluginsRef.current.find((entry) => entry.id === profile.pluginId) ??
         null)
-      : vaduAi;
+      : firstPluginOfKind(kind);
     const next = editorFromProfile(profile, plugin);
     setSelectedId(id);
     setBaseline(next);
@@ -339,19 +361,58 @@ function ProvidersPage(): ReactNode {
       return;
     }
     if (editor && isDirty(editor, baseline)) {
-      setPending(id);
+      setPending({ id });
       return;
     }
     switchTo(id);
+  };
+
+  const applyKindChange = (nextKind: PluginKind): void => {
+    const cleared = ensureDraftVisible();
+    setQuery(cleared.query);
+    setFilter(cleared.filter);
+    setError(null);
+    setInfo(null);
+    setPending(null);
+    setKind(nextKind);
+    const latest = profilesRef.current
+      .filter(
+        (entry) => kindOfPlugin(pluginsRef.current, entry.pluginId) === nextKind
+      )
+      .at(-1);
+    if (!latest) {
+      // 该 kind 没有 profile：直接进草稿态，让用户立即可新建
+      const nextEditor = editorFromProfile(null, firstPluginOfKind(nextKind));
+      setSelectedId(NEW_PROFILE_ID);
+      setBaseline(nextEditor);
+      setEditor(nextEditor);
+      return;
+    }
+    switchTo(latest.id);
+  };
+
+  const requestKindChange = (nextKind: PluginKind): void => {
+    if (saving || nextKind === kind) {
+      return;
+    }
+    if (editor && isDirty(editor, baseline)) {
+      setPending({ kind: nextKind });
+      return;
+    }
+    applyKindChange(nextKind);
   };
 
   const confirmDiscard = (): void => {
     if (pending === null) {
       return;
     }
-    const id = pending;
+    const target = pending;
     setPending(null);
-    switchTo(id);
+    if ("kind" in target) {
+      applyKindChange(target.kind);
+    } else {
+      switchTo(target.id);
+    }
   };
 
   const cancelDiscard = (): void => {
@@ -423,8 +484,15 @@ function ProvidersPage(): ReactNode {
   const displayProfiles = useMemo(() => [...profiles].reverse(), [profiles]);
 
   const onReorder = async (ordered: Profile[]): Promise<void> => {
+    // 当前 kind 的新顺序只覆盖全量展示序中该 kind 的位置，跨 kind 相对位置保持不变
+    const merged = displayProfiles.map((entry) => {
+      if (kindOfPlugin(pluginsRef.current, entry.pluginId) !== kind) {
+        return entry;
+      }
+      return ordered.shift() ?? entry;
+    });
     // 展示序是存储序的反转，落盘必须再反转回去
-    const orderedIds = [...ordered].reverse().map((entry) => entry.id);
+    const orderedIds = [...merged].reverse().map((entry) => entry.id);
     setError(null);
     try {
       const result = await window.vadu.config.reorderProfiles(orderedIds);
@@ -465,8 +533,13 @@ function ProvidersPage(): ReactNode {
       setProfiles(next);
       setPending(null);
       setInfo("已删除");
-      // 删除后紧接着切到列表末条；这里只能用刚拿到的新列表，refs 里的快照还是删前的
-      const fallback = next.at(-1) ?? null;
+      // 删除后回退限制在同一 kind；这里只能用刚拿到的新列表，refs 里的快照还是删前的
+      const fallback =
+        next
+          .filter(
+            (entry) => kindOfPlugin(pluginsRef.current, entry.pluginId) === kind
+          )
+          .at(-1) ?? null;
       if (fallback) {
         const fallbackPlugin =
           pluginsRef.current.find((entry) => entry.id === fallback.pluginId) ??
@@ -483,7 +556,7 @@ function ProvidersPage(): ReactNode {
         ).catch(() => undefined);
       } else {
         const cleared = ensureDraftVisible();
-        const nextEditor = editorFromProfile(null, vaduAi);
+        const nextEditor = editorFromProfile(null, firstPluginOfKind(kind));
         setQuery(cleared.query);
         setFilter(cleared.filter);
         setSelectedId(NEW_PROFILE_ID);
@@ -497,17 +570,25 @@ function ProvidersPage(): ReactNode {
     }
   };
 
-  const resolvePluginName = (profile: Profile): string | undefined => {
-    if (plugins.length <= 1) {
-      return undefined;
-    }
-    return plugins.find((entry) => entry.id === profile.pluginId)?.name;
-  };
+  const visiblePlugins = useMemo(
+    () => plugins.filter((entry) => entry.kind === kind),
+    [kind, plugins]
+  );
+
+  const visibleProfiles = useMemo(
+    () =>
+      displayProfiles.filter(
+        (entry) => kindOfPlugin(plugins, entry.pluginId) === kind
+      ),
+    [displayProfiles, kind, plugins]
+  );
 
   const filteredProfiles = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const pluginNames = new Map(plugins.map((entry) => [entry.id, entry.name]));
-    return displayProfiles.filter((profile) => {
+    const pluginNames = new Map(
+      visiblePlugins.map((entry) => [entry.id, entry.name])
+    );
+    return visibleProfiles.filter((profile) => {
       if (filter === "enabled" && !profile.enabled) {
         return false;
       }
@@ -518,12 +599,14 @@ function ProvidersPage(): ReactNode {
         return true;
       }
       const pluginName =
-        plugins.length > 1 ? (pluginNames.get(profile.pluginId) ?? "") : "";
+        visiblePlugins.length > 1
+          ? (pluginNames.get(profile.pluginId) ?? "")
+          : "";
       const haystack =
         `${profile.name} ${pluginName} ${String(profile.config.baseURL ?? "")}`.toLowerCase();
       return haystack.includes(q);
     });
-  }, [displayProfiles, filter, plugins, query]);
+  }, [filter, query, visiblePlugins, visibleProfiles]);
 
   const selectedProfile =
     selectedId === null || selectedId === NEW_PROFILE_ID
@@ -531,63 +614,89 @@ function ProvidersPage(): ReactNode {
       : (profiles.find((entry) => entry.id === selectedId) ?? null);
   const selectedPlugin = selectedProfile
     ? (plugins.find((entry) => entry.id === selectedProfile.pluginId) ?? null)
-    : vaduAi;
+    : firstPluginOfKind(kind);
   const schema = selectedPlugin?.configSchema;
   const isNew = selectedId === NEW_PROFILE_ID;
   const dirty = editor !== null && isDirty(editor, baseline);
 
+  const FORM_FOR_KIND: Record<PluginKind, typeof TranslatorForm> = {
+    ocr: OcrForm,
+    translator: TranslatorForm,
+    tts: TtsForm,
+  };
+  const FormForKind = FORM_FOR_KIND[kind];
+
   return (
-    <div className="grid min-h-0 grid-cols-1 items-start gap-6 md:grid-cols-[16rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] md:items-stretch">
-      <LeftPanel
-        addDisabled={!ready || vaduAi === null}
-        draftName={isNew && editor ? draftLabel(editor.name) : null}
-        filter={filter}
-        filtered={filteredProfiles}
-        hasPlugins={plugins.length > 0}
-        listRef={listRef}
-        onAdd={startNew}
-        onFilterChange={setFilter}
-        onQueryChange={setQuery}
-        onReorder={onReorder}
-        onSelect={requestSelection}
-        onSelectDraft={startNew}
-        onToggleEnabled={toggleEnabled}
-        profiles={profiles}
-        query={query}
-        resolvePluginName={resolvePluginName}
-        saving={saving}
-        selectedId={selectedId}
-      />
-      <section className="min-h-0 min-w-0 md:overflow-y-auto md:px-2">
-        {editor === null ? (
-          <p className="text-muted-foreground text-sm">
-            从左侧选择服务商进行配置，或点击「新增自定义 OpenAI」。
-          </p>
-        ) : (
-          <EditorForm
-            dirty={dirty}
-            editor={editor}
-            error={error}
-            info={info}
-            isNew={isNew}
-            key={selectedId ?? "new"}
-            onCancelDiscard={cancelDiscard}
-            onConfirmDiscard={confirmDiscard}
-            onDelete={onDelete}
-            onPatch={updateEditor}
-            onSave={onSave}
-            pending={pending !== null}
-            plugin={selectedPlugin}
+    <Tabs
+      className="flex min-h-0 flex-1 flex-col"
+      onValueChange={(value) => {
+        if (value !== null) {
+          requestKindChange(value as PluginKind);
+        }
+      }}
+      value={kind}
+    >
+      <TabsList className="self-start">
+        {KIND_ORDER.map((entry) => (
+          <TabsTrigger key={entry} value={entry}>
+            {KIND_LABEL[entry]}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      <TabsContent className="min-h-0" value={kind}>
+        <div className="grid h-full min-h-0 grid-cols-1 items-start gap-6 md:grid-cols-[16rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] md:items-stretch">
+          <LeftPanel
+            addDisabled={!ready || firstPluginOfKind(kind) === null}
+            draftName={isNew && editor ? draftLabel(editor.name) : null}
+            filter={filter}
+            filtered={filteredProfiles}
+            hasPlugins={visiblePlugins.length > 0}
+            kind={kind}
+            kindCount={visibleProfiles.length}
+            listRef={listRef}
+            onAdd={startNew}
+            onFilterChange={setFilter}
+            onQueryChange={setQuery}
+            onReorder={onReorder}
+            onSelect={requestSelection}
+            onSelectDraft={startNew}
+            onToggleEnabled={toggleEnabled}
+            query={query}
             saving={saving}
-            schema={schema}
-            secretAvailable={secretAvailable}
-            secretHas={secretHas[selectedId ?? ""] ?? {}}
             selectedId={selectedId}
-            showPluginName={plugins.length > 1}
           />
-        )}
-      </section>
-    </div>
+          <section className="min-h-0 min-w-0 md:overflow-y-auto md:px-2">
+            {editor === null ? (
+              <p className="text-muted-foreground text-sm">
+                从左侧选择服务商进行配置，或点击「{KIND_ADD[kind]}」。
+              </p>
+            ) : (
+              <FormForKind
+                dirty={dirty}
+                editor={editor}
+                error={error}
+                info={info}
+                isNew={isNew}
+                key={selectedId ?? "new"}
+                onCancelDiscard={cancelDiscard}
+                onConfirmDiscard={confirmDiscard}
+                onDelete={onDelete}
+                onPatch={updateEditor}
+                onSave={onSave}
+                pending={pending !== null}
+                plugin={selectedPlugin}
+                saving={saving}
+                schema={schema}
+                secretAvailable={secretAvailable}
+                secretHas={secretHas[selectedId ?? ""] ?? {}}
+                selectedId={selectedId}
+                showPluginName={plugins.length > 1}
+              />
+            )}
+          </section>
+        </div>
+      </TabsContent>
+    </Tabs>
   );
 }
 

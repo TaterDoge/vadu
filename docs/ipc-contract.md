@@ -259,7 +259,7 @@ export type AppSettings = {
 
 服务商设置中模型字段「选择模型」浮层的唯一数据通道，语义：
 
-- 入参 `profileId` 可以是草稿 id（如 `"__new__"`）：未保存的服务商也可获取模型列表，无需先保存；已保存 profile 仍直接命中。
+- 入参 `profileId` 可以是未落盘的草稿 id（新增 dialog 传 `""`）：未保存的服务商也可获取模型列表，无需先保存；已保存 profile 仍直接命中。
 - `secrets`（可选）是本次表单里用户已输入、尚未保存的密钥明文，**只用于本次模型列表请求**：绝不并入 `config`、绝不落盘、绝不写入日志（含插件日志与错误 message）。宿主校验形状：普通对象、值全为 string、键数 ≤ 16、单值长度 ≤ 8192，否则 `INVALID_CONFIG`。`secrets` 中出现的键优先于已保存的密钥桶；未出现的键回落已保存桶。
 - origin 约束：
   - 已保存 profile：请求经受控 `runtime.fetch`，只允许发往已保存 `allowedOrigins` 里已登记的地址；即使本次表单改了 baseURL，未登记的新 origin 仍返回 `PERMISSION_DENIED`（保持「先保存再换地址」的保护）。

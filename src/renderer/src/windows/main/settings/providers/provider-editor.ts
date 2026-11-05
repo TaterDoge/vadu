@@ -24,18 +24,6 @@ export function mergeSecretRetry<T extends SecretRetryEditor>(
 }
 
 /**
- * 新增草稿必须让列表可见：清空搜索、切回「全部」过滤。
- */
-export function ensureDraftVisible() {
-  return { filter: "all" as const, query: "" };
-}
-
-/** 草稿名兜底：名称为空仍显示「自定义 OpenAI」 */
-export function draftLabel(name: string): string {
-  return name === "" ? "自定义 OpenAI" : name;
-}
-
-/**
  * 模型列表请求签名：除 model（由下拉结果驱动的字段）外的配置确定性序列化。
  * 用于在 baseURL 等影响 listModels 的字段变化时作废进行中的请求。
  */

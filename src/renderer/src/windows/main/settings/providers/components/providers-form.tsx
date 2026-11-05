@@ -1,4 +1,4 @@
-import type { FormEvent, ReactNode } from "react";
+import { type FormEvent, type ReactNode, useId } from "react";
 import { AlertDialog } from "@animate-ui/react/primitives/base-ui/alert-dialog";
 import { Alert, AlertDescription } from "@renderer/components/ui/alert";
 import { Button } from "@renderer/components/ui/button";
@@ -165,6 +165,7 @@ function FieldControl({
 }
 
 type FieldRowProps = {
+  controlId: string;
   disabled: boolean;
   editor: EditorState;
   field: ConfigField;
@@ -174,6 +175,7 @@ type FieldRowProps = {
 };
 
 function FieldRow({
+  controlId,
   disabled,
   editor,
   field,
@@ -198,7 +200,6 @@ function FieldRow({
       />
     );
   }
-  const controlId = `field-${keyName}`;
   const handleSecretChange = (value: string): void => {
     if (field.type === "json") {
       onPatch({ jsonText: { ...editor.jsonText, [keyName]: value } });
@@ -283,6 +284,8 @@ function EditorFormShell({
   showPluginName,
 }: EditorFormShellProps): ReactNode {
   const fieldEntries = Object.entries(schema?.properties ?? {});
+  // 表单会同时出现在右侧面板与新增 dialog，field id 必须唯一
+  const idPrefix = useId();
   const basicFields = fieldEntries.filter(
     ([, field]) => field["x-advanced"] !== true
   );
@@ -341,7 +344,7 @@ function EditorFormShell({
             </span>
             <div className="flex gap-2">
               <Button onClick={onConfirmDiscard} size="sm" type="button">
-                放弃并切换
+                放弃
               </Button>
               <Button
                 onClick={onCancelDiscard}
@@ -377,10 +380,10 @@ function EditorFormShell({
           </p>
         ) : null}
         <Field className="gap-1.5" key="name">
-          <FieldLabel htmlFor="profile-name">名称</FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-name`}>名称</FieldLabel>
           <Input
             disabled={saving}
-            id="profile-name"
+            id={`${idPrefix}-name`}
             onChange={(event) => onPatch({ name: event.target.value })}
             value={editor.name}
           />
@@ -416,6 +419,7 @@ function EditorFormShell({
           }
           return (
             <FieldRow
+              controlId={`${idPrefix}-${key}`}
               disabled={saving}
               editor={editor}
               field={field}
@@ -438,6 +442,7 @@ function EditorFormShell({
             <CollapsiblePanel>
               {advancedFields.map(([key, field]) => (
                 <FieldRow
+                  controlId={`${idPrefix}-${key}`}
                   disabled={saving}
                   editor={editor}
                   field={field}

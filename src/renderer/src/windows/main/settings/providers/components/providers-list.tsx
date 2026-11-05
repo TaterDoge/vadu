@@ -19,7 +19,6 @@ import type { PluginKind, Profile } from "@shared/ipc";
 import { cn } from "cn";
 
 import { KIND_ADD, KIND_EMPTY } from "../kinds";
-import { NEW_PROFILE_ID } from "../model-picker";
 import type { FilterState } from "../provider-editor";
 import { PluginIcon } from "./provider-icon";
 
@@ -31,6 +30,7 @@ type RowProps = {
   reorderable: boolean;
   saving: boolean;
   selected: boolean;
+  toggling: boolean;
 };
 
 function ProviderRow({
@@ -41,6 +41,7 @@ function ProviderRow({
   reorderable,
   saving,
   selected,
+  toggling,
 }: RowProps): ReactNode {
   const { ref, handleRef, isDragging } = useSortable({
     disabled: !reorderable || saving,
@@ -97,42 +98,10 @@ function ProviderRow({
       <Switch
         aria-label={`启用 ${profile.name}`}
         checked={profile.enabled}
-        disabled={saving}
+        disabled={saving || toggling}
         onCheckedChange={onToggle}
         size="sm"
       />
-    </div>
-  );
-}
-
-type DraftRowProps = {
-  name: string;
-  onSelect: () => void;
-  selected: boolean;
-};
-
-function DraftRow({ name, onSelect, selected }: DraftRowProps): ReactNode {
-  return (
-    <div
-      className={cn(
-        "my-1 flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-sm transition-colors motion-reduce:transition-none",
-        selected
-          ? "border-border bg-muted"
-          : "border-transparent hover:bg-muted"
-      )}
-    >
-      <Button
-        aria-current={selected ? "true" : undefined}
-        className="flex-1 justify-start px-0 text-left"
-        onClick={onSelect}
-        size="xs"
-        variant="ghost"
-      >
-        <span className="truncate">{name}</span>
-      </Button>
-      <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[0.6875rem] text-muted-foreground">
-        草稿
-      </span>
     </div>
   );
 }
@@ -144,17 +113,15 @@ type LeftPanelProps = {
   kind: PluginKind;
   /** 当前 kind 的 profile 总数（不受搜索/过滤影响），显示在标题旁 */
   kindCount: number;
-  /** 列表滚动容器，父层用它把选中的草稿行滚回顶部 */
-  listRef: RefObject<HTMLDivElement | null>;
-  /** 非 null 表示存在未保存的新建草稿，值即草稿行显示名 */
-  draftName: string | null;
   /** 启用状态过滤，非 "all" 时禁用拖拽排序 */
   filter: FilterState;
   /** 已按 query 与 filter 过滤后的可见列表；拖拽只改这份顺序 */
   filtered: Profile[];
   /** 当前 kind 是否至少有一个插件；为 false 时整表换成提示，不渲染 profile 行 */
   hasPlugins: boolean;
-  /** 点击新增按钮，进入草稿编辑态 */
+  /** 列表滚动容器，父层用它把新增后的服务商滚回可见区 */
+  listRef: RefObject<HTMLDivElement | null>;
+  /** 点击新增按钮，打开新增服务商 dialog */
   onAdd: () => void;
   /** 切换启用状态过滤 */
   onFilterChange: (filter: FilterState) => void;
@@ -164,37 +131,36 @@ type LeftPanelProps = {
   onReorder: (ordered: Profile[]) => void;
   /** 点击某行，请求切换到该 profile 的编辑态 */
   onSelect: (id: string) => void;
-  /** 点击草稿行，回到新建编辑态 */
-  onSelectDraft: () => void;
   /** 切换某 profile 的启用开关 */
   onToggleEnabled: (profile: Profile, enabled: boolean) => void;
   /** 搜索关键词（受控），非空时禁用拖拽排序 */
   query: string;
   /** 保存中，禁用拖拽、启用开关与新增按钮 */
   saving: boolean;
-  /** 当前选中项 id，可为 NEW_PROFILE_ID 表示草稿行被选中 */
+  /** 当前选中项 id */
   selectedId: string | null;
+  /** 正在切换启用状态的 profile id，只锁对应行的开关，不影响表单保存态 */
+  togglingId: string | null;
 };
 
 function LeftPanel({
   addDisabled,
   kind,
   kindCount,
-  draftName,
-  listRef,
   filter,
   filtered,
   hasPlugins,
+  listRef,
   onAdd,
   onFilterChange,
   onQueryChange,
   onReorder,
   onSelect,
-  onSelectDraft,
   onToggleEnabled,
   query,
   saving,
   selectedId,
+  togglingId,
 }: LeftPanelProps): ReactNode {
   // 过滤态下 filtered 只是子集，拖拽落盘的顺序会错位；保持全量可见才允许拖拽
   const reorderable = filter === "all" && query.trim() === "";
@@ -277,14 +243,6 @@ function LeftPanel({
         {/* 每项都带稳定 key：条件行增删不能让后面的行换索引重放入场 */}
         <DragDropProvider onDragEnd={handleDragEnd}>
           <StaggerList>
-            {draftName ? (
-              <DraftRow
-                key="draft"
-                name={draftName}
-                onSelect={onSelectDraft}
-                selected={selectedId === NEW_PROFILE_ID}
-              />
-            ) : null}
             {hasPlugins ? null : (
               <p className="text-muted-foreground text-sm" key="no-plugins">
                 {KIND_EMPTY[kind]}，请检查应用安装状态。
@@ -301,10 +259,11 @@ function LeftPanel({
                     reorderable={reorderable}
                     saving={saving}
                     selected={selectedId === profile.id}
+                    toggling={togglingId === profile.id}
                   />
                 ))
               : null}
-            {hasPlugins && !draftName && filtered.length === 0 ? (
+            {hasPlugins && filtered.length === 0 ? (
               <p className="text-muted-foreground text-sm" key="empty">
                 没有匹配的服务商。
               </p>

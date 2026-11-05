@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@renderer/components/ui/button";
 import {
   Combobox,
@@ -18,8 +18,6 @@ import {
   modelDisplayLabel,
   modelsConfigSignature,
 } from "./provider-editor";
-
-const NEW_PROFILE_ID = "__new__";
 
 type ModelPickerProps = {
   config: Record<string, unknown>;
@@ -145,7 +143,8 @@ function ModelPicker({
   };
 
   const filtered = filterModels(cached ?? [], query);
-  const controlId = "field-model";
+  // 同一页面可能同时渲染面板表单与新增 dialog 表单，id 不能硬编码
+  const controlId = useId();
   const showLoading = busy && cached === null;
   const showError = error !== null && !showLoading;
   const hasList = cached !== null;
@@ -282,4 +281,4 @@ function ModelPicker({
   );
 }
 
-export { ModelPicker, NEW_PROFILE_ID };
+export { ModelPicker };

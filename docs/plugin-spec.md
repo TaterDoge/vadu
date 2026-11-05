@@ -158,7 +158,7 @@ type ConfigSchema = {
 
    刷新条件（由宿主强制）：
 
-   - **profile 可为草稿**：`profileId` 指向已落盘 profile 或草稿 id（如 `"__new__"`）；新建服务商首次保存前即可发起请求，UI 不再要求先保存。
+   - **profile 可为草稿**：`profileId` 指向已落盘 profile 或未落盘的草稿 id（新增 dialog 传 `""`）；新建服务商首次保存前即可发起请求，UI 不再要求先保存。
    - **密钥用本次表单输入**：`secrets` 可选，携带用户已输入、未保存的密钥明文，仅用于本次请求（不落盘、不进日志、不并入 config），命中键优先于已保存密钥桶；对应 secret 字段从未设置且本次未输入时，适配器抛 `AUTH_FAILED`「缺少 API Key」。
    - **origin**：已保存 profile 只允许已登记的 `allowedOrigins`（保存 profile 时自动登记该 profile 的 baseURL origin），未登记 origin 返回 `PERMISSION_DENIED`；草稿临时用本次 baseURL 派生 origin，取不到合法 baseURL 报 `INVALID_CONFIG`。
 

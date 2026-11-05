@@ -4,8 +4,6 @@ import { describe, test } from "node:test";
 import type { ModelInfo } from "@shared/ipc";
 
 import {
-  draftLabel,
-  ensureDraftVisible,
   filterModels,
   isModelRequestInvalid,
   mergeJsonFields,
@@ -34,19 +32,6 @@ describe("mergeSecretRetry", () => {
     const current = { secrets: {} };
     const saved = { secrets: {} };
     assert.deepEqual(mergeSecretRetry(current, saved), { secrets: {} });
-  });
-});
-
-describe("ensureDraftVisible", () => {
-  test("新增草稿清空搜索并切回全部过滤", () => {
-    assert.deepEqual(ensureDraftVisible(), { filter: "all", query: "" });
-  });
-});
-
-describe("draftLabel", () => {
-  test("空名仍显示「自定义 OpenAI」", () => {
-    assert.equal(draftLabel(""), "自定义 OpenAI");
-    assert.equal(draftLabel("我的服务商"), "我的服务商");
   });
 });
 

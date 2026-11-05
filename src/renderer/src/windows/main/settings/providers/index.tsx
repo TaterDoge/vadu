@@ -6,6 +6,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { Dialog } from "@animate-ui/react/primitives/base-ui/dialog";
+import { Button } from "@renderer/components/ui/button";
 import {
   Tabs,
   TabsContent,
@@ -17,22 +19,22 @@ import type { PluginDescriptor, PluginKind, Profile } from "@shared/ipc";
 import { OcrForm, TranslatorForm, TtsForm } from "./components/providers-form";
 import { LeftPanel } from "./components/providers-list";
 import { KIND_ADD, KIND_LABEL, KIND_ORDER } from "./kinds";
-import { NEW_PROFILE_ID } from "./model-picker";
 import {
   EMPTY_EDITOR,
   type EditorState,
   type FilterState,
   buildConfigPayload,
   buildSavePayload,
-  draftLabel,
   editorFromProfile,
-  ensureDraftVisible,
   isDirty,
   mergeSecretRetry,
   secretFieldNames,
 } from "./provider-editor";
 
-type PendingSwitch = { kind: PluginKind } | { id: string };
+type PendingSwitch = { kind: PluginKind } | { id: string } | { create: true };
+
+/** 新增 dialog 的编辑态：baseline 用于判断关闭时是否需要确认 */
+type Creating = { baseline: EditorState; editor: EditorState };
 
 function kindOfPlugin(
   plugins: PluginDescriptor[],
@@ -199,6 +201,8 @@ async function bootProviders(
 
 type SaveApi = {
   existing: Profile | null;
+  /** 保存成功后的额外收尾（新增 dialog 用它关闭自己） */
+  onSaved?: () => void;
   plugin: PluginDescriptor | null;
   readPlugins: () => PluginDescriptor[];
   setBaseline: (editor: EditorState) => void;
@@ -244,6 +248,7 @@ async function performSave(editor: EditorState, api: SaveApi): Promise<void> {
         api.seqRef,
         api.setSecretHas
       ).catch(() => undefined);
+      api.onSaved?.();
     }
     const listResult = await window.vadu.config.listProfiles();
     if (listResult.ok) {
@@ -274,9 +279,14 @@ function ProvidersPage(): ReactNode {
   const [filter, setFilter] = useState<FilterState>("all");
   const [secretAvailable, setSecretAvailable] = useState(true);
   const [saving, setSaving] = useState(false);
+  // 开关切换独立于保存：共用 saving 会让详情表单按钮闪成「保存中…」
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingSwitch | null>(null);
+  const [creating, setCreating] = useState<Creating | null>(null);
+  // 关闭新增 dialog 时存在未保存内容，等用户确认丢弃
+  const [closePending, setClosePending] = useState(false);
   const [kind, setKind] = useState<PluginKind>("translator");
   const [ready, setReady] = useState(false);
   const secretHasSeqRef = useRef(0);
@@ -285,12 +295,8 @@ function ProvidersPage(): ReactNode {
   const pluginsRef = useRef<PluginDescriptor[]>([]);
   profilesRef.current = profiles;
   pluginsRef.current = plugins;
-
-  useEffect(() => {
-    if (selectedId === NEW_PROFILE_ID) {
-      listRef.current?.scrollTo({ top: 0 });
-    }
-  }, [selectedId]);
+  const creatingDirty =
+    creating !== null && isDirty(creating.editor, creating.baseline);
 
   useEffect(() => {
     const aliveRef = { current: true };
@@ -317,11 +323,25 @@ function ProvidersPage(): ReactNode {
   const firstPluginOfKind = (target: PluginKind): PluginDescriptor | null =>
     plugins.find((entry) => entry.kind === target) ?? null;
 
+  const openCreate = (): void => {
+    const next = editorFromProfile(null, firstPluginOfKind(kind));
+    // 清空搜索/过滤，保存后新服务商一定能出现在列表里
+    setQuery("");
+    setFilter("all");
+    setCreating({ baseline: next, editor: next });
+    setClosePending(false);
+    setError(null);
+    setInfo(null);
+    setPending(null);
+  };
+
   const startNew = (): void => {
-    const cleared = ensureDraftVisible();
-    setQuery(cleared.query);
-    setFilter(cleared.filter);
-    requestSelection(NEW_PROFILE_ID);
+    // 面板里的未保存修改会被新增后的选中结果覆盖，先让用户确认
+    if (editor && isDirty(editor, baseline)) {
+      setPending({ create: true });
+      return;
+    }
+    openCreate();
   };
 
   const switchTo = (id: string): void => {
@@ -329,16 +349,12 @@ function ProvidersPage(): ReactNode {
       return;
     }
     const profile =
-      id === NEW_PROFILE_ID
-        ? null
-        : (profilesRef.current.find((entry) => entry.id === id) ?? null);
-    if (!profile && id !== NEW_PROFILE_ID) {
+      profilesRef.current.find((entry) => entry.id === id) ?? null;
+    if (!profile) {
       return;
     }
-    const plugin = profile
-      ? (pluginsRef.current.find((entry) => entry.id === profile.pluginId) ??
-        null)
-      : firstPluginOfKind(kind);
+    const plugin =
+      pluginsRef.current.find((entry) => entry.id === profile.pluginId) ?? null;
     const next = editorFromProfile(profile, plugin);
     setSelectedId(id);
     setBaseline(next);
@@ -346,7 +362,7 @@ function ProvidersPage(): ReactNode {
     setError(null);
     setInfo(null);
     setPending(null);
-    if (profile && plugin) {
+    if (plugin) {
       loadSecretHas(
         profile.id,
         secretFieldNames(plugin.configSchema),
@@ -368,9 +384,6 @@ function ProvidersPage(): ReactNode {
   };
 
   const applyKindChange = (nextKind: PluginKind): void => {
-    const cleared = ensureDraftVisible();
-    setQuery(cleared.query);
-    setFilter(cleared.filter);
     setError(null);
     setInfo(null);
     setPending(null);
@@ -381,11 +394,10 @@ function ProvidersPage(): ReactNode {
       )
       .at(-1);
     if (!latest) {
-      // 该 kind 没有 profile：直接进草稿态，让用户立即可新建
-      const nextEditor = editorFromProfile(null, firstPluginOfKind(nextKind));
-      setSelectedId(NEW_PROFILE_ID);
-      setBaseline(nextEditor);
-      setEditor(nextEditor);
+      // 该 kind 没有 profile：空面板，新增走 dialog
+      setSelectedId(null);
+      setBaseline(EMPTY_EDITOR);
+      setEditor(null);
       return;
     }
     switchTo(latest.id);
@@ -410,6 +422,8 @@ function ProvidersPage(): ReactNode {
     setPending(null);
     if ("kind" in target) {
       applyKindChange(target.kind);
+    } else if ("create" in target) {
+      openCreate();
     } else {
       switchTo(target.id);
     }
@@ -417,6 +431,31 @@ function ProvidersPage(): ReactNode {
 
   const cancelDiscard = (): void => {
     setPending(null);
+  };
+
+  const closeCreate = (): void => {
+    setCreating(null);
+    setClosePending(false);
+  };
+
+  const requestCloseCreate = (): void => {
+    if (saving) {
+      return;
+    }
+    // 有未保存内容时先进确认态，不直接丢掉 dialog 里的输入
+    if (creatingDirty) {
+      setClosePending(true);
+      return;
+    }
+    closeCreate();
+  };
+
+  const patchCreating = (patch: Partial<EditorState>): void => {
+    setCreating((current) =>
+      current
+        ? { ...current, editor: { ...current.editor, ...patch } }
+        : current
+    );
   };
 
   const updateEditor = (patch: Partial<EditorState>): void => {
@@ -427,10 +466,10 @@ function ProvidersPage(): ReactNode {
     profile: Profile,
     enabled: boolean
   ): Promise<void> => {
-    if (saving) {
+    if (saving || togglingId !== null) {
       return;
     }
-    setSaving(true);
+    setTogglingId(profile.id);
     setError(null);
     try {
       const result = await window.vadu.config.saveProfile({
@@ -449,25 +488,46 @@ function ProvidersPage(): ReactNode {
     } catch (reason) {
       setError(String(reason));
     } finally {
-      setSaving(false);
+      setTogglingId(null);
     }
   };
 
   const onSave = async (event?: FormEvent): Promise<void> => {
     event?.preventDefault();
-    if (!editor || saving) {
+    if (!(editor && !saving && selectedId !== null)) {
       return;
     }
-    const existing =
-      selectedId === NEW_PROFILE_ID
-        ? null
-        : (profilesRef.current.find((entry) => entry.id === selectedId) ??
-          null);
     await performSave(editor, {
-      existing,
+      existing:
+        profilesRef.current.find((entry) => entry.id === selectedId) ?? null,
       plugin:
         pluginsRef.current.find((entry) => entry.id === editor.pluginId) ??
         null,
+      readPlugins: () => pluginsRef.current,
+      seqRef: secretHasSeqRef,
+      setBaseline,
+      setEditor,
+      setError,
+      setInfo,
+      setProfiles,
+      setSaving,
+      setSecretHas,
+      setSelectedId,
+    });
+  };
+
+  const onCreateSave = async (event?: FormEvent): Promise<void> => {
+    event?.preventDefault();
+    if (!(creating && !saving)) {
+      return;
+    }
+    await performSave(creating.editor, {
+      existing: null,
+      onSaved: closeCreate,
+      plugin:
+        pluginsRef.current.find(
+          (entry) => entry.id === creating.editor.pluginId
+        ) ?? null,
       readPlugins: () => pluginsRef.current,
       seqRef: secretHasSeqRef,
       setBaseline,
@@ -507,12 +567,7 @@ function ProvidersPage(): ReactNode {
   };
 
   const onDelete = async (): Promise<void> => {
-    if (
-      !editor ||
-      saving ||
-      selectedId === null ||
-      selectedId === NEW_PROFILE_ID
-    ) {
+    if (!editor || saving || selectedId === null) {
       return;
     }
     setSaving(true);
@@ -555,13 +610,9 @@ function ProvidersPage(): ReactNode {
           setSecretHas
         ).catch(() => undefined);
       } else {
-        const cleared = ensureDraftVisible();
-        const nextEditor = editorFromProfile(null, firstPluginOfKind(kind));
-        setQuery(cleared.query);
-        setFilter(cleared.filter);
-        setSelectedId(NEW_PROFILE_ID);
-        setBaseline(nextEditor);
-        setEditor(nextEditor);
+        setSelectedId(null);
+        setBaseline(EMPTY_EDITOR);
+        setEditor(null);
       }
     } catch (reason) {
       setError(String(reason));
@@ -609,14 +660,16 @@ function ProvidersPage(): ReactNode {
   }, [filter, query, visiblePlugins, visibleProfiles]);
 
   const selectedProfile =
-    selectedId === null || selectedId === NEW_PROFILE_ID
+    selectedId === null
       ? null
       : (profiles.find((entry) => entry.id === selectedId) ?? null);
   const selectedPlugin = selectedProfile
     ? (plugins.find((entry) => entry.id === selectedProfile.pluginId) ?? null)
-    : firstPluginOfKind(kind);
+    : null;
+  const creatingPlugin = creating
+    ? (plugins.find((entry) => entry.id === creating.editor.pluginId) ?? null)
+    : null;
   const schema = selectedPlugin?.configSchema;
-  const isNew = selectedId === NEW_PROFILE_ID;
   const dirty = editor !== null && isDirty(editor, baseline);
 
   const FORM_FOR_KIND: Record<PluginKind, typeof TranslatorForm> = {
@@ -627,76 +680,129 @@ function ProvidersPage(): ReactNode {
   const FormForKind = FORM_FOR_KIND[kind];
 
   return (
-    <Tabs
-      className="flex min-h-0 flex-1 flex-col"
-      onValueChange={(value) => {
-        if (value !== null) {
-          requestKindChange(value as PluginKind);
-        }
-      }}
-      value={kind}
-    >
-      <TabsList className="self-start">
-        {KIND_ORDER.map((entry) => (
-          <TabsTrigger key={entry} value={entry}>
-            {KIND_LABEL[entry]}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-      <TabsContent className="min-h-0" value={kind}>
-        <div className="grid h-full min-h-0 grid-cols-1 items-start gap-6 md:grid-cols-[16rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] md:items-stretch">
-          <LeftPanel
-            addDisabled={!ready || firstPluginOfKind(kind) === null}
-            draftName={isNew && editor ? draftLabel(editor.name) : null}
-            filter={filter}
-            filtered={filteredProfiles}
-            hasPlugins={visiblePlugins.length > 0}
-            kind={kind}
-            kindCount={visibleProfiles.length}
-            listRef={listRef}
-            onAdd={startNew}
-            onFilterChange={setFilter}
-            onQueryChange={setQuery}
-            onReorder={onReorder}
-            onSelect={requestSelection}
-            onSelectDraft={startNew}
-            onToggleEnabled={toggleEnabled}
-            query={query}
-            saving={saving}
-            selectedId={selectedId}
-          />
-          <section className="min-h-0 min-w-0 md:overflow-y-auto md:px-2">
-            {editor === null ? (
-              <p className="text-muted-foreground text-sm">
-                从左侧选择服务商进行配置，或点击「{KIND_ADD[kind]}」。
-              </p>
-            ) : (
+    <>
+      <Tabs
+        className="flex min-h-0 flex-1 flex-col"
+        onValueChange={(value) => {
+          if (value !== null) {
+            requestKindChange(value as PluginKind);
+          }
+        }}
+        value={kind}
+      >
+        <TabsList className="self-start">
+          {KIND_ORDER.map((entry) => (
+            <TabsTrigger key={entry} value={entry}>
+              {KIND_LABEL[entry]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent className="min-h-0" value={kind}>
+          <div className="grid h-full min-h-0 grid-cols-1 items-start gap-6 md:grid-cols-[16rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] md:items-stretch">
+            <LeftPanel
+              addDisabled={!ready || firstPluginOfKind(kind) === null}
+              filter={filter}
+              filtered={filteredProfiles}
+              hasPlugins={visiblePlugins.length > 0}
+              kind={kind}
+              kindCount={visibleProfiles.length}
+              listRef={listRef}
+              onAdd={startNew}
+              onFilterChange={setFilter}
+              onQueryChange={setQuery}
+              onReorder={onReorder}
+              onSelect={requestSelection}
+              onToggleEnabled={toggleEnabled}
+              query={query}
+              saving={saving}
+              selectedId={selectedId}
+              togglingId={togglingId}
+            />
+            <section className="min-h-0 min-w-0 md:overflow-y-auto md:px-2">
+              {editor === null ? (
+                <p className="text-muted-foreground text-sm">
+                  从左侧选择服务商进行配置，或点击「{KIND_ADD[kind]}」。
+                </p>
+              ) : (
+                <FormForKind
+                  dirty={dirty}
+                  editor={editor}
+                  error={error}
+                  info={info}
+                  isNew={false}
+                  key={selectedId}
+                  onCancelDiscard={cancelDiscard}
+                  onConfirmDiscard={confirmDiscard}
+                  onDelete={onDelete}
+                  onPatch={updateEditor}
+                  onSave={onSave}
+                  pending={pending !== null}
+                  plugin={selectedPlugin}
+                  saving={saving}
+                  schema={schema}
+                  secretAvailable={secretAvailable}
+                  secretHas={secretHas[selectedId ?? ""] ?? {}}
+                  selectedId={selectedId}
+                  showPluginName={plugins.length > 1}
+                />
+              )}
+            </section>
+          </div>
+        </TabsContent>
+      </Tabs>
+      <Dialog.Root
+        onOpenChange={(open) => {
+          if (!open) {
+            requestCloseCreate();
+          }
+        }}
+        open={creating !== null}
+      >
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/20 supports-backdrop-filter:backdrop-blur-xs" />
+          <Dialog.Popup
+            aria-label={KIND_ADD[kind]}
+            className="fixed inset-0 z-50 m-auto flex h-fit max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-xl flex-col overflow-y-auto rounded-xl border bg-popover p-6 text-popover-foreground shadow-lg outline-none"
+          >
+            <Dialog.Close
+              render={
+                <Button
+                  className="absolute top-3 right-3"
+                  disabled={saving}
+                  size="icon-sm"
+                  variant="ghost"
+                />
+              }
+            >
+              <span aria-hidden="true" className="icon-[lucide--x] size-4" />
+              <span className="sr-only">取消新增</span>
+            </Dialog.Close>
+            {creating ? (
               <FormForKind
-                dirty={dirty}
-                editor={editor}
+                dirty={creatingDirty}
+                editor={creating.editor}
                 error={error}
                 info={info}
-                isNew={isNew}
-                key={selectedId ?? "new"}
-                onCancelDiscard={cancelDiscard}
-                onConfirmDiscard={confirmDiscard}
-                onDelete={onDelete}
-                onPatch={updateEditor}
-                onSave={onSave}
-                pending={pending !== null}
-                plugin={selectedPlugin}
+                isNew
+                onCancelDiscard={() => setClosePending(false)}
+                onConfirmDiscard={closeCreate}
+                onDelete={() => undefined}
+                onPatch={patchCreating}
+                onSave={onCreateSave}
+                pending={closePending}
+                plugin={creatingPlugin}
                 saving={saving}
-                schema={schema}
+                schema={creatingPlugin?.configSchema}
                 secretAvailable={secretAvailable}
-                secretHas={secretHas[selectedId ?? ""] ?? {}}
-                selectedId={selectedId}
+                secretHas={{}}
+                selectedId={null}
                 showPluginName={plugins.length > 1}
               />
-            )}
-          </section>
-        </div>
-      </TabsContent>
-    </Tabs>
+            ) : null}
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   );
 }
 

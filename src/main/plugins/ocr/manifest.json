@@ -1,0 +1,51 @@
+{
+  "apiVersion": 2,
+  "id": "vadu.ocr",
+  "name": "AI 取词",
+  "version": "0.1.0",
+  "kind": "ocr",
+  "main": "index.js",
+  "description": "通过视觉语言模型识别图中的文字",
+  "author": "vadu",
+  "capabilities": {},
+  "permissions": ["net:*"],
+  "config": {
+    "type": "object",
+    "required": ["baseURL", "apiKey", "model"],
+    "properties": {
+      "baseURL": {
+        "type": "string",
+        "title": "接口地址 (Base URL)",
+        "placeholder": "https://api.openai.com/v1",
+        "required": true
+      },
+      "apiKey": {
+        "type": "secret",
+        "title": "API Key",
+        "required": true
+      },
+      "model": {
+        "type": "string",
+        "title": "视觉模型",
+        "placeholder": "gpt-4o-mini",
+        "required": true
+      },
+      "prompt": {
+        "type": "string",
+        "title": "识别提示词",
+        "default": "按阅读顺序输出图中的文字，不要翻译，不要解释",
+        "x-advanced": true
+      }
+    }
+  },
+  "presets": [
+    {
+      "id": "openai",
+      "label": "OpenAI",
+      "config": {
+        "baseURL": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini"
+      }
+    }
+  ]
+}

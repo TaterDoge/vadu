@@ -21,9 +21,11 @@ import {
 } from "./hotkey";
 import { handle } from "./ipc";
 import { registerConfigIpc } from "./ipc/config";
+import { registerOcrIpc } from "./ipc/ocr";
 import { registerPluginsIpc } from "./ipc/plugins";
 import { registerSecretsIpc } from "./ipc/secrets";
 import { registerTranslateIpc } from "./ipc/translate";
+import { registerTtsIpc } from "./ipc/tts";
 import { createTray } from "./tray";
 import {
   getQuickWindowPinned,
@@ -67,6 +69,8 @@ function start(): void {
     registerPluginsIpc();
     registerSecretsIpc();
     registerTranslateIpc();
+    registerTtsIpc();
+    registerOcrIpc();
 
     // Default open or close DevTools by F12 in development
     // and ignore CommandOrControl + R in production.

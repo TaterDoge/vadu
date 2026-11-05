@@ -1,5 +1,11 @@
-import { copyFileSync, mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+} from "node:fs";
+import { dirname, join, resolve } from "node:path";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -16,13 +22,25 @@ const devCspUnsafeInlineScripts: Plugin = {
 };
 
 // 内置插件必须保持独立模块，被打进主 bundle 就无法被动态 import()
+// 遍历 src/main/plugins/*/manifest.json 各自复制，避免新增插件时改这份构建配置
 const copyPluginManifests: Plugin = {
   name: "copy-plugin-manifests",
   writeBundle() {
-    const manifest = resolve("src/main/plugins/ai/manifest.json");
-    const target = resolve("out/main/plugins/ai/manifest.json");
-    mkdirSync(dirname(target), { recursive: true });
-    copyFileSync(manifest, target);
+    const srcRoot = resolve("src/main/plugins");
+    const outRoot = resolve("out/main/plugins");
+    for (const name of readdirSync(srcRoot)) {
+      const dir = join(srcRoot, name);
+      if (!statSync(dir).isDirectory()) {
+        continue;
+      }
+      const manifest = join(dir, "manifest.json");
+      if (!existsSync(manifest)) {
+        continue;
+      }
+      const target = join(outRoot, name, "manifest.json");
+      mkdirSync(dirname(target), { recursive: true });
+      copyFileSync(manifest, target);
+    }
   },
 };
 
@@ -33,6 +51,8 @@ export default defineConfig({
         input: {
           index: resolve("src/main/index.ts"),
           "plugins/ai/index": resolve("src/main/plugins/ai/index.ts"),
+          "plugins/ocr/index": resolve("src/main/plugins/ocr/index.ts"),
+          "plugins/tts/index": resolve("src/main/plugins/tts/index.ts"),
         },
         output: {
           entryFileNames: "[name].js",

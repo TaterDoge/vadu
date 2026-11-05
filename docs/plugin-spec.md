@@ -66,7 +66,7 @@ my-plugin/
 | `id` | 是 | string | 插件身份全局唯一，反向域名，小写，仅 `[a-z0-9._-]`。profile 通过 pluginId 关联插件，密钥按 profileId 隔离 |
 | `name` | 是 | string | 界面展示名 |
 | `version` | 是 | string | 插件自身 semver |
-| `kind` | 是 | `"translator"` | 能力种类。当前只实现 `translator` |
+| `kind` | 是 | `"translator"` \| `"ocr"` \| `"tts"` | 能力种类，决定入口模块要实现哪套方法（§5）。一个插件只声明一种 kind，profile 归属只在对应能力的列表里出现 |
 | `main` | 是 | string | 入口相对路径，必须以 `.js` / `.mjs` 结尾 |
 | `description` | 否 | string | 界面副标题 |
 | `author` | 否 | string | 展示用 |
@@ -163,6 +163,8 @@ type ConfigSchema = {
    - **origin**：已保存 profile 只允许已登记的 `allowedOrigins`（保存 profile 时自动登记该 profile 的 baseURL origin），未登记 origin 返回 `PERMISSION_DENIED`；草稿临时用本次 baseURL 派生 origin，取不到合法 baseURL 报 `INVALID_CONFIG`。
 
    返回的 `ModelInfo[]` 宿主去重并截断到 500 条，适配器侧截断到 200 条；单次调用超时 30s。
+
+   **模型选择器只对 `translator` 生效。** `ocr` / `tts` 没有 `listModels` 契约，枚举选项（如音色、输出格式）用 `type: "string"` + `enum` 声明，渲染层直接出下拉框。
 5. 字段顺序 = `properties` 的书写顺序。
 6. `"x-advanced": true` 的字段默认收进折叠的「高级选项」（渲染层放在基础字段之后、保存区之前，默认收起）；校验行为与普通字段完全一致，插件读到的是普通 profile 配置值。
 7. `type: "json"` 只接受可解析的 JSON 对象（不允许数组/标量），值直接以对象形式存进 profile。用于 `extra` 这类厂商特有参数；插件读到的已经是对象，不需要自己 `JSON.parse`。
@@ -184,21 +186,37 @@ preset 是**只读模板**。用户新建 profile 时可选一个 preset 预填 
 // src/shared/plugin.ts 的对外形态
 export const PLUGIN_API_VERSION = 2;
 
+/** 能力种类，必须与 manifest.kind 一致。宿主按 kind 只调用对应接口 */
+export type PluginKind = "translator" | "ocr" | "tts";
+
 /** profile 的配置值，键由 manifest.config.properties 定义；secret 字段不在此列 */
 export type PluginConfig = Record<string, unknown>;
 
-export interface TranslatorPlugin {
-  /** 单次翻译。必须尊重 signal；增量输出用多次 yield，非流式则 yield 一次全量。 */
-  translate(req: TranslateRequest, opts: CallOptions): AsyncIterable<string>;
-
+/** 三种能力共有的生命周期钩子 */
+export interface PluginBase {
   /** 可选：校验失败请抛错误（§7），宿主会转成 `INVALID_CONFIG` */
   validateConfig?(config: PluginConfig, runtime: PluginRuntime): Promise<void>;
 
-  /** 可选：capabilities.models 为 true 时实现。 */
-  listModels?(config: PluginConfig, runtime: PluginRuntime): Promise<ModelInfo[]>;
-
   /** 可选：宿主在禁用/卸载/退出前调用，用于释放连接池、定时器等。 */
   dispose?(): void | Promise<void>;
+}
+
+export interface TranslatorPlugin extends PluginBase {
+  /** 单次翻译。必须尊重 signal；增量输出用多次 yield，非流式则 yield 一次全量。 */
+  translate(req: TranslateRequest, opts: CallOptions): AsyncIterable<string>;
+
+  /** 可选：capabilities.models 为 true 时实现。 */
+  listModels?(config: PluginConfig, runtime: PluginRuntime): Promise<ModelInfo[]>;
+}
+
+export interface OcrPlugin extends PluginBase {
+  /** 单次识别。返回识别出的纯文本；宿主按换行还原多栏排版 */
+  recognize(req: OcrRequest, opts: CallOptions): Promise<OcrResult>;
+}
+
+export interface TtsPlugin extends PluginBase {
+  /** 单次合成。整段音频一次返回，宿主不做流式播放（§8） */
+  synthesize(req: TtsRequest, opts: CallOptions): Promise<TtsResult>;
 }
 
 export interface TranslateRequest {
@@ -243,17 +261,50 @@ export interface ModelInfo {
   id: string;
   label?: string;
 }
+
+export interface OcrRequest {
+  /** 该 profile 的配置；secret 字段已被剔除 */
+  config: PluginConfig;
+  /** 图片字节，宿主已从剪贴板读取并限制大小 */
+  image: { data: Uint8Array; mimeType: string };
+  /** 期望语言提示，可选；缺省表示不指定 */
+  language?: string;
+}
+
+export interface OcrResult {
+  /** 识别文本；空串表示未识别到文字，宿主在 UI 提示，不算错误 */
+  text: string;
+}
+
+export interface TtsRequest {
+  /** 该 profile 的配置；secret 字段已被剔除 */
+  config: PluginConfig;
+  /** 待朗读文本，长度已由宿主限制 */
+  text: string;
+  /** BCP-47 语言码，可选 */
+  language?: string;
+}
+
+export interface TtsResult {
+  /** 音频字节（mp3/wav 等浏览器可播放容器），宿主转成 Blob URL 交给 `<audio>` */
+  audio: Uint8Array;
+  /** 如 `audio/mpeg`，用于 Blob 的 type */
+  mimeType: string;
+}
 ```
+
+`createPlugin()` 返回的对象必须实现 `manifest.kind` 对应的接口：`translator` → `translate()`（可选 `listModels()`），`ocr` → `recognize()`，`tts` → `synthesize()`。宿主按 kind 取值，方法缺失视为 `PLUGIN_CRASH`。
 
 约定：
 
 - 同一插件实例可能被**并发**调用（多个 profile / 多个翻译请求），实现需无共享可变状态或自行加锁。
-- `translate()` 抛出的错误由宿主归一化，插件不需要拼 UI 文案。推荐直接抛带 `code` 的错误（见 §7），未标注的按 `INTERNAL` 处理。
+- `translate()` / `recognize()` / `synthesize()` 抛出的错误由宿主归一化，插件不需要拼 UI 文案。推荐直接抛带 `code` 的错误（见 §7），未标注的按 `INTERNAL` 处理。
 - 插件不得在模块顶层做耗时初始化（网络请求、读大文件）；放到 `createPlugin()` 或首次 `translate()`。
 - 插件**不得**读写 `config.json` / `secrets.bin` / 其它插件目录，**不得**调用 `app` / `ipcMain` / `shell`。这些调用在宿主已加载 Electron 的环境下技术上可行，属于越界行为，评审直接拒绝。
 - **取消语义**：`signal.aborted` 后立即停止 yield 并关闭上游 reader，不要在 `finally` 里再 yield 一次“剩余内容”。已发出的增量不回滚，由 UI 标记“已取消”。生成器必须真正终止，禁止悬挂（宿主不会帮你 `return()` 两次）。
 - 插件是**单次调用无状态**的：不要在插件实例上缓存上一次翻译的文本、语言或临时 build 结果，同一实例会被并发调用。
-- **请求对象里不放厂商特有参数。** `TranslateRequest` 是所有插件共用的形状，任何“只有某家有”的参数属于该插件的 `config`（用 `type: "json"` 声明），由插件自己合进请求体。不要修改请求形状来适配单家厂商。
+- **请求对象里不放厂商特有参数。** `TranslateRequest` / `OcrRequest` / `TtsRequest` 是同类插件共用的形状，任何“只有某家有”的参数属于该插件的 `config`（用 `type: "json"` 声明），由插件自己合进请求体。不要修改请求形状来适配单家厂商。
+- **OCR 与 TTS 不做流式。** `recognize()` 与 `synthesize()` 一次返回完整结果；宿主不做音频分块播放，也不提供逐块回调。长文本合成超时即整段失败，等真有流式音频需求再扩契约。
 - **日志不得泄露用户内容与凭据**：不在 `meta` 里传 `req.text`、`req.glossary` 的完整值，不传 `Authorization` 头、完整密钥。宿主出口会截断，但被截断的日志已经失去调试价值——该传的是长度、语言对、状态码。
 - **错误信息只给可行动信息**：允许带 HTTP 状态码与上游的机器可读错误码（如 `insufficient_quota`）；禁止把上游响应 body 原文或含密钥的 header 写进 `message`，它会直接显示在 UI 上。
 
@@ -311,10 +362,14 @@ throw err;
 
 - `apiVersion` 是**整数**，当前为 `2`。
 - 宿主只加载 `apiVersion === PLUGIN_API_VERSION` 的插件。>、< 一律拒绝，错误 `PLUGIN_LOAD_FAILED`，文案说明需要更新插件或宿主。
-- 不做运行时兼容层、不做字段级降级。契约一旦破坏性变更就 `+1`，并在插件列表里标出旧插件。
-- 非破坏性新增（如多一个可选 capability）也必须 `+1`：插件需要靠版本判断自己能否依赖该字段。
+- 不做运行时兼容层、不做字段级降级。只有**破坏已有插件**的变更才 `+1`：改已有字段语义、删方法、改请求形状。
+- 纯加性变更**不**升 `apiVersion`：新增 `kind` 可用值、新增可选 capability 键、新增可选 manifest 字段。不认识的 `kind` 由清单校验拒绝并给出可读原因，不靠版本号代劳。
+- `kind` 的可用值随宿主版本单调增加，不会移除；本版为 `translator` / `ocr` / `tts`。
+- 例外：新增 `kind` 时同时出现的**可选**契约成员（如 `OcrPlugin`）也属于加性变更，不升版本——旧插件的 `kind` 不在新集合里，本就不会被新方法调用。
 
 ## 9. 最小完整示例
+
+### 9.1 翻译插件
 
 一个非流式、单端点的翻译插件：
 
@@ -368,6 +423,113 @@ export function createPlugin(runtime) {
 
       const data = await res.json();
       yield data.translation; // 非流式：只 yield 一次
+    },
+  };
+}
+```
+
+### 9.2 语音插件（tts）
+
+```json
+{
+  "apiVersion": 2,
+  "id": "vadu.ttsexample",
+  "name": "示例朗读",
+  "version": "1.0.0",
+  "kind": "tts",
+  "main": "index.mjs",
+  "permissions": ["net:https://api.example.com"],
+  "config": {
+    "type": "object",
+    "required": ["apiKey"],
+    "properties": {
+      "apiKey": { "type": "secret", "title": "API Key", "required": true },
+      "voice": { "type": "string", "title": "音色", "enum": ["alloy", "nova"], "default": "alloy" }
+    }
+  }
+}
+```
+
+```js
+// index.mjs
+export function createPlugin(runtime) {
+  return {
+    async synthesize(req, { signal }) {
+      const key = runtime.secrets.get("apiKey");
+      if (!key) {
+        const e = new Error("缺少 API Key");
+        e.code = "AUTH_FAILED";
+        throw e;
+      }
+      const res = await runtime.fetch("https://api.example.com/v1/audio/speech", {
+        method: "POST",
+        signal,
+        headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+        body: JSON.stringify({ input: req.text, voice: req.config.voice }),
+      });
+      if (!res.ok) {
+        const e = new Error(`上游返回 ${res.status}`);
+        e.code = res.status === 401 ? "AUTH_FAILED" : "INTERNAL";
+        throw e;
+      }
+      // 插件拿到的是 Node 环境：转成 Uint8Array 交给宿主
+      return { audio: new Uint8Array(await res.arrayBuffer()), mimeType: "audio/mpeg" };
+    },
+  };
+}
+```
+
+### 9.3 识别插件（ocr）
+
+```json
+{
+  "apiVersion": 2,
+  "id": "vadu.ocrextample",
+  "name": "示例取词",
+  "version": "1.0.0",
+  "kind": "ocr",
+  "main": "index.mjs",
+  "permissions": ["net:https://api.example.com"],
+  "config": {
+    "type": "object",
+    "required": ["apiKey", "model"],
+    "properties": {
+      "apiKey": { "type": "secret", "title": "API Key", "required": true },
+      "model": { "type": "string", "title": "视觉模型", "required": true }
+    }
+  }
+}
+```
+
+```js
+// index.mjs
+export function createPlugin(runtime) {
+  return {
+    async recognize(req, { signal }) {
+      const key = runtime.secrets.get("apiKey");
+      const base64 = Buffer.from(req.image.data).toString("base64");
+      const res = await runtime.fetch("https://api.example.com/v1/chat/completions", {
+        method: "POST",
+        signal,
+        headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model: req.config.model,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: "按阅读顺序输出图中的文字，不要翻译" },
+              { type: "image_url", image_url: { url: `data:${req.image.mimeType};base64,${base64}` } },
+            ],
+          }],
+        }),
+      });
+      if (!res.ok) {
+        const e = new Error(`上游返回 ${res.status}`);
+        e.code = res.status === 401 ? "AUTH_FAILED" : "INTERNAL";
+        throw e;
+      }
+      const data = await res.json();
+      return { text: data.choices?.[0]?.message?.content ?? "" };
     },
   };
 }

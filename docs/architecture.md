@@ -322,22 +322,30 @@ function sanitize(meta: Record<string, unknown>): Record<string, unknown> {
 | ADR-008 | 配置 schema 用**可序列化的 JSON 子集**，不用 zod | 插件是纯 JS 目录，配置 UI 必须从数据生成；zod 只能存在于 TS 构建期，无法跨进程传给渲染层，也无法描述第三方插件 | 手写约 80 行校验器（只支持 7 个约束）+ 单元测试；表达能力有限，复杂交互靠 `x-widget` 扩展 |
 | ADR-009 | 取消是"尽力而为"，不回滚已显示的译文 | 事务式回滚需要缓存整个流并重放，用户看到的闪烁比"半句译文 + 已取消标记"更差 | 用户需要在 UI 上看到"已取消"状态，不能静默停住 |
 | ADR-010 | 局内快捷键由渲染层用 TanStack Hotkeys（keydown）绑定，不经主进程 `globalShortcut`；主进程只校验与持久化 `AppSettings.inAppHotkeys` | 全局热键是 OS 级稀缺资源且会吞键；窗口聚焦时才生效的组合键犯不着占用系统层 | 浮窗失焦即失效；与全局热键同组合时全局优先；改绑靠重新聚焦重拉，不广播 |
+| ADR-011 | `kind` 从一个 `translator` 扩为 `translator` / `ocr` / `tts`，**一个插件只声明一种** | manifest 一份能力声明、registry id→单 kind、profile 归属唯一 tab，三者都干净；同一厂商的 chat / vision / speech 本来就是三套 config 与模型 | 同账号要填多次 key（`secrets.bin` 按 profileId 分桶，不共享凭据）；跨 kind 不做凭据复用 |
+| ADR-012 | 增 `kind` 可用值**不升** `apiVersion`；只有破坏已有插件的改动才 `+1` | 升版会废弃全部已装插件，换取 0 行为收益；新 kind 由清单校验拒绝，安全性不依赖版本号 | 插件无法用版本号判断「宿主是否支持某 kind」，靠文档与错误文案 |
+| ADR-013 | OCR / TTS 走一次性 invoke，不流式、不提供取消通道 | 浏览器 `<audio>` 的暂停不需要上游取消；OCR 本来就是一次全量返回 | 长文本合成超时即整段失败，没有渐进播放；要流式音频需新契约 + 任务生命周期 |
 
 ## 8. 明确不做
 
 - 不做插件市场 / 在线分发（M3 只做本地安装）。
-- 不做 OCR、语音、词典插件（契约里 `kind` 预留，但运行时只实现 `translator`）。
+- 不做词典插件；`kind` 只保留 `translator` / `ocr` / `tts` 三种，不再扩。
+- 不做 OCR 的结构化输出（区域坐标、置信度）与多图批量识别。
+- 不做 TTS 流式播放与音频落盘缓存。
 - 不做插件间依赖与插件间调用。
 - 不做多账号并发、团队共享配置。
 - 不做渲染层按插件动态加载组件。
 
 ## 9. 演进路径
 
-新增非翻译能力（如 `ocr`）时的最小改动面：
+新增一种能力（如未来的 `asr`）时的改动面，已由本次 `ocr` / `tts` 落地验证：
 
-1. `src/shared/plugin.ts` 扩 `PluginKind` 与对应请求类型，`apiVersion` +1。
-2. `core/plugin/registry.ts` 按 `kind` 建索引（当前是平表）。
-3. 新增 `core/<kind>/service.ts`，与 `translate/service.ts` 同构。
-4. 加对应 IPC 通道与 UI 面板。
+1. `src/shared/plugin.ts` 加 `PluginKind` 取值与对应请求/结果类型（加性，不升 `apiVersion`）。
+2. `src/shared/ipc.ts` 的 `PluginDescriptor.kind` 与 `IPC` 通道常量同步。
+3. `core/plugin/manifest.ts` 的 kind 校验改为集合判断；`registry.ts` 增加对应窄化取值器（`getTranslator` / `getOcr` / `getTts`）。
+4. 新增 `core/<kind>/service.ts`，与 `translate/service.ts` 同构；入口校验 `descriptor.kind`。
+5. 加 IPC 通道、preload、UI 面板与一个**有真实消费端**的入口。
 
-插件加载、清单校验、配置与密钥机制无需改动——这是这套分层成立与否的检验点。
+`schema` 驱动的表单、密钥存储、profile 存储与受控 fetch 无需改动——这是这套分层成立与否的检验点。
+
+**不要**为「以后可能加 kind」预先建三套索引或抽象基类：registry 保持平表，kind 检查集中在窄化取值器里。

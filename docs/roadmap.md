@@ -74,12 +74,32 @@
 - 卸载插件后，其 profile 与密钥一并清理，无残留。
 - 占位符被翻译时出现警告条，但译文仍显示。
 
+## M3.5 · 多能力：语音与识别（本轮）
+
+**交付**
+
+- `kind` 扩为 `translator` / `ocr` / `tts`；`apiVersion` 仍为 `2`（加性变更，见 [plugin-spec.md §8](./plugin-spec.md#8-版本兼容)）。
+- `core/tts/service.ts` + `vadu:tts:synthesize`：一次性合成，浮窗工具栏的朗读/暂停接真实音频。
+- `core/ocr/service.ts` + `vadu:ocr:recognize`：一次性识别，浮窗支持粘贴图片取词。
+- 内置插件 `vadu.tts`（OpenAI `/v1/audio/speech`）与 `vadu.ocr`（OpenAI 兼容 vision）。
+- 设置页服务商列表三 tab；`EditorForm` 一个壳 + 按 kind 注入字段插槽，不复制表单。
+- CSP 放行 `media-src 'self' blob:`（仅此一项）。
+
+**验收**
+
+- 三个 tab 各自列出对应 kind 的插件与 profile，可建、可删、可拖、可启停；切 tab 遇未保存改动时走同一放弃确认。
+- 翻译 tab 行为与改造前完全一致（回归）。
+- 填 TTS key 后点朗读出声、可暂停；填 OCR key 后粘贴截图，文字进输入框。
+- 未配置该 kind 服务商时，消费端提示「未配置可用的语音/识别服务商」，不崩溃。
+
 ## 明确不做（当前阶段）
 
 - 插件市场、在线安装、自动更新、签名校验。
 - 插件沙箱与权限运行时强制（见 [architecture.md §2](./architecture.md#2-进程模型)）。
-- `kind` 除 `translator` 之外的实现（`ocr` / `tts` 只留类型位）。
-- 图片翻译、截图取词、全局快捷键弹窗（M4 起再评估，快捷键字段已在 `AppSettings` 里预留）。
+- 词典插件；`kind` 不再扩第四种。
+- OCR 的区域坐标/置信度输出与多图批量识别。
+- TTS 流式播放与音频落盘缓存。
+- 区域截图（选区）取词与整图翻译成文（只做整图取词）。
 - 翻译历史持久化、导出、云同步。
 - token 用量与成本统计（需契约扩到 `TranslateDelta` 并 `apiVersion + 1`，M4 再评估）。
 - 评测指标自动化（BLEU/COMET）。

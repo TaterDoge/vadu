@@ -10,7 +10,7 @@
 vadu:<domain>:<action>
 ```
 
-- `domain`：`plugins` / `translate` / `config` / `secret` / `app`
+- `domain`：`plugins` / `translate` / `ocr` / `tts` / `config` / `secret` / `app`
 - `action`：小驼峰动词或名词
 - 通道名常量集中在 `src/shared/ipc.ts` 的 `IPC` 对象，业务代码禁止裸字符串
 
@@ -95,7 +95,7 @@ export type PluginDescriptor = {
   id: string;
   name: string;
   version: string;
-  kind: "translator";
+  kind: "translator" | "ocr" | "tts";
   description?: string;
   origin: "builtin" | "user";
   status: PluginStatus;
@@ -169,11 +169,53 @@ export type TranslateWarning = "PLACEHOLDER_MISMATCH" | "EMPTY_OUTPUT" | "OUTPUT
 
 多窗口时事件需要按发起窗口定向发送：`start` 时记录 `event.sender`，后续用该 `webContents.send`，不要 `BrowserWindow.getAllWindows()` 广播。
 
+### 识别与语音
+
+两种能力都是**一次性请求-响应**，不流式、不提供取消通道：超时由主进程兜底（120s），超时整段失败。音频/图片字节直接走结构化克隆（`Uint8Array`），不经 base64。
+
+| 通道 | 方向 | 入参 | 返回 |
+| --- | --- | --- | --- |
+| `vadu:ocr:recognize` | invoke | `OcrParams` | `OcrResult` |
+| `vadu:tts:synthesize` | invoke | `TtsParams` | `TtsPayload` |
+
+```ts
+export type OcrParams = {
+  /** 为空表示用该 kind 下第一个已启用的服务商 */
+  profileId?: string;
+  /** 图片字节，渲染层从剪贴板/拖拽读取后传入 */
+  image: Uint8Array;
+  /** 如 image/png、image/jpeg、image/webp；宿主只放行这三种 */
+  mimeType: string;
+  /** 期望语言提示，可选 */
+  language?: string;
+};
+
+export type OcrResult = { text: string };
+
+export type TtsParams = {
+  /** 为空表示用该 kind 下第一个已启用的服务商 */
+  profileId?: string;
+  text: string;
+  /** BCP-47，可选 */
+  language?: string;
+};
+
+export type TtsPayload = {
+  /** 音频字节，渲染层转 Blob URL 播放；不落盘 */
+  audio: Uint8Array;
+  mimeType: string;
+};
+```
+
+`profileId` 缺省时的选择规则与浮窗一致：按存储顺序取该 kind 下第一个 `enabled` 的服务商；一个都没有时报 `INVALID_CONFIG`「未配置可用的识别/语音服务商」。
+
+CSP 需要 `media-src 'self' blob:`，否则播放被拦。
+
 ### 配置
 
 | 通道 | 方向 | 入参 | 返回 |
 | --- | --- | --- | --- |
-| `vadu:config:listProfiles` | invoke | `{ pluginId?: string }` | `Profile[]` |
+| `vadu:config:listProfiles` | invoke | `{ pluginId?: string; kind?: PluginKind }` | `Profile[]` |
 | `vadu:config:saveProfile` | invoke | `Profile` | `Profile` |
 | `vadu:config:reorderProfiles` | invoke | `{ orderedIds: string[] }` | `Profile[]` |
 | `vadu:config:deleteProfile` | invoke | `{ profileId: string }` | `void` |
@@ -306,6 +348,12 @@ const vadu = {
     start: (params: TranslateParams) => call(IPC.translate.start, params),
     cancel: (requestId: string) => ipcRenderer.send(IPC.translate.cancel, { requestId }),
     onEvent: (fn: (event: TranslateEvent) => void) => subscribe(IPC.translate.event, fn),
+  },
+  ocr: {
+    recognize: (params: OcrParams) => call(IPC.ocr.recognize, params),
+  },
+  tts: {
+    synthesize: (params: TtsParams) => call(IPC.tts.synthesize, params),
   },
   config: { /* 同上 */ },
   secrets: { /* 同上 */ },

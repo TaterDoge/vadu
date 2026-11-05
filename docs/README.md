@@ -20,10 +20,12 @@ vadu 是一个桌面翻译软件。翻译能力全部由「插件」提供，应
 翻译面板 UI  ──IPC──▶  translate service ──▶ plugin registry ──▶ 插件
    ▲                     │                        │              │
    └──流式 chunk──────────┘                       │              ▼
-                                               配置/密钥       HTTP(S) 厂商 API
+取词 / 朗读 UI ──IPC──▶  ocr / tts service ──▶ (同一 registry)   HTTP(S) 厂商 API
+                                                配置/密钥
 ```
 
-- **插件是翻译能力的唯一边界。** 主进程 core 不认识 OpenAI、DeepL 或任何厂商。
+- **插件是外部能力的唯一边界。** 主进程 core 不认识 OpenAI、DeepL 或任何厂商。
+- **一个插件一种能力（kind）。** `translator` / `ocr` / `tts` 各自一套契约与 profile，共享同一套密钥、schema 表单与受控 fetch。
 - **AI 是一个插件，多个协议适配器。** 不是「每厂商一个插件」，用户填 baseURL 就能覆盖大多数服务。
 - **流式是默认形态。** 插件产出增量文本，core 累积并转发，UI 边收边渲染。
 - **配置由清单驱动。** 插件的设置表单来自 `manifest.json` 的 schema，插件不写 UI 代码。
@@ -32,8 +34,8 @@ vadu 是一个桌面翻译软件。翻译能力全部由「插件」提供，应
 
 | 术语 | 含义 | 不是什么 |
 | --- | --- | --- |
-| **plugin** | 一个可加载的翻译服务实现，目录形态，含 `manifest.json` + 入口模块 | 不是 npm 包，不走 npm 依赖解析 |
-| **kind** | 插件能力种类。当前只有 `translator`，预留 `ocr` / `tts` | 不是插件名 |
+| **plugin** | 一种外部能力的实现（翻译 / 识别 / 朗读），目录形态，含 `manifest.json` + 入口模块 | 不是 npm 包，不走 npm 依赖解析 |
+| **kind** | 插件能力种类：`translator` / `ocr` / `tts`，一个插件只声明一种 | 不是插件名 |
 | **capabilities** | 插件声明支持的可选特性：`streaming`、`models`、`glossary`、`batch` | 不是权限 |
 | **permissions** | 插件运行需要的资源声明，如 `net:https://api.openai.com` | 不是 capabilities，权限由宿主校验 |
 | **apiVersion** | 插件契约版本号，整数递增，主版本不匹配即拒绝加载 | 不是插件自身版本 |

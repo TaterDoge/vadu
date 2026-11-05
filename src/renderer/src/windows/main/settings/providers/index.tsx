@@ -767,7 +767,8 @@ function ProvidersPage(): ReactNode {
             <Dialog.Close
               render={
                 <Button
-                  className="absolute top-3 right-3"
+                  // StaggerList 的行残留 filter，会建 stacking context 压住按钮，必须抬 z-index
+                  className="absolute top-3 right-3 z-10"
                   disabled={saving}
                   size="icon-sm"
                   variant="ghost"

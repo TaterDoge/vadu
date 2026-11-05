@@ -1,8 +1,8 @@
 import type { SerializedError } from "./errors";
-import type { ModelInfo } from "./plugin";
+import type { ModelInfo, OcrResult, PluginKind } from "./plugin";
 
 export type { SerializedError } from "./errors";
-export type { ModelInfo } from "./plugin";
+export type { ModelInfo, OcrResult, PluginKind } from "./plugin";
 
 export const IPC = {
   config: {
@@ -17,6 +17,9 @@ export const IPC = {
   getQuickWindowPinned: "vadu:app:getQuickWindowPinned",
   getSecretStorage: "vadu:app:getSecretStorage",
   getShowMainWindowOnStartup: "vadu:app:getShowMainWindowOnStartup",
+  ocr: {
+    recognize: "vadu:ocr:recognize",
+  },
   plugins: {
     list: "vadu:plugins:list",
     listModels: "vadu:plugins:listModels",
@@ -38,6 +41,9 @@ export const IPC = {
     cancel: "vadu:translate:cancel",
     event: "vadu:translate:event",
     start: "vadu:translate:start",
+  },
+  tts: {
+    synthesize: "vadu:tts:synthesize",
   },
 } as const;
 
@@ -161,7 +167,7 @@ export type PluginDescriptor = {
   id: string;
   name: string;
   version: string;
-  kind: "translator";
+  kind: PluginKind;
   description?: string;
   origin: "builtin" | "user";
   status: PluginStatus;
@@ -220,6 +226,33 @@ export type TranslateEvent =
     }
   | { requestId: string; type: "error"; error: SerializedError };
 
+// ── 识别与语音 ───────────────────────────────────────────────────────────────
+
+export type OcrParams = {
+  /** 为空表示用该 kind 下第一个已启用的服务商 */
+  profileId?: string;
+  /** 图片字节，渲染层从剪贴板/拖拽读取后传入 */
+  image: Uint8Array;
+  /** 如 image/png、image/jpeg、image/webp */
+  mimeType: string;
+  /** 期望语言提示，可选 */
+  language?: string;
+};
+
+export type TtsParams = {
+  /** 为空表示用该 kind 下第一个已启用的服务商 */
+  profileId?: string;
+  text: string;
+  /** BCP-47，可选 */
+  language?: string;
+};
+
+export type TtsPayload = {
+  /** 音频字节，渲染层转 Blob URL 播放；不落盘 */
+  audio: Uint8Array;
+  mimeType: string;
+};
+
 // ── 密钥存储状态 ─────────────────────────────────────────────────────────────
 
 export type SecretStorageState = {
@@ -263,12 +296,18 @@ export type VaduApi = {
       secrets?: Record<string, string>
     ) => Promise<IpcResult<ModelInfo[]>>;
   };
+  ocr: {
+    recognize: (params: OcrParams) => Promise<IpcResult<OcrResult>>;
+  };
   translate: {
     start: (
       params: TranslateParams
     ) => Promise<IpcResult<{ requestId: string }>>;
     cancel: (requestId: string) => void;
     onEvent: (fn: (event: TranslateEvent) => void) => () => void;
+  };
+  tts: {
+    synthesize: (params: TtsParams) => Promise<IpcResult<TtsPayload>>;
   };
   config: {
     deleteProfile: (profileId: string) => Promise<IpcResult<null>>;

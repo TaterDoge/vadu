@@ -7,11 +7,15 @@ import type {
   InAppHotkeyState,
   IpcChannel,
   IpcResult,
+  OcrParams,
+  OcrResult,
   PluginDescriptor,
   Profile,
   SecretStorageState,
   TranslateEvent,
   TranslateParams,
+  TtsParams,
+  TtsPayload,
   VaduApi,
 } from "../shared/ipc";
 import { IPC } from "../shared/ipc";
@@ -84,6 +88,10 @@ const vadu: VaduApi = {
     suspend: (suspended: boolean): Promise<IpcResult<null>> =>
       ipcRenderer.invoke(IPC.setHotkeySuspended, { suspended }),
   },
+  ocr: {
+    recognize: (params: OcrParams): Promise<IpcResult<OcrResult>> =>
+      ipcRenderer.invoke(IPC.ocr.recognize, params),
+  },
   platform,
   plugins: {
     list: (): Promise<IpcResult<PluginDescriptor[]>> =>
@@ -121,6 +129,10 @@ const vadu: VaduApi = {
       params: TranslateParams
     ): Promise<IpcResult<{ requestId: string }>> =>
       ipcRenderer.invoke(IPC.translate.start, params),
+  },
+  tts: {
+    synthesize: (params: TtsParams): Promise<IpcResult<TtsPayload>> =>
+      ipcRenderer.invoke(IPC.tts.synthesize, params),
   },
 };
 

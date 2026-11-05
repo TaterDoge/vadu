@@ -38,8 +38,20 @@ describe("validateManifest", () => {
     assert.equal(validateManifest({ ...BASE, main: "index.mjs" }).ok, true);
   });
 
-  test("kind 只支持 translator", () => {
-    assert.equal(validateManifest({ ...BASE, kind: "ocr" }).ok, false);
+  test("三种 kind 均通过", () => {
+    for (const kind of ["translator", "ocr", "tts"]) {
+      const result = validateManifest({ ...BASE, kind });
+      assert.equal(result.ok, true);
+      if (result.ok) {
+        assert.equal(result.manifest.kind, kind);
+      }
+    }
+  });
+
+  test("非法 kind 拒绝", () => {
+    assert.equal(validateManifest({ ...BASE, kind: "asr" }).ok, false);
+    assert.equal(validateManifest({ ...BASE, kind: 42 }).ok, false);
+    assert.equal(validateManifest({ ...BASE, kind: undefined }).ok, false);
   });
 
   test("permissions 必须是 net: 前缀", () => {

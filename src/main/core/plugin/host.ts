@@ -9,13 +9,19 @@ import type { Profile } from "../../../shared/ipc";
 import type {
   CallOptions,
   ModelInfo,
+  OcrPlugin,
+  OcrRequest,
+  OcrResult,
+  PluginBase,
   PluginRuntime,
   TranslateRequest,
   TranslatorPlugin,
+  TtsPlugin,
+  TtsRequest,
+  TtsResult,
 } from "../../../shared/plugin";
 import { getSecret, hasSecret } from "../config/secrets";
 import { withDeadline } from "./deadline";
-import type { PluginCreateFn } from "./registry";
 
 export const FIRST_BYTE_TIMEOUT_MS = 20_000;
 export const TOTAL_TIMEOUT_MS = 120_000;
@@ -165,26 +171,32 @@ function makeRuntime(
   };
 }
 
-export async function hostListModels(args: {
-  create: PluginCreateFn;
-  config: Record<string, unknown>;
+/** 一次性调用共享包装：创建实例 → deadline 竞速 → 错误归一化 → dispose 不阻塞 */
+async function runPluginCall<TPlugin extends PluginBase, TResult>(args: {
+  create: (runtime: PluginRuntime) => TPlugin;
   pluginId: string;
   profile: Profile;
-  requestId: string;
   secrets?: Record<string, string>;
-  timeoutMs?: number;
-}): Promise<ModelInfo[]> {
+  timeoutMs: number;
+  deadlineMessage: string;
+  run: (
+    plugin: TPlugin,
+    runtime: PluginRuntime,
+    signal: AbortSignal
+  ) => Promise<TResult>;
+}): Promise<TResult> {
   const {
     create,
-    config,
     pluginId,
     profile,
     secrets,
-    timeoutMs = MODELS_TIMEOUT_MS,
+    timeoutMs,
+    deadlineMessage,
+    run,
   } = args;
   const signal = AbortSignal.timeout(timeoutMs);
   const runtime = makeRuntime(pluginId, profile, signal, secrets);
-  let plugin: TranslatorPlugin;
+  let plugin: TPlugin;
   try {
     plugin = create(runtime);
   } catch (error) {
@@ -194,15 +206,11 @@ export async function hostListModels(args: {
     });
   }
   try {
-    const listModels = plugin.listModels?.bind(plugin);
-    if (typeof listModels !== "function") {
-      throw new VaduError("INVALID_CONFIG", "该插件不支持获取模型列表");
-    }
     // 竞速截止：插件 Promise 长期挂起（不理会 signal）也必须 settle
     return await withDeadline(
-      Promise.resolve().then(() => listModels(config, runtime)),
+      Promise.resolve().then(() => run(plugin, runtime, signal)),
       timeoutMs,
-      "获取模型列表超时"
+      deadlineMessage
     );
   } catch (error) {
     throw normalizePluginError(error, {
@@ -219,8 +227,82 @@ export async function hostListModels(args: {
   }
 }
 
+export function hostListModels(args: {
+  create: (runtime: PluginRuntime) => TranslatorPlugin;
+  config: Record<string, unknown>;
+  pluginId: string;
+  profile: Profile;
+  requestId: string;
+  secrets?: Record<string, string>;
+  timeoutMs?: number;
+}): Promise<ModelInfo[]> {
+  const {
+    create,
+    config,
+    pluginId,
+    profile,
+    secrets,
+    timeoutMs = MODELS_TIMEOUT_MS,
+  } = args;
+  return runPluginCall({
+    create,
+    deadlineMessage: "获取模型列表超时",
+    pluginId,
+    profile,
+    run: (plugin, runtime) => {
+      const listModels = plugin.listModels?.bind(plugin);
+      if (typeof listModels !== "function") {
+        throw new VaduError("INVALID_CONFIG", "该插件不支持获取模型列表");
+      }
+      return listModels(config, runtime);
+    },
+    secrets,
+    timeoutMs,
+  });
+}
+
+export function hostSynthesize(args: {
+  create: (runtime: PluginRuntime) => TtsPlugin;
+  pluginId: string;
+  profile: Profile;
+  req: TtsRequest;
+  secrets?: Record<string, string>;
+}): Promise<TtsResult> {
+  const { create, pluginId, profile, req, secrets } = args;
+  return runPluginCall({
+    create,
+    deadlineMessage: "语音合成超时",
+    pluginId,
+    profile,
+    run: (plugin, _runtime, signal) =>
+      plugin.synthesize(req, { requestId: crypto.randomUUID(), signal }),
+    secrets,
+    timeoutMs: TOTAL_TIMEOUT_MS,
+  });
+}
+
+export function hostRecognize(args: {
+  create: (runtime: PluginRuntime) => OcrPlugin;
+  pluginId: string;
+  profile: Profile;
+  req: OcrRequest;
+  secrets?: Record<string, string>;
+}): Promise<OcrResult> {
+  const { create, pluginId, profile, req, secrets } = args;
+  return runPluginCall({
+    create,
+    deadlineMessage: "识别超时",
+    pluginId,
+    profile,
+    run: (plugin, _runtime, signal) =>
+      plugin.recognize(req, { requestId: crypto.randomUUID(), signal }),
+    secrets,
+    timeoutMs: TOTAL_TIMEOUT_MS,
+  });
+}
+
 export async function* hostTranslate(args: {
-  create: PluginCreateFn;
+  create: (runtime: PluginRuntime) => TranslatorPlugin;
   pluginId: string;
   profile: Profile;
   req: TranslateRequest;

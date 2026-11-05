@@ -59,7 +59,7 @@ async function run(
   profile: Profile,
   params: TranslateParams
 ): Promise<void> {
-  const plugin = registry.get(profile.pluginId);
+  const plugin = registry.getTranslator(profile.pluginId);
   const startedAt = Date.now();
   try {
     if (!plugin) {

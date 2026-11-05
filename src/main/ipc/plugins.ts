@@ -80,7 +80,7 @@ async function listModels(raw: unknown): Promise<ModelInfo[]> {
     throw new VaduError("INVALID_CONFIG", "配置字段过多");
   }
   const secretsOverride = validateSecrets(secrets);
-  const plugin = registry.get(pluginId);
+  const plugin = registry.getTranslator(pluginId);
   if (plugin?.descriptor.status !== "ready") {
     throw new VaduError("PLUGIN_LOAD_FAILED", "插件未就绪");
   }

@@ -70,7 +70,7 @@ test("真实内置 manifest 经 service 注入 glossary 并进入插件请求", 
     },
     "../plugin/registry": {
       registry: {
-        get: () => ({
+        getTranslator: () => ({
           descriptor: { capabilities: validated.manifest.capabilities },
         }),
         isReady: () => true,

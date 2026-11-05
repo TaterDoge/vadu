@@ -46,7 +46,7 @@ function loadPluginsIpc(savedProfiles: Profile[]) {
     },
     "../core/plugin/registry": {
       registry: {
-        get: () => ({
+        getTranslator: () => ({
           create: () => null,
           descriptor: {
             capabilities: { models: true },

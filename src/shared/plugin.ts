@@ -5,7 +5,19 @@
 
 export const PLUGIN_API_VERSION = 2;
 
+/** 能力种类：宿主按 kind 只调用对应接口 */
+export type PluginKind = "translator" | "ocr" | "tts";
+
 export type PluginConfig = Record<string, unknown>;
+
+/** 三种能力共有的生命周期钩子 */
+export type PluginBase = {
+  dispose?: () => void | Promise<void>;
+  validateConfig?: (
+    config: PluginConfig,
+    runtime: PluginRuntime
+  ) => Promise<void>;
+};
 
 export type TranslateRequest = {
   config: PluginConfig;
@@ -40,8 +52,7 @@ export type ModelInfo = {
   label?: string;
 };
 
-export type TranslatorPlugin = {
-  dispose?: () => void | Promise<void>;
+export type TranslatorPlugin = PluginBase & {
   listModels?: (
     config: PluginConfig,
     runtime: PluginRuntime
@@ -50,8 +61,35 @@ export type TranslatorPlugin = {
     req: TranslateRequest,
     opts: CallOptions
   ) => AsyncIterable<string>;
-  validateConfig?: (
-    config: PluginConfig,
-    runtime: PluginRuntime
-  ) => Promise<void>;
 };
+
+export type OcrRequest = {
+  config: PluginConfig;
+  image: { data: Uint8Array; mimeType: string };
+  language?: string;
+};
+
+export type OcrResult = {
+  text: string;
+};
+
+export type OcrPlugin = PluginBase & {
+  recognize: (req: OcrRequest, opts: CallOptions) => Promise<OcrResult>;
+};
+
+export type TtsRequest = {
+  config: PluginConfig;
+  text: string;
+  language?: string;
+};
+
+export type TtsResult = {
+  audio: Uint8Array;
+  mimeType: string;
+};
+
+export type TtsPlugin = PluginBase & {
+  synthesize: (req: TtsRequest, opts: CallOptions) => Promise<TtsResult>;
+};
+
+export type VaduPlugin = TranslatorPlugin | OcrPlugin | TtsPlugin;

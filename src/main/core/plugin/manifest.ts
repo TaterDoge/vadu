@@ -4,14 +4,14 @@
  */
 
 import type { ConfigSchema, PluginPreset } from "../../../shared/ipc";
-import { PLUGIN_API_VERSION } from "../../../shared/plugin";
+import { PLUGIN_API_VERSION, type PluginKind } from "../../../shared/plugin";
 
 export type PluginManifest = {
   apiVersion: number;
   id: string;
   name: string;
   version: string;
-  kind: "translator";
+  kind: PluginKind;
   main: string;
   description?: string;
   author?: string;
@@ -130,8 +130,8 @@ export function validateManifest(raw: unknown): ManifestResult {
   if (typeof raw.version !== "string" || raw.version.length === 0) {
     return { error: "version 缺失", ok: false };
   }
-  if (raw.kind !== "translator") {
-    return { error: "kind 只支持 translator", ok: false };
+  if (raw.kind !== "translator" && raw.kind !== "ocr" && raw.kind !== "tts") {
+    return { error: "kind 必须是 translator / ocr / tts 之一", ok: false };
   }
   if (typeof raw.main !== "string" || !MAIN_RE.test(raw.main)) {
     return { error: "main 必须是 .js 或 .mjs 相对路径", ok: false };
@@ -160,7 +160,7 @@ export function validateManifest(raw: unknown): ManifestResult {
       description:
         typeof raw.description === "string" ? raw.description : undefined,
       id: raw.id,
-      kind: "translator",
+      kind: raw.kind,
       main: raw.main,
       name: raw.name,
       permissions,

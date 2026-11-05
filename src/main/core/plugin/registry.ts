@@ -10,12 +10,24 @@ import { pathToFileURL } from "node:url";
 import { app } from "electron";
 
 import type { PluginDescriptor } from "../../../shared/ipc";
-import type { PluginRuntime, TranslatorPlugin } from "../../../shared/plugin";
+import type {
+  OcrPlugin,
+  PluginRuntime,
+  TranslatorPlugin,
+  TtsPlugin,
+  VaduPlugin,
+} from "../../../shared/plugin";
 import { hasSecret } from "../config/secrets";
 import { readProfiles } from "../config/store";
 import { type PluginManifest, validateManifest } from "./manifest";
 
-export type PluginCreateFn = (runtime: PluginRuntime) => TranslatorPlugin;
+export type PluginCreateFn = (runtime: PluginRuntime) => VaduPlugin;
+
+type NarrowedPlugin<T> = {
+  create: (runtime: PluginRuntime) => T;
+  descriptor: PluginDescriptor;
+  manifest: PluginManifest;
+};
 
 export type LoadedPlugin = {
   descriptor: PluginDescriptor;
@@ -73,7 +85,7 @@ function buildDescriptor(manifest: PluginManifest): PluginDescriptor {
     configSchema: manifest.config,
     description: manifest.description,
     id: manifest.id,
-    kind: "translator",
+    kind: manifest.kind,
     name: manifest.name,
     origin: "builtin",
     permissions: manifest.permissions,
@@ -136,6 +148,44 @@ export class PluginRegistry {
 
   get(pluginId: string): LoadedPlugin | undefined {
     return this.loaded.get(pluginId);
+  }
+
+  getTranslator(
+    pluginId: string
+  ): NarrowedPlugin<TranslatorPlugin> | undefined {
+    const loaded = this.loaded.get(pluginId);
+    if (loaded?.descriptor.kind !== "translator") {
+      return undefined;
+    }
+    return {
+      create: loaded.create as (runtime: PluginRuntime) => TranslatorPlugin,
+      descriptor: loaded.descriptor,
+      manifest: loaded.manifest,
+    };
+  }
+
+  getOcr(pluginId: string): NarrowedPlugin<OcrPlugin> | undefined {
+    const loaded = this.loaded.get(pluginId);
+    if (loaded?.descriptor.kind !== "ocr") {
+      return undefined;
+    }
+    return {
+      create: loaded.create as (runtime: PluginRuntime) => OcrPlugin,
+      descriptor: loaded.descriptor,
+      manifest: loaded.manifest,
+    };
+  }
+
+  getTts(pluginId: string): NarrowedPlugin<TtsPlugin> | undefined {
+    const loaded = this.loaded.get(pluginId);
+    if (loaded?.descriptor.kind !== "tts") {
+      return undefined;
+    }
+    return {
+      create: loaded.create as (runtime: PluginRuntime) => TtsPlugin,
+      descriptor: loaded.descriptor,
+      manifest: loaded.manifest,
+    };
   }
 
   isReady(pluginId: string): boolean {

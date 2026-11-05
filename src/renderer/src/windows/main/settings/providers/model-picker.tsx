@@ -25,28 +25,28 @@ type ModelPickerProps = {
   config: Record<string, unknown>;
   description?: string;
   disabled?: boolean;
-  hasSavedKey: boolean;
   model: string;
   onModelChange: (model: string) => void;
   placeholder?: string;
   pluginId: string;
   profileId: string;
   required?: boolean;
+  secrets: Record<string, string>;
   title?: string;
 };
 
-// 密钥只从已保存的 profile 读取，手动输入不依赖模型列表。
+// 未保存草稿也允许拉模型列表：密钥随本次请求临时传递，不落盘、不入日志。
 function ModelPicker({
   config,
   description,
   disabled = false,
-  hasSavedKey,
   model,
   onModelChange,
   placeholder,
   pluginId,
   profileId,
   required = false,
+  secrets,
   title = "模型",
 }: ModelPickerProps) {
   const [cached, setCached] = useState<ModelInfo[] | null>(null);
@@ -55,23 +55,30 @@ function ModelPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const configSig = modelsConfigSignature(config);
+  const secretsSig = JSON.stringify(
+    Object.entries(secrets)
+      .filter(([, value]) => value !== "")
+      .sort(([a], [b]) => a.localeCompare(b))
+  );
+  // 密钥变化同样作废旧响应：中途改 Key 后不应沿用旧列表
+  const sig = `${configSig}\u0000${secretsSig}`;
   const seqRef = useRef(0);
   const profileIdRef = useRef(profileId);
   const pluginIdRef = useRef(pluginId);
-  const configSigRef = useRef(configSig);
+  const sigRef = useRef(sig);
 
-  // 切换服务商或请求配置时丢弃旧响应，避免把上一接口的模型填入当前配置。
+  // 切换服务商或请求配置/密钥时丢弃旧响应，避免把上一接口的模型填入当前配置。
   useEffect(() => {
     seqRef.current += 1;
     profileIdRef.current = profileId;
     pluginIdRef.current = pluginId;
-    configSigRef.current = configSig;
+    sigRef.current = sig;
     setCached(null);
     setError(null);
     setBusy(false);
     setQuery("");
     setOpen(false);
-  }, [configSig, pluginId, profileId]);
+  }, [pluginId, profileId, sig]);
 
   function handleOpenChange(next: boolean): void {
     setOpen(next);
@@ -88,19 +95,11 @@ function ModelPicker({
     if (busy || disabled) {
       return;
     }
-    if (!profileId || profileId === NEW_PROFILE_ID) {
-      setError("先保存配置，再获取模型列表");
-      return;
-    }
-    if (!hasSavedKey) {
-      setError("请先保存 API Key，再获取模型列表");
-      return;
-    }
     seqRef.current += 1;
     const seq = seqRef.current;
     const requestedProfileId = profileId;
     const requestedPluginId = pluginId;
-    const requestedSig = configSig;
+    const requestedSig = sig;
     setBusy(true);
     setError(null);
     const ctx = {
@@ -113,13 +112,18 @@ function ModelPicker({
       pluginIdRef,
       profileIdRef,
       seqRef,
-      sigRef: configSigRef,
+      sigRef,
     };
+    // 只传用户已输入的密钥明文，空值不发送
+    const pendingSecrets = Object.fromEntries(
+      Object.entries(secrets).filter(([, value]) => value !== "")
+    );
     try {
       const result = await window.vadu.plugins.listModels(
         requestedPluginId,
         requestedProfileId,
-        config
+        config,
+        Object.keys(pendingSecrets).length > 0 ? pendingSecrets : undefined
       );
       // 失效响应直接丢弃：busy/结果归当前（可能更新的）请求/切换管理
       if (isModelRequestInvalid(ctx, refs)) {

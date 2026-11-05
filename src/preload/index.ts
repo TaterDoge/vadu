@@ -64,6 +64,8 @@ const vadu: VaduApi = {
       ipcRenderer.invoke(IPC.config.deleteProfile, { profileId }),
     listProfiles: (pluginId?: string): Promise<IpcResult<Profile[]>> =>
       ipcRenderer.invoke(IPC.config.listProfiles, pluginId ? { pluginId } : {}),
+    reorderProfiles: (orderedIds: string[]): Promise<IpcResult<Profile[]>> =>
+      ipcRenderer.invoke(IPC.config.reorderProfiles, { orderedIds }),
     saveProfile: (profile: Profile): Promise<IpcResult<Profile>> =>
       ipcRenderer.invoke(IPC.config.saveProfile, profile),
   },
@@ -89,12 +91,14 @@ const vadu: VaduApi = {
     listModels: (
       pluginId: string,
       profileId: string,
-      config: Record<string, unknown>
+      config: Record<string, unknown>,
+      secrets?: Record<string, string>
     ): Promise<IpcResult<ModelInfo[]>> =>
       ipcRenderer.invoke(IPC.plugins.listModels, {
         config,
         pluginId,
         profileId,
+        ...(secrets ? { secrets } : {}),
       }),
   },
   secrets: {

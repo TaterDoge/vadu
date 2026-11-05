@@ -1,4 +1,8 @@
 import type { ReactNode, RefObject } from "react";
+import { move } from "@dnd-kit/helpers";
+import type { DragEndEvent } from "@dnd-kit/react";
+import { DragDropProvider } from "@dnd-kit/react";
+import { useSortable } from "@dnd-kit/react/sortable";
 import { Button } from "@renderer/components/ui/button";
 import {
   DropdownMenu,
@@ -18,31 +22,56 @@ import { NEW_PROFILE_ID } from "../model-picker";
 import type { FilterState } from "../provider-editor";
 
 type RowProps = {
+  index: number;
   onSelect: () => void;
   onToggle: (enabled: boolean) => void;
   profile: Profile;
+  reorderable: boolean;
   saving: boolean;
   selected: boolean;
   subtitle?: string;
 };
 
 function ProviderRow({
+  index,
   onSelect,
   onToggle,
   profile,
+  reorderable,
   saving,
   selected,
   subtitle,
 }: RowProps): ReactNode {
+  const { ref, handleRef, isDragging } = useSortable({
+    disabled: !reorderable || saving,
+    id: profile.id,
+    index,
+  });
+
   return (
     <div
       className={cn(
-        "flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-sm transition-colors motion-reduce:transition-none",
+        "my-1 flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-sm transition-colors motion-reduce:transition-none",
         selected
           ? "border-border bg-muted"
-          : "border-transparent hover:bg-muted"
+          : "border-transparent hover:bg-muted",
+        isDragging && "opacity-60"
       )}
+      ref={ref}
     >
+      <Button
+        aria-label={`拖动排序 ${profile.name}`}
+        className="shrink-0 cursor-grab text-muted-foreground"
+        disabled={!reorderable || saving}
+        ref={handleRef}
+        size="icon-xs"
+        variant="ghost"
+      >
+        <span
+          aria-hidden="true"
+          className="icon-[lucide--grip-vertical] size-3.5"
+        />
+      </Button>
       <Button
         aria-current={selected ? "true" : undefined}
         className="flex min-w-0 flex-1 flex-col items-start justify-center gap-0.5 px-0 text-left"
@@ -90,7 +119,7 @@ function DraftRow({ name, onSelect, selected }: DraftRowProps): ReactNode {
   return (
     <div
       className={cn(
-        "flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-sm transition-colors motion-reduce:transition-none",
+        "my-1 flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-sm transition-colors motion-reduce:transition-none",
         selected
           ? "border-border bg-muted"
           : "border-transparent hover:bg-muted"
@@ -122,6 +151,7 @@ type LeftPanelProps = {
   onAdd: () => void;
   onFilterChange: (filter: FilterState) => void;
   onQueryChange: (query: string) => void;
+  onReorder: (ordered: Profile[]) => void;
   onSelect: (id: string) => void;
   onSelectDraft: () => void;
   onToggleEnabled: (profile: Profile, enabled: boolean) => void;
@@ -142,6 +172,7 @@ function LeftPanel({
   onAdd,
   onFilterChange,
   onQueryChange,
+  onReorder,
   onSelect,
   onSelectDraft,
   onToggleEnabled,
@@ -151,6 +182,21 @@ function LeftPanel({
   saving,
   selectedId,
 }: LeftPanelProps): ReactNode {
+  // 过滤态下 filtered 只是子集，拖拽落盘的顺序会错位；保持全量可见才允许拖拽
+  const reorderable = filter === "all" && query.trim() === "";
+
+  const handleDragEnd = (event: DragEndEvent): void => {
+    if (event.canceled) {
+      return;
+    }
+    const next = move(filtered, event);
+    // move 无位移时返回原数组或等值数组，避免白写一次配置
+    if (next.every((entry, index) => entry === filtered[index])) {
+      return;
+    }
+    onReorder(next);
+  };
+
   return (
     <aside className="flex min-h-0 flex-col gap-3 md:self-stretch">
       <div className="flex items-center justify-between gap-2">
@@ -213,43 +259,47 @@ function LeftPanel({
         </DropdownMenu>
       </div>
       <div
-        className="-mx-1 flex flex-1 flex-col gap-1 overflow-y-auto px-1"
+        className="-mx-1 flex flex-1 flex-col overflow-y-auto px-1"
         ref={listRef}
       >
         {/* 每项都带稳定 key：条件行增删不能让后面的行换索引重放入场 */}
-        <StaggerList>
-          {draftName ? (
-            <DraftRow
-              key="draft"
-              name={draftName}
-              onSelect={onSelectDraft}
-              selected={selectedId === NEW_PROFILE_ID}
-            />
-          ) : null}
-          {hasPlugins ? null : (
-            <p className="text-muted-foreground text-sm" key="no-plugins">
-              没有可用的翻译插件，请检查应用安装状态。
-            </p>
-          )}
-          {hasPlugins
-            ? filtered.map((profile) => (
-                <ProviderRow
-                  key={profile.id}
-                  onSelect={() => onSelect(profile.id)}
-                  onToggle={(enabled) => onToggleEnabled(profile, enabled)}
-                  profile={profile}
-                  saving={saving}
-                  selected={selectedId === profile.id}
-                  subtitle={resolvePluginName(profile)}
-                />
-              ))
-            : null}
-          {hasPlugins && !draftName && filtered.length === 0 ? (
-            <p className="text-muted-foreground text-sm" key="empty">
-              没有匹配的服务商。
-            </p>
-          ) : null}
-        </StaggerList>
+        <DragDropProvider onDragEnd={handleDragEnd}>
+          <StaggerList>
+            {draftName ? (
+              <DraftRow
+                key="draft"
+                name={draftName}
+                onSelect={onSelectDraft}
+                selected={selectedId === NEW_PROFILE_ID}
+              />
+            ) : null}
+            {hasPlugins ? null : (
+              <p className="text-muted-foreground text-sm" key="no-plugins">
+                没有可用的翻译插件，请检查应用安装状态。
+              </p>
+            )}
+            {hasPlugins
+              ? filtered.map((profile, index) => (
+                  <ProviderRow
+                    index={index}
+                    key={profile.id}
+                    onSelect={() => onSelect(profile.id)}
+                    onToggle={(enabled) => onToggleEnabled(profile, enabled)}
+                    profile={profile}
+                    reorderable={reorderable}
+                    saving={saving}
+                    selected={selectedId === profile.id}
+                    subtitle={resolvePluginName(profile)}
+                  />
+                ))
+              : null}
+            {hasPlugins && !draftName && filtered.length === 0 ? (
+              <p className="text-muted-foreground text-sm" key="empty">
+                没有匹配的服务商。
+              </p>
+            ) : null}
+          </StaggerList>
+        </DragDropProvider>
       </div>
       <Button
         className="w-full"

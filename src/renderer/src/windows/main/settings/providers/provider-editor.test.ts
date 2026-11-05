@@ -12,7 +12,6 @@ import {
   mergeSecretRetry,
   modelDisplayLabel,
   modelsConfigSignature,
-  requiredSecretNames,
 } from "./provider-editor";
 
 describe("mergeSecretRetry", () => {
@@ -169,45 +168,6 @@ describe("modelDisplayLabel", () => {
     assert.equal(
       modelDisplayLabel({ id: "gpt-4o", label: "GPT-4o" }),
       "GPT-4o"
-    );
-  });
-});
-
-describe("requiredSecretNames", () => {
-  const schema = {
-    properties: {
-      apiKey: { required: true, title: "API Key", type: "secret" as const },
-      apiSecret: { title: "Secret", type: "secret" as const },
-      org: { title: "Org ID", type: "string" as const },
-    },
-    required: ["apiKey"],
-    type: "object" as const,
-  };
-
-  test("只列必填 secret，支持多字段与 required 数组", () => {
-    assert.deepEqual(requiredSecretNames(schema), ["apiKey"]);
-    const both = {
-      ...schema,
-      properties: {
-        ...schema.properties,
-        apiSecret: {
-          required: true,
-          title: "Secret",
-          type: "secret" as const,
-        },
-      },
-    };
-    assert.deepEqual(requiredSecretNames(both), ["apiKey", "apiSecret"]);
-  });
-
-  test("无 secret 或无 schema 均返回空（不受门控）", () => {
-    assert.deepEqual(requiredSecretNames(undefined), []);
-    assert.deepEqual(
-      requiredSecretNames({
-        properties: { org: { title: "Org", type: "string" as const } },
-        type: "object" as const,
-      }),
-      []
     );
   });
 });

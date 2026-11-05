@@ -64,6 +64,7 @@ function loadStore(directory: string) {
   });
   return exports as {
     readProfiles: () => Array<{ id: string; enabled: boolean }>;
+    reorderProfiles: (orderedIds: string[]) => Array<{ id: string }>;
     saveProfile: (profile: {
       id: string;
       pluginId: string;
@@ -118,6 +119,39 @@ test("旧 profile 无 enabled 字段默认启用，显式 false 保留", () => {
     });
     assert.equal(saved.enabled, true);
     assert.ok(existsSync(join(directory, "config.json")));
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("reorderProfiles 按传入 id 顺序写回，未列出的保持原相对顺序", () => {
+  const directory = mkdtempSync(join(tmpdir(), "vadu-store-reorder-"));
+  try {
+    writeFileSync(
+      join(directory, "config.json"),
+      JSON.stringify({
+        profiles: ["a", "b", "c"].map((id) => ({
+          allowedOrigins: [],
+          config: {},
+          createdAt: 1,
+          id,
+          name: id,
+          pluginId: "vadu.ai",
+        })),
+        schemaVersion: 1,
+        settings: {},
+      })
+    );
+    const store = loadStore(directory);
+    // 跨 vm 上下文的数组原型不同，先摊开成当前上下文的数组再比
+    assert.deepEqual(
+      [...store.reorderProfiles(["c", "a"]).map((profile) => profile.id)],
+      ["c", "a", "b"]
+    );
+    assert.deepEqual(
+      [...store.readProfiles().map((profile) => profile.id)],
+      ["c", "a", "b"]
+    );
   } finally {
     rmSync(directory, { force: true, recursive: true });
   }

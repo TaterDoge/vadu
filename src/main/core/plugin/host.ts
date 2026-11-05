@@ -108,7 +108,8 @@ export function normalizePluginError(
 function makeRuntime(
   pluginId: string,
   profile: Profile,
-  callSignal: AbortSignal
+  callSignal: AbortSignal,
+  secretsOverride?: Record<string, string>
 ): PluginRuntime {
   return {
     fetch(input, init = {}): Promise<Response> {
@@ -151,8 +152,15 @@ function makeRuntime(
         console.warn(`[plugin:${pluginId}] ${message}`, sanitizeMeta(meta)),
     },
     secrets: {
-      get: (name) => getSecret(profile.id, name),
-      has: (name) => hasSecret(profile.id, name),
+      // 本次调用的覆盖表（如草稿表单输入的未保存密钥）优先，其余回落已保存桶
+      get: (name) =>
+        secretsOverride && Object.hasOwn(secretsOverride, name)
+          ? secretsOverride[name]
+          : getSecret(profile.id, name),
+      has: (name) =>
+        secretsOverride && Object.hasOwn(secretsOverride, name)
+          ? true
+          : hasSecret(profile.id, name),
     },
   };
 }
@@ -163,6 +171,7 @@ export async function hostListModels(args: {
   pluginId: string;
   profile: Profile;
   requestId: string;
+  secrets?: Record<string, string>;
   timeoutMs?: number;
 }): Promise<ModelInfo[]> {
   const {
@@ -170,10 +179,11 @@ export async function hostListModels(args: {
     config,
     pluginId,
     profile,
+    secrets,
     timeoutMs = MODELS_TIMEOUT_MS,
   } = args;
   const signal = AbortSignal.timeout(timeoutMs);
-  const runtime = makeRuntime(pluginId, profile, signal);
+  const runtime = makeRuntime(pluginId, profile, signal, secrets);
   let plugin: TranslatorPlugin;
   try {
     plugin = create(runtime);

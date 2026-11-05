@@ -8,6 +8,7 @@ export const IPC = {
   config: {
     deleteProfile: "vadu:config:deleteProfile",
     listProfiles: "vadu:config:listProfiles",
+    reorderProfiles: "vadu:config:reorderProfiles",
     saveProfile: "vadu:config:saveProfile",
   },
   getHotkey: "vadu:app:getHotkey",
@@ -257,7 +258,9 @@ export type VaduApi = {
     listModels: (
       pluginId: string,
       profileId: string,
-      config: Record<string, unknown>
+      config: Record<string, unknown>,
+      /** 本次表单未保存的密钥明文：仅用于本次模型列表请求，不落盘、不记录日志 */
+      secrets?: Record<string, string>
     ) => Promise<IpcResult<ModelInfo[]>>;
   };
   translate: {
@@ -270,6 +273,8 @@ export type VaduApi = {
   config: {
     deleteProfile: (profileId: string) => Promise<IpcResult<null>>;
     listProfiles: (pluginId?: string) => Promise<IpcResult<Profile[]>>;
+    /** orderedIds 是持久化顺序（config.json 数组顺序），返回重排后的完整列表 */
+    reorderProfiles: (orderedIds: string[]) => Promise<IpcResult<Profile[]>>;
     saveProfile: (profile: Profile) => Promise<IpcResult<Profile>>;
   };
   secrets: {

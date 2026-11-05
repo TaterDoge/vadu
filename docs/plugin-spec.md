@@ -158,9 +158,9 @@ type ConfigSchema = {
 
    刷新条件（由宿主强制）：
 
-   - **profile 必须已保存**：`profileId` 指向已落盘 profile，新 profile 首次保存前不发请求，UI 提示「先保存配置」。
-   - **密钥只用已保存的**：不读输入框里的未保存值（那些值本来就不应该经过渲染层与主进程的这条路径，否则等于新开一条传密钥的通道）。对应 secret 字段从未保存过密钥时直接提示「请先保存 API Key」，不发请求。
-   - **origin 只允许已登记的**：请求经受控 `runtime.fetch`，只发往 `allowedOrigins`（保存 profile 时自动登记该 profile 的 baseURL origin）；未登记 origin 返回 `PERMISSION_DENIED`。
+   - **profile 可为草稿**：`profileId` 指向已落盘 profile 或草稿 id（如 `"__new__"`）；新建服务商首次保存前即可发起请求，UI 不再要求先保存。
+   - **密钥用本次表单输入**：`secrets` 可选，携带用户已输入、未保存的密钥明文，仅用于本次请求（不落盘、不进日志、不并入 config），命中键优先于已保存密钥桶；对应 secret 字段从未设置且本次未输入时，适配器抛 `AUTH_FAILED`「缺少 API Key」。
+   - **origin**：已保存 profile 只允许已登记的 `allowedOrigins`（保存 profile 时自动登记该 profile 的 baseURL origin），未登记 origin 返回 `PERMISSION_DENIED`；草稿临时用本次 baseURL 派生 origin，取不到合法 baseURL 报 `INVALID_CONFIG`。
 
    返回的 `ModelInfo[]` 宿主去重并截断到 500 条，适配器侧截断到 200 条；单次调用超时 30s。
 5. 字段顺序 = `properties` 的书写顺序。

@@ -22,7 +22,6 @@ import {
   ensureDraftVisible,
   isDirty,
   mergeSecretRetry,
-  requiredSecretNames,
   secretFieldNames,
 } from "./provider-editor";
 
@@ -423,6 +422,22 @@ function ProvidersPage(): ReactNode {
 
   const displayProfiles = useMemo(() => [...profiles].reverse(), [profiles]);
 
+  const onReorder = async (ordered: Profile[]): Promise<void> => {
+    // 展示序是存储序的反转，落盘必须再反转回去
+    const orderedIds = [...ordered].reverse().map((entry) => entry.id);
+    setError(null);
+    try {
+      const result = await window.vadu.config.reorderProfiles(orderedIds);
+      if (result.ok) {
+        setProfiles(result.data);
+      } else {
+        setError(result.error.message ?? result.error.code);
+      }
+    } catch (reason) {
+      setError(String(reason));
+    }
+  };
+
   const onDelete = async (): Promise<void> => {
     if (
       !editor ||
@@ -518,10 +533,6 @@ function ProvidersPage(): ReactNode {
     ? (plugins.find((entry) => entry.id === selectedProfile.pluginId) ?? null)
     : vaduAi;
   const schema = selectedPlugin?.configSchema;
-  // 门控只看 schema 声明的必填 secret；无必填密钥的插件不受限制
-  const hasSavedKey = requiredSecretNames(schema).every(
-    (name) => selectedId !== null && secretHas[selectedId]?.[name] === true
-  );
   const isNew = selectedId === NEW_PROFILE_ID;
   const dirty = editor !== null && isDirty(editor, baseline);
 
@@ -537,6 +548,7 @@ function ProvidersPage(): ReactNode {
         onAdd={startNew}
         onFilterChange={setFilter}
         onQueryChange={setQuery}
+        onReorder={onReorder}
         onSelect={requestSelection}
         onSelectDraft={startNew}
         onToggleEnabled={toggleEnabled}
@@ -556,7 +568,6 @@ function ProvidersPage(): ReactNode {
             dirty={dirty}
             editor={editor}
             error={error}
-            hasSavedKey={hasSavedKey}
             info={info}
             isNew={isNew}
             key={selectedId ?? "new"}

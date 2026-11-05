@@ -21,7 +21,10 @@ const PROFILE: Profile = {
   pluginId: "vadu.ai",
 };
 
-function loadHost(fetchCalls: { init: RequestInit; url: URL }[]) {
+function loadHost(
+  fetchCalls: { init: RequestInit; url: URL }[],
+  opts?: { getSecret?: (profileId: string, name: string) => string | undefined }
+) {
   const exports: Record<string, unknown> = {};
   const source = readFileSync(join(import.meta.dirname, "host.ts"), "utf8");
   const { outputText } = ts.transpileModule(source, {
@@ -33,8 +36,9 @@ function loadHost(fetchCalls: { init: RequestInit; url: URL }[]) {
   const imports: Record<string, unknown> = {
     "../../../shared/errors": { VaduError },
     "../config/secrets": {
-      getSecret: () => undefined,
-      hasSecret: () => false,
+      getSecret: opts?.getSecret ?? (() => undefined),
+      hasSecret: (profileId: string, name: string) =>
+        (opts?.getSecret?.(profileId, name) ?? undefined) !== undefined,
     },
     "./deadline": { withDeadline: (work: Promise<unknown>) => work },
   };
@@ -74,6 +78,7 @@ function loadHost(fetchCalls: { init: RequestInit; url: URL }[]) {
       pluginId: string;
       profile: Profile;
       requestId: string;
+      secrets?: Record<string, string>;
       timeoutMs?: number;
     }) => Promise<unknown>;
   };
@@ -91,6 +96,41 @@ function createFor(target: string) {
       })(),
   });
 }
+
+test("secrets 覆盖表优先于已保存密钥桶，未覆盖的键回落", async () => {
+  const calls: { init: RequestInit; url: URL }[] = [];
+  const { hostListModels } = loadHost(calls, {
+    getSecret: () => "saved-key",
+  });
+  const seen: Record<string, unknown> = {};
+  const models = await hostListModels({
+    config: { baseURL: "https://api.example.com/v1" },
+    create: (runtime) => ({
+      listModels: () => {
+        seen.api = runtime.secrets.get("apiKey");
+        seen.apiHas = runtime.secrets.has("apiKey");
+        seen.org = runtime.secrets.get("org");
+        seen.orgHas = runtime.secrets.has("org");
+        return Promise.resolve([{ id: "m" }]);
+      },
+      translate: () =>
+        (async function* empty() {
+          yield* [];
+        })(),
+    }),
+    pluginId: "vadu.ai",
+    profile: PROFILE,
+    requestId: "r3",
+    secrets: { apiKey: "override-key" },
+  });
+  assert.deepEqual([...(models as { id: string }[])], [{ id: "m" }]);
+  assert.deepEqual(seen, {
+    api: "override-key",
+    apiHas: true,
+    org: "saved-key",
+    orgHas: true,
+  });
+});
 
 test("未登记的 origin 被拒，登记后强制 redirect:error", async () => {
   const calls: { init: RequestInit; url: URL }[] = [];

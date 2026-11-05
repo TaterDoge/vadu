@@ -137,6 +137,31 @@ export function deleteProfile(id: string): void {
   writeConfigRaw(mergeProfiles(raw, profiles));
 }
 
+/** 按给定 id 顺序重排；未列出的 profile 按原相对顺序追加在末尾，未知 id 忽略 */
+export function reorderProfiles(orderedIds: string[]): Profile[] {
+  const raw = parseConfig(configPath());
+  if (!raw && existsSync(configPath())) {
+    throw new VaduError("INVALID_CONFIG", "配置文件损坏，请先恢复配置");
+  }
+  const profiles = readProfiles();
+  const remaining = new Map(profiles.map((entry) => [entry.id, entry]));
+  const ordered: Profile[] = [];
+  for (const id of orderedIds) {
+    const profile = remaining.get(id);
+    if (!profile) {
+      continue;
+    }
+    remaining.delete(id);
+    ordered.push(profile);
+  }
+  const next = [
+    ...ordered,
+    ...profiles.filter((profile) => remaining.has(profile.id)),
+  ];
+  writeConfigRaw(mergeProfiles(raw, next));
+  return next;
+}
+
 export function saveProfile(profile: Profile): Profile {
   const raw = parseConfig(configPath());
   if (!raw && existsSync(configPath())) {

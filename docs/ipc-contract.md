@@ -82,7 +82,7 @@ export function handle<TArg, TResult>(
 | `vadu:plugins:list` | invoke | — | `PluginDescriptor[]` |
 | `vadu:plugins:rescan` | invoke | — | `PluginDescriptor[]` |
 | `vadu:plugins:setEnabled` | invoke | `{ pluginId: string; enabled: boolean }` | `PluginDescriptor` |
-| `vadu:plugins:listModels` | invoke | `{ pluginId: string; profileId: string; config: Record<string, unknown> }` | `ModelInfo[]` |
+| `vadu:plugins:listModels` | invoke | `{ pluginId: string; profileId: string; config: Record<string, unknown>; secrets?: Record<string, string> }` | `ModelInfo[]` |
 | `vadu:plugins:changed` | send（main→renderer） | `PluginDescriptor[]` | — |
 | `vadu:plugins:install` | invoke | —（主进程自己弹目录选择框，见 §5）（M3） | `PluginDescriptor` |
 | `vadu:plugins:uninstall` | invoke | `{ pluginId: string }`（M3） | `void` |
@@ -175,6 +175,7 @@ export type TranslateWarning = "PLACEHOLDER_MISMATCH" | "EMPTY_OUTPUT" | "OUTPUT
 | --- | --- | --- | --- |
 | `vadu:config:listProfiles` | invoke | `{ pluginId?: string }` | `Profile[]` |
 | `vadu:config:saveProfile` | invoke | `Profile` | `Profile` |
+| `vadu:config:reorderProfiles` | invoke | `{ orderedIds: string[] }` | `Profile[]` |
 | `vadu:config:deleteProfile` | invoke | `{ profileId: string }` | `void` |
 | `vadu:config:getSettings` | invoke | — | `AppSettings` |
 | `vadu:config:saveSettings` | invoke | `AppSettings` | `AppSettings` |
@@ -216,10 +217,13 @@ export type AppSettings = {
 
 服务商设置中模型字段「选择模型」浮层的唯一数据通道，语义：
 
-- 入参 `profileId` 必须指向已完成保存的 profile（新 profile 首次保存前不可获取，UI 提示「先保存配置」）。
-- **密钥只从该 profile 已保存的密钥桶读取**，绝不使用渲染层输入框里的未保存值。对应 secret 字段未保存过密钥时直接返回 `AUTH_FAILED` 提示「请先保存 API Key」，不发请求。
-- origin 约束与翻译相同：请求经受控 `runtime.fetch`，只允许发往 `allowedOrigins` 里已登记的地址（保存 profile 时自动登记 baseURL origin）；未登记 origin 返回 `PERMISSION_DENIED`。
-- `config` 由渲染层传当前表单值（含未保存修改），宿主只做形状与字段数校验，不落盘。
+- 入参 `profileId` 可以是草稿 id（如 `"__new__"`）：未保存的服务商也可获取模型列表，无需先保存；已保存 profile 仍直接命中。
+- `secrets`（可选）是本次表单里用户已输入、尚未保存的密钥明文，**只用于本次模型列表请求**：绝不并入 `config`、绝不落盘、绝不写入日志（含插件日志与错误 message）。宿主校验形状：普通对象、值全为 string、键数 ≤ 16、单值长度 ≤ 8192，否则 `INVALID_CONFIG`。`secrets` 中出现的键优先于已保存的密钥桶；未出现的键回落已保存桶。
+- origin 约束：
+  - 已保存 profile：请求经受控 `runtime.fetch`，只允许发往已保存 `allowedOrigins` 里已登记的地址；即使本次表单改了 baseURL，未登记的新 origin 仍返回 `PERMISSION_DENIED`（保持「先保存再换地址」的保护）。
+  - 草稿 profile：临时用本次 `config.baseURL` 派生 origin（仅本次调用生效，不登记白名单）；baseURL 缺失或非法时报 `INVALID_CONFIG`「请先填写正确的接口地址」，不放行。
+- `config` 由渲染层传当前表单值（含未保存修改），宿主只做形状与字段数校验，不落盘；草稿 profile 仅在内存构造，请求成功/失败均无持久化副作用。
+- 缺少对应密钥时由插件抛 `AUTH_FAILED`，渲染层不再前置拦截。
 - 返回 `ModelInfo[]`，宿主去重并截断到 500 条；适配器侧截断到 200 条。
 - 超时 30s，错误归一化与翻译一致（`TIMEOUT` / `NETWORK` / `AUTH_FAILED` …）。
 - `ModelInfo = { id: string; label?: string }`，来自 `src/shared/plugin.ts`。
@@ -233,7 +237,7 @@ export type AppSettings = {
 
 清除单个密钥使用 `vadu:secret:set`，传对应 `profileId`、`name` 和空字符串 `value`；不另设 `secret:clear` 通道。
 
-`vadu:secret:has` 只返回「该 profile 是否已保存某密钥」的布尔值，不暴露密钥任何片段，用于设置页表单占位与模型列表前置判断；`PluginDescriptor.secretsSet` 是跨 profile 的聚合快照，不得用于当前 profile 的保存状态。
+`vadu:secret:has` 只返回「该 profile 是否已保存某密钥」的布尔值，不暴露密钥任何片段，用于设置页表单占位（模型列表请求不再以它作前置判断，未保存草稿直接随请求携带临时密钥）；`PluginDescriptor.secretsSet` 是跨 profile 的聚合快照，不得用于当前 profile 的保存状态。
 
 **没有 `secret:get` 通道，永远不要加。** 也**不提供掩码 / 片段回显**：返回 key 的任何一部分都需要把密钥送进渲染层，收益只是让用户认出是哪个 key——用 profile 名区分即可。
 
@@ -295,7 +299,7 @@ const vadu = {
     list: () => call(IPC.plugins.list),
     rescan: () => call(IPC.plugins.rescan),
     setEnabled: (pluginId: string, enabled: boolean) => call(IPC.plugins.setEnabled, { enabled, pluginId }),
-    listModels: (pluginId: string, profileId: string, config: Record<string, unknown>) => call(IPC.plugins.listModels, { pluginId, profileId, config }),
+    listModels: (pluginId: string, profileId: string, config: Record<string, unknown>, secrets?: Record<string, string>) => call(IPC.plugins.listModels, { pluginId, profileId, config, secrets }),
     onChanged: (fn: (plugins: PluginDescriptor[]) => void) => subscribe(IPC.plugins.changed, fn),
   },
   translate: {

@@ -97,20 +97,6 @@ export function mergeJsonFields(
   return config;
 }
 
-/** 按 schema 判定模型列表前置校验所需的必填 secret 字段集合 */
-export function requiredSecretNames(
-  schema: ConfigSchema | undefined
-): string[] {
-  const requiredKeys = new Set(schema?.required ?? []);
-  return Object.entries(schema?.properties ?? {})
-    .filter(
-      ([key, field]) =>
-        field.type === "secret" &&
-        (field.required === true || requiredKeys.has(key))
-    )
-    .map(([key]) => key);
-}
-
 export type ModelRequestCtx = {
   pluginId: string;
   profileId: string;

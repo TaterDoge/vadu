@@ -7,6 +7,7 @@ import { clearProfileSecrets } from "../core/config/secrets";
 import {
   readProfiles,
   deleteProfile as removeProfile,
+  reorderProfiles,
   saveProfile,
 } from "../core/config/store";
 import { validateConfigAgainstSchema } from "../core/config/validate";
@@ -100,6 +101,29 @@ export function registerConfigIpc(): void {
     saveQueue = operation;
     return operation;
   });
+
+  handle<{ orderedIds?: string[] }, Profile[]>(
+    IPC.config.reorderProfiles,
+    (raw, { sender }) => {
+      const operation = saveQueue
+        .catch(() => undefined)
+        .then(() => {
+          if (sender.isDestroyed()) {
+            throw new VaduError("ABORTED", "窗口已关闭");
+          }
+          const orderedIds = isRecord(raw) ? raw.orderedIds : undefined;
+          if (!Array.isArray(orderedIds)) {
+            throw new VaduError("INVALID_CONFIG", "orderedIds 非法");
+          }
+          // 非字符串项按未知 id 忽略，reorderProfiles 只认配置里存在的 id
+          return reorderProfiles(
+            orderedIds.filter((id): id is string => typeof id === "string")
+          );
+        });
+      saveQueue = operation;
+      return operation;
+    }
+  );
 
   handle<{ profileId?: string }, null>(
     IPC.config.deleteProfile,

@@ -55,6 +55,16 @@ test("config IPC 自动登记 origin，忽略 renderer 授权，保存串行且�
         }
       },
       readProfiles: () => profiles,
+      reorderProfiles: (orderedIds: string[]) => {
+        const next = [
+          ...orderedIds.flatMap((id) =>
+            profiles.filter((entry) => entry.id === id)
+          ),
+          ...profiles.filter((entry) => !orderedIds.includes(entry.id)),
+        ];
+        profiles.splice(0, profiles.length, ...next);
+        return [...profiles];
+      },
       saveProfile: (profile: Profile) => {
         const index = profiles.findIndex((entry) => entry.id === profile.id);
         if (index < 0) {
@@ -105,6 +115,10 @@ test("config IPC 自动登记 origin，忽略 renderer 授权，保存串行且�
     raw: unknown,
     ctx: unknown
   ) => Promise<null>;
+  const reorder = handlers.get(IPC.config.reorderProfiles) as (
+    raw: unknown,
+    ctx: unknown
+  ) => Promise<Profile[]>;
   assert.ok(save);
   assert.ok(remove);
   const ctx = { sender: { isDestroyed: () => false } };
@@ -178,6 +192,24 @@ test("config IPC 自动登记 origin，忽略 renderer 授权，保存串行且�
   );
   assert.deepEqual(clearedSecrets, [first.id]);
   await assert.rejects(remove({ profileId: 1 }, ctx), {
+    code: "INVALID_CONFIG",
+  });
+
+  // 拖拽排序按传入 id 顺序落盘，未知 id 忽略
+  assert.deepEqual(
+    (
+      await reorder(
+        { orderedIds: [second.id, "missing", savedProfile.id] },
+        ctx
+      )
+    ).map((profile) => profile.id),
+    [second.id, savedProfile.id]
+  );
+  assert.deepEqual(
+    profiles.map((profile) => profile.id),
+    [second.id, savedProfile.id]
+  );
+  await assert.rejects(reorder({ orderedIds: "nope" }, ctx), {
     code: "INVALID_CONFIG",
   });
 });

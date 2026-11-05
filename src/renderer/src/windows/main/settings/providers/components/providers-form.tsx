@@ -234,7 +234,6 @@ type EditorFormProps = {
   dirty: boolean;
   editor: EditorState;
   error: string | null;
-  hasSavedKey: boolean;
   info: string | null;
   isNew: boolean;
   onCancelDiscard: () => void;
@@ -256,7 +255,6 @@ function EditorForm({
   dirty,
   editor,
   error,
-  hasSavedKey,
   info,
   isNew,
   onCancelDiscard,
@@ -388,7 +386,6 @@ function EditorForm({
                 config={mergeJsonFields(editor, schema)}
                 description={field.description}
                 disabled={saving}
-                hasSavedKey={hasSavedKey}
                 key={key}
                 model={String(editor.config.model ?? "")}
                 onModelChange={(model) =>
@@ -400,6 +397,7 @@ function EditorForm({
                 required={
                   field.required === true || schema?.required?.includes(key)
                 }
+                secrets={editor.secrets}
                 title={field.title}
               />
             );

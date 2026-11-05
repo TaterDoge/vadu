@@ -50,20 +50,23 @@ function ProviderRow({
   });
 
   return (
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: 整行可点，键盘由行内名称按钮冒泡到此处
     <div
       className={cn(
-        "my-1 flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-sm transition-colors motion-reduce:transition-none",
+        "my-1 flex w-full cursor-pointer items-center gap-1 rounded-lg border px-2.5 py-1 text-sm transition-colors motion-reduce:transition-none",
         selected
           ? "border-border bg-muted"
           : "border-transparent hover:bg-muted",
         isDragging && "opacity-60"
       )}
+      onClick={onSelect}
       ref={ref}
     >
       <Button
         aria-label={`拖动排序 ${profile.name}`}
         className="shrink-0 cursor-grab text-muted-foreground"
         disabled={!reorderable || saving}
+        onClick={(event) => event.stopPropagation()}
         ref={handleRef}
         size="icon-xs"
         variant="ghost"
@@ -74,10 +77,10 @@ function ProviderRow({
         />
       </Button>
       <PluginIcon pluginId={profile.pluginId} />
+      {/* 自身无 handler，点按 / 回车靠冒泡触发整行选中 */}
       <Button
         aria-current={selected ? "true" : undefined}
         className="flex min-w-0 flex-1 flex-col items-start justify-center gap-0.5 px-0 text-left"
-        onClick={onSelect}
         size="xs"
         variant="ghost"
       >
@@ -100,6 +103,7 @@ function ProviderRow({
         checked={profile.enabled}
         disabled={saving || toggling}
         onCheckedChange={onToggle}
+        onClick={(event) => event.stopPropagation()}
         size="sm"
       />
     </div>

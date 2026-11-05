@@ -1,3 +1,6 @@
+import { AnimateIcon } from "@animate-ui/react/icons";
+import { Frame } from "@renderer/components/animate-ui/icons/frame";
+import { Palette } from "@renderer/components/animate-ui/icons/palette";
 import { Button } from "@renderer/components/ui/button";
 import {
   DropdownMenu,
@@ -19,22 +22,24 @@ export function StyleSwitcher(): React.ReactNode {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            aria-label="切换组件风格"
-            size="icon-sm"
-            title="切换组件风格"
-            variant="ghost"
-          />
-        }
-      >
-        {style === "lyra" ? (
-          <span aria-hidden="true" className="icon-[lucide--frame] size-4" />
-        ) : (
-          <span aria-hidden="true" className="icon-[lucide--palette] size-4" />
-        )}
-      </DropdownMenuTrigger>
+      <AnimateIcon animateOnHover asChild>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              aria-label="切换组件风格"
+              size="icon-sm"
+              title="切换组件风格"
+              variant="ghost"
+            />
+          }
+        >
+          {style === "lyra" ? (
+            <Frame aria-hidden="true" className="size-4" />
+          ) : (
+            <Palette aria-hidden="true" className="size-4" />
+          )}
+        </DropdownMenuTrigger>
+      </AnimateIcon>
       <DropdownMenuContent align="start" className="w-auto min-w-40">
         <DropdownMenuRadioGroup
           onValueChange={(value) => setStyle(value as StyleName)}

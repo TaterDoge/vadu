@@ -5,6 +5,11 @@ import {
   useRef,
   useState,
 } from "react";
+import { AnimateIcon } from "@animate-ui/react/icons";
+import { Keyboard } from "@renderer/components/animate-ui/icons/keyboard";
+import { Pin } from "@renderer/components/animate-ui/icons/pin";
+import { RotateCcw } from "@renderer/components/animate-ui/icons/rotate-ccw";
+import { Settings } from "@renderer/components/animate-ui/icons/settings";
 import { Alert, AlertDescription } from "@renderer/components/ui/alert";
 import { Button } from "@renderer/components/ui/button";
 import {
@@ -18,8 +23,7 @@ import {
 import { Kbd, KbdGroup } from "@renderer/components/ui/kbd";
 import { StaggerList } from "@renderer/components/ui/stagger-list";
 import { Switch } from "@renderer/components/ui/switch";
-import type { IconClass } from "@renderer/lib/icons";
-import { ALERT_ICON } from "@renderer/lib/icons";
+import { AlertIcon, type IconComponent } from "@renderer/lib/icons";
 import { IS_MAC } from "@renderer/lib/platform";
 import { acceleratorFromEvent, formatAccelerator } from "@shared/hotkey";
 import {
@@ -148,7 +152,7 @@ function HotkeyItem({
   defaultAccelerator,
   description,
   disabled,
-  icon,
+  icon: Icon,
   onChange,
   title,
 }: {
@@ -157,8 +161,7 @@ function HotkeyItem({
   defaultAccelerator: string;
   description: string;
   disabled: boolean;
-  /** Iconify 类名，构建期由 @iconify/tailwind4 内联成 data URI */
-  icon: IconClass;
+  icon: IconComponent;
   onChange: (accelerator: string | null) => void;
   title: string;
 }): ReactNode {
@@ -180,7 +183,7 @@ function HotkeyItem({
     <div className="flex flex-col gap-4">
       <Item size="default" variant="outline">
         <ItemMedia variant="icon">
-          <span aria-hidden="true" className={cn(icon, "size-4")} />
+          <Icon aria-hidden="true" className="size-4" />
         </ItemMedia>
         <ItemContent>
           <ItemTitle>{title}</ItemTitle>
@@ -206,17 +209,16 @@ function HotkeyItem({
             )}
           </button>
           {modified && !recording ? (
-            <Button
-              aria-label={`把「${title}」恢复为默认快捷键`}
-              onClick={() => onChange(defaultAccelerator)}
-              size="icon-xs"
-              variant="ghost"
-            >
-              <span
-                aria-hidden="true"
-                className="icon-[lucide--rotate-ccw] size-3.5"
-              />
-            </Button>
+            <AnimateIcon animateOnHover asChild>
+              <Button
+                aria-label={`把「${title}」恢复为默认快捷键`}
+                onClick={() => onChange(defaultAccelerator)}
+                size="icon-xs"
+                variant="ghost"
+              >
+                <RotateCcw aria-hidden="true" className="size-3.5" />
+              </Button>
+            </AnimateIcon>
           ) : null}
           <Switch
             aria-label={`启用「${title}」`}
@@ -229,7 +231,7 @@ function HotkeyItem({
 
       {hint ? (
         <HintAlert variant="default">
-          <span aria-hidden="true" className={ALERT_ICON} />
+          <AlertIcon />
           <AlertDescription>{hint}</AlertDescription>
         </HintAlert>
       ) : null}
@@ -307,7 +309,7 @@ function ShortcutsPage(): ReactNode {
           defaultAccelerator={DEFAULT_HOTKEYS.global}
           description="按一次唤起并聚焦翻译窗口，再按一次隐藏到后台"
           disabled={state === null}
-          icon="icon-[lucide--keyboard]"
+          icon={Keyboard}
           onChange={applyGlobal}
           title="唤起 / 隐藏翻译浮窗"
         />
@@ -318,7 +320,7 @@ function ShortcutsPage(): ReactNode {
           defaultAccelerator={DEFAULT_HOTKEYS.inApp.openSettings}
           description="在翻译浮窗内打开设置页面，仅浮窗聚焦时生效"
           disabled={inApp === null}
-          icon="icon-[lucide--settings]"
+          icon={Settings}
           onChange={(accelerator) => applyInApp("openSettings", accelerator)}
           title="浮窗内打开设置"
         />
@@ -328,21 +330,21 @@ function ShortcutsPage(): ReactNode {
           defaultAccelerator={DEFAULT_HOTKEYS.inApp.togglePin}
           description="在浮窗内切换图钉（固定窗口），仅浮窗聚焦时生效"
           disabled={inApp === null}
-          icon="icon-[lucide--pin]"
+          icon={Pin}
           onChange={(accelerator) => applyInApp("togglePin", accelerator)}
           title="浮窗内切换固定窗口"
         />
 
         {hint ? (
           <HintAlert>
-            <span aria-hidden="true" className={ALERT_ICON} />
+            <AlertIcon />
             <AlertDescription>{hint}</AlertDescription>
           </HintAlert>
         ) : null}
 
         {error ? (
           <HintAlert variant="destructive">
-            <span aria-hidden="true" className={ALERT_ICON} />
+            <AlertIcon />
             <AlertDescription>{error}</AlertDescription>
           </HintAlert>
         ) : null}

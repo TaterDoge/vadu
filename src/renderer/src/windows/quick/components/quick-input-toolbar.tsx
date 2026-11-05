@@ -1,5 +1,11 @@
 import { type JSX, useEffect, useRef, useState } from "react";
+import { AnimateIcon } from "@animate-ui/react/icons";
 import { IconButton } from "@animate-ui/react/primitives/buttons/icon";
+import { Check } from "@renderer/components/animate-ui/icons/check";
+import { Copy } from "@renderer/components/animate-ui/icons/copy";
+import { Eraser } from "@renderer/components/animate-ui/icons/eraser";
+import { Pause } from "@renderer/components/animate-ui/icons/pause";
+import { Volume2 } from "@renderer/components/animate-ui/icons/volume-2";
 import { buttonVariants } from "@renderer/components/ui/button";
 import { cn } from "cn";
 
@@ -152,76 +158,85 @@ function QuickInputToolbar({
       className={cn("flex shrink-0 items-center justify-between", className)}
     >
       <div className="flex items-center gap-1">
-        <IconButton
-          aria-label={speaking ? "暂停朗读" : "朗读输入内容"}
-          aria-pressed={speaking}
-          className={buttonVariants({
-            className: "rounded-sm p-1",
-            size: "icon-xs",
-            variant: "secondary",
-          })}
-          disabled={value.length === 0 || busy}
-          onClick={toggleTts}
-          // 同复制按钮：不抢焦点，朗读时仍能在文本域继续编辑
-          onMouseDown={(event) => event.preventDefault()}
-          title={ttsTitle}
-        >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "size-3.5",
-              speaking ? "icon-[lucide--pause]" : "icon-[lucide--volume-2]",
-              busy && "animate-pulse"
+        <AnimateIcon animateOnHover asChild>
+          <IconButton
+            aria-label={speaking ? "暂停朗读" : "朗读输入内容"}
+            aria-pressed={speaking}
+            className={buttonVariants({
+              className: "rounded-sm p-1",
+              size: "icon-xs",
+              variant: "secondary",
+            })}
+            disabled={value.length === 0 || busy}
+            onClick={toggleTts}
+            // 同复制按钮：不抢焦点，朗读时仍能在文本域继续编辑
+            onMouseDown={(event) => event.preventDefault()}
+            title={ttsTitle}
+          >
+            {speaking ? (
+              <Pause
+                aria-hidden="true"
+                className={cn("size-3.5", busy && "animate-pulse")}
+              />
+            ) : (
+              <Volume2
+                aria-hidden="true"
+                className={cn("size-3.5", busy && "animate-pulse")}
+              />
             )}
-          />
-        </IconButton>
+          </IconButton>
+        </AnimateIcon>
+        <AnimateIcon animateOnHover asChild>
+          <IconButton
+            aria-label="复制输入内容"
+            className={buttonVariants({
+              className: "rounded-sm p-1",
+              size: "icon-xs",
+              variant: "secondary",
+            })}
+            disabled={value.length === 0}
+            onClick={copy}
+            // 按下就不抢焦点：否则文本域失焦，选区与光标位置一起丢失
+            onMouseDown={(event) => event.preventDefault()}
+            title="复制输入内容"
+          >
+            {/* 两个图标叠放靠透明度过渡，复制成功时原地换成勾 */}
+            <span className="relative inline-flex size-3.5 items-center justify-center">
+              <Copy
+                aria-hidden="true"
+                className={cn(
+                  "size-3.5 transition-opacity duration-150",
+                  copied && "opacity-0"
+                )}
+              />
+              <Check
+                aria-hidden="true"
+                className={cn(
+                  "absolute size-3.5 transition-opacity duration-150",
+                  copied ? "opacity-100" : "opacity-0"
+                )}
+              />
+            </span>
+          </IconButton>
+        </AnimateIcon>
+      </div>
+      <AnimateIcon animateOnHover asChild>
         <IconButton
-          aria-label="复制输入内容"
+          aria-label="清空输入"
           className={buttonVariants({
             className: "rounded-sm p-1",
             size: "icon-xs",
             variant: "secondary",
           })}
           disabled={value.length === 0}
-          onClick={copy}
-          // 按下就不抢焦点：否则文本域失焦，选区与光标位置一起丢失
+          onClick={onClear}
+          // 同上：清空后光标还留在文本域，可以直接继续输入
           onMouseDown={(event) => event.preventDefault()}
-          title="复制输入内容"
+          title="清空输入"
         >
-          {/* 两个图标叠放靠透明度过渡，复制成功时原地换成勾 */}
-          <span className="relative inline-flex size-3.5 items-center justify-center">
-            <span
-              aria-hidden="true"
-              className={cn(
-                "icon-[lucide--copy] size-3.5 transition-opacity duration-150",
-                copied && "opacity-0"
-              )}
-            />
-            <span
-              aria-hidden="true"
-              className={cn(
-                "icon-[lucide--check] absolute size-3.5 transition-opacity duration-150",
-                copied ? "opacity-100" : "opacity-0"
-              )}
-            />
-          </span>
+          <Eraser aria-hidden="true" className="size-3.5" />
         </IconButton>
-      </div>
-      <IconButton
-        aria-label="清空输入"
-        className={buttonVariants({
-          className: "rounded-sm p-1",
-          size: "icon-xs",
-          variant: "secondary",
-        })}
-        disabled={value.length === 0}
-        onClick={onClear}
-        // 同上：清空后光标还留在文本域，可以直接继续输入
-        onMouseDown={(event) => event.preventDefault()}
-        title="清空输入"
-      >
-        <span aria-hidden="true" className="icon-[lucide--eraser] size-3.5" />
-      </IconButton>
+      </AnimateIcon>
     </div>
   );
 }

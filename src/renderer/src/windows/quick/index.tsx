@@ -1,4 +1,8 @@
 import { type JSX, useEffect, useRef, useState } from "react";
+import { AnimateIcon } from "@animate-ui/react/icons";
+import { Layers } from "@renderer/components/animate-ui/icons/layers";
+import { Pin } from "@renderer/components/animate-ui/icons/pin";
+import { PinOff } from "@renderer/components/animate-ui/icons/pin-off";
 import { Button } from "@renderer/components/ui/button";
 import {
   DropdownMenu,
@@ -243,40 +247,38 @@ function QuickAppInner(): JSX.Element {
       <div className="flex flex-col" ref={frameRef}>
         {/* frame:false 无边框窗口，顶栏整体可拖拽 */}
         <div className="drag-region flex h-8 shrink-0 items-center justify-between px-3">
-          <Button
-            aria-label={pinned ? "取消固定窗口" : "固定窗口"}
-            className="no-drag"
-            onClick={togglePin}
-            size="icon-sm"
-            title={pinned ? "取消固定窗口" : "固定窗口"}
-            variant="ghost"
-          >
-            {pinned ? (
-              <span
-                aria-hidden="true"
-                className="icon-[lucide--pin-off] size-4"
-              />
-            ) : (
-              <span aria-hidden="true" className="icon-[lucide--pin] size-4" />
-            )}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  aria-label="功能菜单"
-                  className="no-drag"
-                  size="icon-sm"
-                  title="功能菜单"
-                  variant="ghost"
-                />
-              }
+          <AnimateIcon animateOnHover asChild>
+            <Button
+              aria-label={pinned ? "取消固定窗口" : "固定窗口"}
+              className="no-drag"
+              onClick={togglePin}
+              size="icon-sm"
+              title={pinned ? "取消固定窗口" : "固定窗口"}
+              variant="ghost"
             >
-              <span
-                aria-hidden="true"
-                className="icon-[lucide--layers] size-4"
-              />
-            </DropdownMenuTrigger>
+              {pinned ? (
+                <PinOff aria-hidden="true" className="size-4" />
+              ) : (
+                <Pin aria-hidden="true" className="size-4" />
+              )}
+            </Button>
+          </AnimateIcon>
+          <DropdownMenu>
+            <AnimateIcon animateOnHover asChild>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    aria-label="功能菜单"
+                    className="no-drag"
+                    size="icon-sm"
+                    title="功能菜单"
+                    variant="ghost"
+                  />
+                }
+              >
+                <Layers aria-hidden="true" className="size-4" />
+              </DropdownMenuTrigger>
+            </AnimateIcon>
             <DropdownMenuContent align="end" className="min-w-40">
               <DropdownMenuItem onClick={() => window.vadu.app.showSettings()}>
                 打开设置

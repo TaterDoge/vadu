@@ -1,3 +1,4 @@
+import { AnimateIcon } from "@animate-ui/react/icons";
 import { AnimatedThemeToggler } from "@renderer/components/ui/animated-theme-toggler";
 import {
   Sidebar,
@@ -60,18 +61,20 @@ export function AppSidebar({
               <SidebarMenu>
                 {NAV_ITEMS.map((item) => (
                   <SidebarMenuItem key={item.id}>
-                    <SidebarMenuButton
-                      isActive={section === item.id}
-                      onClick={() => onSectionChange(item.id)}
-                      tooltip={item.label}
-                    >
-                      {/* Iconify 是空 span + mask，shadcn 的 [&_svg]:size-4 选不中，尺寸要自己写 */}
-                      <span
-                        aria-hidden="true"
-                        className={cn(item.icon, "size-4 shrink-0")}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
+                    {/* 整行可悬停触发图标动画，不用把指针挪到 16px 的图标上 */}
+                    <AnimateIcon animateOnHover asChild>
+                      <SidebarMenuButton
+                        isActive={section === item.id}
+                        onClick={() => onSectionChange(item.id)}
+                        tooltip={item.label}
+                      >
+                        <item.icon
+                          aria-hidden="true"
+                          className="size-4 shrink-0"
+                        />
+                        <span>{item.label}</span>
+                      </SidebarMenuButton>
+                    </AnimateIcon>
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
@@ -89,7 +92,9 @@ export function AppSidebar({
       >
         <AnimatedThemeToggler />
         <StyleSwitcher />
-        <SidebarTrigger />
+        <AnimateIcon animateOnHover asChild>
+          <SidebarTrigger />
+        </AnimateIcon>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

@@ -1,9 +1,18 @@
 import type { ReactNode } from "react";
+import { AnimateIcon } from "@animate-ui/react/icons";
 import {
   AvatarGroup,
   AvatarGroupTooltip,
   AvatarGroupTooltipArrow,
 } from "@animate-ui/react/primitives/avatar-group";
+import { Frame } from "@renderer/components/animate-ui/icons/frame";
+import { Monitor } from "@renderer/components/animate-ui/icons/monitor";
+import { Moon } from "@renderer/components/animate-ui/icons/moon";
+import { Palette } from "@renderer/components/animate-ui/icons/palette";
+import { Square } from "@renderer/components/animate-ui/icons/square";
+import { Squircle } from "@renderer/components/animate-ui/icons/squircle";
+import { Sun } from "@renderer/components/animate-ui/icons/sun";
+import { SunMoon } from "@renderer/components/animate-ui/icons/sun-moon";
 import {
   Item,
   ItemActions,
@@ -21,6 +30,7 @@ import {
   SelectValue,
 } from "@renderer/components/ui/select";
 import { ACCENT_NAMES, type AccentName, useAccent } from "@renderer/lib/accent";
+import type { IconComponent } from "@renderer/lib/icons";
 import { type StyleName, useStyle } from "@renderer/lib/style";
 import { type Theme, useTheme } from "@renderer/lib/theme";
 import { cn } from "cn";
@@ -35,15 +45,19 @@ const ACCENT_LABELS: Record<AccentName, string> = {
   violet: "紫",
 };
 
-const THEME_OPTIONS: { icon: string; label: string; value: Theme }[] = [
-  { icon: "icon-[lucide--monitor]", label: "跟随系统", value: "system" },
-  { icon: "icon-[lucide--sun]", label: "明亮", value: "light" },
-  { icon: "icon-[lucide--moon]", label: "暗色", value: "dark" },
+const THEME_OPTIONS: { icon: IconComponent; label: string; value: Theme }[] = [
+  { icon: Monitor, label: "跟随系统", value: "system" },
+  { icon: Sun, label: "明亮", value: "light" },
+  { icon: Moon, label: "暗色", value: "dark" },
 ];
 
-const STYLE_OPTIONS: { icon: string; label: string; value: StyleName }[] = [
-  { icon: "icon-[lucide--squircle]", label: "圆角", value: "nova" },
-  { icon: "icon-[lucide--square]", label: "直角", value: "lyra" },
+const STYLE_OPTIONS: {
+  icon: IconComponent;
+  label: string;
+  value: StyleName;
+}[] = [
+  { icon: Squircle, label: "圆角", value: "nova" },
+  { icon: Square, label: "直角", value: "lyra" },
 ];
 
 function AppearancePage(): ReactNode {
@@ -55,7 +69,7 @@ function AppearancePage(): ReactNode {
     <ItemGroup>
       <Item variant="outline">
         <ItemMedia variant="icon">
-          <span aria-hidden="true" className="icon-[lucide--sun-moon]" />
+          <SunMoon aria-hidden="true" />
         </ItemMedia>
         <ItemContent>
           <ItemTitle>主题</ItemTitle>
@@ -71,33 +85,31 @@ function AppearancePage(): ReactNode {
             }}
             value={theme}
           >
-            <SelectTrigger aria-label="主题" className="w-28">
-              <SelectValue>
-                {(value: Theme | null) => {
-                  const option = THEME_OPTIONS.find(
-                    (item) => item.value === value
-                  );
-                  return option ? (
-                    <>
-                      <span
-                        aria-hidden="true"
-                        className={cn(option.icon, "size-4")}
-                      />
-                      {option.label}
-                    </>
-                  ) : null;
-                }}
-              </SelectValue>
-            </SelectTrigger>
+            <AnimateIcon animateOnHover asChild>
+              <SelectTrigger aria-label="主题" className="w-28">
+                <SelectValue>
+                  {(value: Theme | null) => {
+                    const option = THEME_OPTIONS.find(
+                      (item) => item.value === value
+                    );
+                    return option ? (
+                      <>
+                        <option.icon aria-hidden="true" className="size-4" />
+                        {option.label}
+                      </>
+                    ) : null;
+                  }}
+                </SelectValue>
+              </SelectTrigger>
+            </AnimateIcon>
             <SelectContent>
               {THEME_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  <span
-                    aria-hidden="true"
-                    className={cn(option.icon, "size-4")}
-                  />
-                  {option.label}
-                </SelectItem>
+                <AnimateIcon animateOnHover asChild key={option.value}>
+                  <SelectItem value={option.value}>
+                    <option.icon aria-hidden="true" className="size-4" />
+                    {option.label}
+                  </SelectItem>
+                </AnimateIcon>
               ))}
             </SelectContent>
           </Select>
@@ -106,7 +118,7 @@ function AppearancePage(): ReactNode {
 
       <Item variant="outline">
         <ItemMedia variant="icon">
-          <span aria-hidden="true" className="icon-[lucide--palette]" />
+          <Palette aria-hidden="true" />
         </ItemMedia>
         <ItemContent>
           <ItemTitle>主题色</ItemTitle>
@@ -150,7 +162,7 @@ function AppearancePage(): ReactNode {
 
       <Item variant="outline">
         <ItemMedia variant="icon">
-          <span aria-hidden="true" className="icon-[lucide--frame]" />
+          <Frame aria-hidden="true" />
         </ItemMedia>
         <ItemContent>
           <ItemTitle>组件风格</ItemTitle>
@@ -168,33 +180,31 @@ function AppearancePage(): ReactNode {
             }}
             value={style}
           >
-            <SelectTrigger aria-label="组件风格" className="w-24">
-              <SelectValue>
-                {(value: StyleName | null) => {
-                  const option = STYLE_OPTIONS.find(
-                    (item) => item.value === value
-                  );
-                  return option ? (
-                    <>
-                      <span
-                        aria-hidden="true"
-                        className={cn(option.icon, "size-4")}
-                      />
-                      {option.label}
-                    </>
-                  ) : null;
-                }}
-              </SelectValue>
-            </SelectTrigger>
+            <AnimateIcon animateOnHover asChild>
+              <SelectTrigger aria-label="组件风格" className="w-24">
+                <SelectValue>
+                  {(value: StyleName | null) => {
+                    const option = STYLE_OPTIONS.find(
+                      (item) => item.value === value
+                    );
+                    return option ? (
+                      <>
+                        <option.icon aria-hidden="true" className="size-4" />
+                        {option.label}
+                      </>
+                    ) : null;
+                  }}
+                </SelectValue>
+              </SelectTrigger>
+            </AnimateIcon>
             <SelectContent>
               {STYLE_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  <span
-                    aria-hidden="true"
-                    className={cn(option.icon, "size-4")}
-                  />
-                  {option.label}
-                </SelectItem>
+                <AnimateIcon animateOnHover asChild key={option.value}>
+                  <SelectItem value={option.value}>
+                    <option.icon aria-hidden="true" className="size-4" />
+                    {option.label}
+                  </SelectItem>
+                </AnimateIcon>
               ))}
             </SelectContent>
           </Select>

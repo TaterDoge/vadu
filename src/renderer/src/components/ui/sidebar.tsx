@@ -2,6 +2,8 @@ import * as React from "react";
 import * as SidebarPrimitive from "@animate-ui/react/primitives/sidebar";
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
+import { PanelLeftClose } from "@renderer/components/animate-ui/icons/panel-left-close";
+import { PanelLeftOpen } from "@renderer/components/animate-ui/icons/panel-left-open";
 import { Button } from "@renderer/components/ui/button";
 import { Input } from "@renderer/components/ui/input";
 import { Separator } from "@renderer/components/ui/separator";
@@ -20,7 +22,6 @@ import {
 } from "@renderer/components/ui/tooltip";
 import { type VariantProps, cva } from "class-variance-authority";
 import { cn } from "cn";
-import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react";
 
 const SIDEBAR_STATE_KEY = "sidebar_state";
 const SIDEBAR_WIDTH = "12rem";
@@ -196,8 +197,8 @@ function SidebarTrigger({
       {...props}
     >
       <SidebarPrimitive.TriggerIcon
-        closed={<PanelLeftOpenIcon />}
-        open={<PanelLeftCloseIcon />}
+        closed={<PanelLeftOpen aria-hidden="true" />}
+        open={<PanelLeftClose aria-hidden="true" />}
       />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>

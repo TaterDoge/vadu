@@ -1,4 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { AnimateIcon } from "@animate-ui/react/icons";
+import { List } from "@renderer/components/animate-ui/icons/list";
+import { RefreshCw } from "@renderer/components/animate-ui/icons/refresh-cw";
 import { Button } from "@renderer/components/ui/button";
 import {
   Combobox,
@@ -184,12 +187,14 @@ function ModelPicker({
             {title}
             {required ? <span className="text-destructive"> *</span> : null}
           </label>
-          <ComboboxTrigger
-            render={<Button size="sm" type="button" variant="outline" />}
-          >
-            <span aria-hidden="true" className="icon-[lucide--list] size-4" />
-            <span>选择模型</span>
-          </ComboboxTrigger>
+          <AnimateIcon animateOnHover asChild>
+            <ComboboxTrigger
+              render={<Button size="sm" type="button" variant="outline" />}
+            >
+              <List aria-hidden="true" className="size-4" />
+              <span>选择模型</span>
+            </ComboboxTrigger>
+          </AnimateIcon>
         </div>
         <Input
           disabled={disabled}
@@ -205,31 +210,33 @@ function ModelPicker({
       <ComboboxContent align="end">
         <div className="flex items-center gap-1.5 border-b p-2">
           <ComboboxInput aria-label="搜索模型" placeholder="搜索模型…" />
-          <Button
-            aria-label="刷新模型列表"
-            disabled={busy || disabled}
-            onClick={refresh}
-            size="icon-xs"
-            type="button"
-            variant="ghost"
-          >
-            <span
-              aria-hidden="true"
-              className={cn(
-                "icon-[lucide--refresh-cw] size-3.5",
-                busy && "animate-spin motion-reduce:animate-none"
-              )}
-            />
-          </Button>
+          <AnimateIcon animateOnHover asChild>
+            <Button
+              aria-label="刷新模型列表"
+              disabled={busy || disabled}
+              onClick={refresh}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            >
+              <RefreshCw
+                aria-hidden="true"
+                className={cn(
+                  "size-3.5",
+                  busy && "animate-spin motion-reduce:animate-none"
+                )}
+              />
+            </Button>
+          </AnimateIcon>
         </div>
         {showLoading ? (
           <p
             aria-live="polite"
             className="flex items-center gap-1.5 px-2.5 py-3 text-muted-foreground text-sm"
           >
-            <span
+            <RefreshCw
               aria-hidden="true"
-              className="icon-[lucide--refresh-cw] size-3.5 animate-spin motion-reduce:animate-none"
+              className="size-3.5 animate-spin motion-reduce:animate-none"
             />
             正在加载模型列表…
           </p>

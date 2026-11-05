@@ -6,7 +6,9 @@ import {
   useRef,
   useState,
 } from "react";
+import { AnimateIcon } from "@animate-ui/react/icons";
 import { Dialog } from "@animate-ui/react/primitives/base-ui/dialog";
+import { X } from "@renderer/components/animate-ui/icons/x";
 import { Button } from "@renderer/components/ui/button";
 import {
   Tabs,
@@ -764,20 +766,22 @@ function ProvidersPage(): ReactNode {
             aria-label={KIND_ADD[kind]}
             className="fixed inset-0 z-50 m-auto flex h-fit max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-xl flex-col overflow-y-auto rounded-xl border bg-popover p-6 text-popover-foreground shadow-lg outline-none"
           >
-            <Dialog.Close
-              render={
-                <Button
-                  // StaggerList 的行残留 filter，会建 stacking context 压住按钮，必须抬 z-index
-                  className="absolute top-3 right-3 z-10"
-                  disabled={saving}
-                  size="icon-sm"
-                  variant="ghost"
-                />
-              }
-            >
-              <span aria-hidden="true" className="icon-[lucide--x] size-4" />
-              <span className="sr-only">取消新增</span>
-            </Dialog.Close>
+            <AnimateIcon animateOnHover asChild>
+              <Dialog.Close
+                render={
+                  <Button
+                    // StaggerList 的行残留 filter，会建 stacking context 压住按钮，必须抬 z-index
+                    className="absolute top-3 right-3 z-10"
+                    disabled={saving}
+                    size="icon-sm"
+                    variant="ghost"
+                  />
+                }
+              >
+                <X aria-hidden="true" className="size-4" />
+                <span className="sr-only">取消新增</span>
+              </Dialog.Close>
+            </AnimateIcon>
             {creating ? (
               <FormForKind
                 dirty={creatingDirty}

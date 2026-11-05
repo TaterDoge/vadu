@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
+import { AnimateIcon } from "@animate-ui/react/icons";
+import { Moon } from "@renderer/components/animate-ui/icons/moon";
+import { Sun } from "@renderer/components/animate-ui/icons/sun";
 import { Button } from "@renderer/components/ui/button";
 import { useTheme } from "@renderer/lib/theme";
 import { cn } from "cn";
-import { MoonIcon, SunIcon } from "lucide-react";
 
 export type TransitionVariant =
   | "circle"
@@ -231,16 +233,18 @@ export function AnimatedThemeToggler({
   }, [cancelAnim, duration, fromCenter, isDark, setTheme, variant]);
 
   return (
-    <Button
-      aria-label={isDark ? "切换到浅色" : "切换到深色"}
-      className={cn(className)}
-      onClick={toggle}
-      ref={buttonRef}
-      size="icon-sm"
-      title={isDark ? "切换到浅色" : "切换到深色"}
-      variant="ghost"
-    >
-      {isDark ? <SunIcon /> : <MoonIcon />}
-    </Button>
+    <AnimateIcon animateOnHover asChild>
+      <Button
+        aria-label={isDark ? "切换到浅色" : "切换到深色"}
+        className={cn(className)}
+        onClick={toggle}
+        ref={buttonRef}
+        size="icon-sm"
+        title={isDark ? "切换到浅色" : "切换到深色"}
+        variant="ghost"
+      >
+        {isDark ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+      </Button>
+    </AnimateIcon>
   );
 }

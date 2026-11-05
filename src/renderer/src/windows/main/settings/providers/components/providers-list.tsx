@@ -1,8 +1,11 @@
 import type { ReactNode, RefObject } from "react";
+import { AnimateIcon } from "@animate-ui/react/icons";
 import { move } from "@dnd-kit/helpers";
 import type { DragEndEvent } from "@dnd-kit/react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
+import { Filter } from "@renderer/components/animate-ui/icons/filter";
+import { GripVertical } from "@renderer/components/animate-ui/icons/grip-vertical";
 import { Button } from "@renderer/components/ui/button";
 import {
   DropdownMenu,
@@ -62,20 +65,19 @@ function ProviderRow({
       onClick={onSelect}
       ref={ref}
     >
-      <Button
-        aria-label={`拖动排序 ${profile.name}`}
-        className="shrink-0 cursor-grab text-muted-foreground"
-        disabled={!reorderable || saving}
-        onClick={(event) => event.stopPropagation()}
-        ref={handleRef}
-        size="icon-xs"
-        variant="ghost"
-      >
-        <span
-          aria-hidden="true"
-          className="icon-[lucide--grip-vertical] size-3.5"
-        />
-      </Button>
+      <AnimateIcon animateOnHover asChild>
+        <Button
+          aria-label={`拖动排序 ${profile.name}`}
+          className="shrink-0 cursor-grab text-muted-foreground"
+          disabled={!reorderable || saving}
+          onClick={(event) => event.stopPropagation()}
+          ref={handleRef}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <GripVertical aria-hidden="true" className="size-3.5" />
+        </Button>
+      </AnimateIcon>
       <PluginIcon pluginId={profile.pluginId} />
       {/* 自身无 handler，点按 / 回车靠冒泡触发整行选中 */}
       <Button
@@ -196,25 +198,27 @@ function LeftPanel({
           value={query}
         />
         <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                aria-label="按启用状态过滤"
-                className="absolute top-1/2 right-1 -translate-y-1/2"
-                size="icon-xs"
-                title="按启用状态过滤"
-                variant="ghost"
+          <AnimateIcon animateOnHover asChild>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  aria-label="按启用状态过滤"
+                  className="absolute top-1/2 right-1 -translate-y-1/2"
+                  size="icon-xs"
+                  title="按启用状态过滤"
+                  variant="ghost"
+                />
+              }
+            >
+              <Filter
+                aria-hidden="true"
+                className={cn(
+                  "size-3.5",
+                  filter === "all" ? "text-muted-foreground" : "text-primary"
+                )}
               />
-            }
-          >
-            <span
-              aria-hidden="true"
-              className={cn(
-                "icon-[lucide--filter] size-3.5",
-                filter === "all" ? "text-muted-foreground" : "text-primary"
-              )}
-            />
-          </DropdownMenuTrigger>
+            </DropdownMenuTrigger>
+          </AnimateIcon>
           <DropdownMenuContent align="end">
             <DropdownMenuRadioGroup
               onValueChange={(value) => onFilterChange(value as FilterState)}

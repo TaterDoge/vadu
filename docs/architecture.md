@@ -150,12 +150,13 @@ src/
     ├── lib/                  # 渲染层通用能力（主题、主题色、shadcn style 切换）
     ├── hooks/
     └── components/
+        ├── animate-ui/icons/  # 动画图标：一个图标一个文件，来自 animate-ui 注册表
         └── ui/                # shadcn 生成件；只改样式不改结构，跨窗口复用
 ```
 
 目录按**归属**分层，不按文件类型：窗口私有的壳、分区、子件都留在 `windows/<窗口>/` 里，只有真正跨窗口复用的才上提到 `components/`；否则后续拆分时不知道该往哪放。
 
-图标分两套：业务组件（`windows/`）用 Iconify 类名 `icon-[lucide--*]`，由 `@iconify/tailwind4` 在构建期把 SVG 内联成 CSS `data:` URI（运行时零网络、零 JS，受 `img-src data:` 约束）；`components/ui/` 是 shadcn 生成件，保持 `lucide-react` 不动。类名类型见 `lib/icons.ts`。
+图标分两套：业务组件（`windows/`）用 animate-ui 动画图标（`components/animate-ui/icons/<kebab-name>.tsx`，画出 Lucide 原名同款图形，core 来自 `@animate-ui/react/icons`）。悬停触发写在图标上（`animateOnHover`），侧边栏这种整行可点的用 `<AnimateIcon animateOnHover asChild>` 包住触发器，图标靠 context 收播放信号；尺寸仍走 `size-*` 类名，容器里 shadcn 的 `[&_svg]:size-4` 现在选得中真 svg。缺失的 Lucide 图标按 `animate-ui` 的图标规范手写同名文件，不改图形。`components/ui/` 是 shadcn 生成件，保持 `lucide-react` 不动。共享类型与 Alert 图标见 `lib/icons.tsx`。
 
 插件目录在运行时有两个来源：
 

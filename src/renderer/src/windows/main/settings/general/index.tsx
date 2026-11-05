@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
+import { Monitor } from "@renderer/components/animate-ui/icons/monitor";
 import { Alert, AlertDescription } from "@renderer/components/ui/alert";
 import {
   Item,
@@ -9,7 +10,7 @@ import {
   ItemTitle,
 } from "@renderer/components/ui/item";
 import { Switch } from "@renderer/components/ui/switch";
-import { ALERT_ICON } from "@renderer/lib/icons";
+import { AlertIcon } from "@renderer/lib/icons";
 
 function GeneralPage(): ReactNode {
   const [showOnStartup, setShowOnStartup] = useState<boolean | null>(null);
@@ -50,7 +51,7 @@ function GeneralPage(): ReactNode {
       <h2 className="font-medium text-sm">启动</h2>
       <Item variant="outline">
         <ItemMedia variant="icon">
-          <span aria-hidden="true" className="icon-[lucide--monitor] size-4" />
+          <Monitor aria-hidden="true" className="size-4" />
         </ItemMedia>
         <ItemContent>
           <ItemTitle>启动时显示主界面</ItemTitle>
@@ -71,7 +72,7 @@ function GeneralPage(): ReactNode {
 
       {error ? (
         <Alert className="grid-cols-[auto_1fr] gap-x-2" variant="destructive">
-          <span aria-hidden="true" className={ALERT_ICON} />
+          <AlertIcon />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}

@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode, useId } from "react";
 import { AlertDialog } from "@animate-ui/react/primitives/base-ui/alert-dialog";
+import { ChevronDown } from "@renderer/components/animate-ui/icons/chevron-down";
 import { Alert, AlertDescription } from "@renderer/components/ui/alert";
 import { Button } from "@renderer/components/ui/button";
 import {
@@ -29,7 +30,7 @@ import {
 } from "@renderer/components/ui/select";
 import { StaggerList } from "@renderer/components/ui/stagger-list";
 import { Switch } from "@renderer/components/ui/switch";
-import { ALERT_ICON } from "@renderer/lib/icons";
+import { AlertIcon } from "@renderer/lib/icons";
 import type {
   ConfigField,
   ConfigSchema,
@@ -359,7 +360,7 @@ function EditorFormShell({
         ) : null}
         {secretAvailable ? null : (
           <Alert key="secret-alert">
-            <span aria-hidden="true" className={ALERT_ICON} />
+            <AlertIcon />
             <AlertDescription>
               当前系统无安全密钥环，API Key
               仅本次会话有效，重启后需重新填写（不会写入磁盘）。
@@ -433,9 +434,9 @@ function EditorFormShell({
         {advancedFields.length > 0 ? (
           <CollapsibleRoot className="flex flex-col gap-4" key="advanced">
             <CollapsibleTrigger className="group">
-              <span
+              <ChevronDown
                 aria-hidden="true"
-                className="icon-[lucide--chevron-down] size-4 transition-transform group-data-panel-open:rotate-180 motion-reduce:transition-none"
+                className="size-4 transition-transform group-data-panel-open:rotate-180 motion-reduce:transition-none"
               />
               <span>高级选项</span>
             </CollapsibleTrigger>
@@ -461,13 +462,13 @@ function EditorFormShell({
             key="error"
             variant="destructive"
           >
-            <span aria-hidden="true" className={ALERT_ICON} />
+            <AlertIcon />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
         {info ? (
           <Alert className="grid-cols-[auto_1fr] gap-x-2" key="info">
-            <span aria-hidden="true" className={ALERT_ICON} />
+            <AlertIcon />
             <AlertDescription>{info}</AlertDescription>
           </Alert>
         ) : null}

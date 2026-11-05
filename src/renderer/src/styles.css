@@ -6,11 +6,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* 图标在构建期从 @iconify-json/* 读，产物里只有被用到的那几个 svg 的 data URI，运行时零网络零 JS。
-   插件自带 width/height:1em，和 size-* 同层同 specificity：普通写法下 size-* 输出在后必胜，
-   但带变体前缀时图标规则会排到后面反压，那种情况改用 !size-* */
-@plugin "@iconify/tailwind4";
-
 @theme inline {
   --font-heading: var(--font-sans);
   /* 内联会把值展平成字面量，字体必须走 --font-ui 这层间接，否则 data-style 改不动 */

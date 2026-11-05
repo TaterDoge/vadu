@@ -294,6 +294,7 @@ function QuickAppInner(): JSX.Element {
         <div className="flex flex-col gap-2 px-2 pb-2">
           <QuickInput
             onChange={setSource}
+            onError={setErrorMessage}
             placeholder="输入要翻译的文本"
             ref={inputRef}
             value={source}

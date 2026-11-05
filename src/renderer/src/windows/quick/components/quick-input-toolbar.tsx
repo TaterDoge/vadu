@@ -8,6 +8,7 @@ const COPIED_DELAY_MS = 1500;
 type QuickInputToolbarProps = {
   className?: string;
   onClear: () => void;
+  onError?: (message: string) => void;
   value: string;
 };
 
@@ -15,14 +16,75 @@ type QuickInputToolbarProps = {
 function QuickInputToolbar({
   className,
   onClear,
+  onError,
   value,
 }: QuickInputToolbarProps): JSX.Element {
   const [copied, setCopied] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [busy, setBusy] = useState(false);
   const timerRef = useRef<number | undefined>(undefined);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+  const spokenTextRef = useRef("");
 
-  // 卸载时清掉回退定时器，避免对已卸载组件 setState
-  useEffect(() => () => window.clearTimeout(timerRef.current), []);
+  const stopPlayback = (): void => {
+    const audio = audioRef.current;
+    audioRef.current = null;
+    if (audio) {
+      audio.onended = null;
+      audio.pause();
+    }
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    setSpeaking(false);
+  };
+
+  const playAudio = (audio: HTMLAudioElement): void => {
+    audio.onended = stopPlayback;
+    audio.play().then(
+      () => setSpeaking(true),
+      () => {
+        stopPlayback();
+        onError?.("音频播放失败");
+      }
+    );
+  };
+
+  // 卸载时清掉回退定时器并释放音频，避免对已卸载组件 setState / Blob URL 泄漏
+  useEffect(
+    () => () => {
+      window.clearTimeout(timerRef.current);
+      const audio = audioRef.current;
+      audioRef.current = null;
+      if (audio) {
+        audio.onended = null;
+        audio.pause();
+      }
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+    },
+    []
+  );
+
+  // 文本已变：正在朗读的旧音频不再属于当前输入，立即停止并释放
+  useEffect(() => {
+    if (!audioRef.current || spokenTextRef.current === value) {
+      return;
+    }
+    const audio = audioRef.current;
+    audioRef.current = null;
+    audio.onended = null;
+    audio.pause();
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    setSpeaking(false);
+  }, [value]);
 
   const copy = (): void => {
     navigator.clipboard
@@ -38,8 +100,52 @@ function QuickInputToolbar({
       .catch(console.error);
   };
 
-  // shortcut: TTS 服务未接入，这里只切换图标状态；接上朗读后在此启动/暂停音频并同步真实播放状态
-  const toggleTts = (): void => setSpeaking((prev) => !prev);
+  const toggleTts = (): void => {
+    if (busy || value.trim() === "") {
+      return;
+    }
+    const audio = audioRef.current;
+    if (audio && spokenTextRef.current === value) {
+      if (speaking) {
+        audio.pause();
+        setSpeaking(false);
+      } else {
+        playAudio(audio);
+      }
+      return;
+    }
+    if (audio) {
+      stopPlayback();
+    }
+    setBusy(true);
+    const text = value;
+    window.vadu.tts
+      .synthesize({ text })
+      .then((result) => {
+        if (!result.ok) {
+          onError?.(result.error.message);
+          return;
+        }
+        const { audio: bytes, mimeType } = result.data;
+        const url = URL.createObjectURL(
+          new Blob([bytes.buffer as ArrayBuffer], { type: mimeType })
+        );
+        objectUrlRef.current = url;
+        const next = new Audio(url);
+        audioRef.current = next;
+        spokenTextRef.current = text;
+        playAudio(next);
+      })
+      .catch((reason) => onError?.(String(reason)))
+      .finally(() => setBusy(false));
+  };
+
+  let ttsTitle = "朗读输入内容";
+  if (speaking) {
+    ttsTitle = "暂停朗读";
+  } else if (busy) {
+    ttsTitle = "正在合成语音…";
+  }
 
   return (
     <div
@@ -54,17 +160,18 @@ function QuickInputToolbar({
             size: "icon-xs",
             variant: "secondary",
           })}
-          disabled={value.length === 0}
+          disabled={value.length === 0 || busy}
           onClick={toggleTts}
           // 同复制按钮：不抢焦点，朗读时仍能在文本域继续编辑
           onMouseDown={(event) => event.preventDefault()}
-          title={speaking ? "暂停朗读" : "朗读输入内容"}
+          title={ttsTitle}
         >
           <span
             aria-hidden="true"
             className={cn(
               "size-3.5",
-              speaking ? "icon-[lucide--pause]" : "icon-[lucide--volume-2]"
+              speaking ? "icon-[lucide--pause]" : "icon-[lucide--volume-2]",
+              busy && "animate-pulse"
             )}
           />
         </IconButton>

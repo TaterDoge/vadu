@@ -17,6 +17,14 @@
     "type": "object",
     "required": ["baseURL", "model", "apiKey"],
     "properties": {
+      "protocol": {
+        "type": "string",
+        "title": "协议",
+        "description": "OpenAI 兼容端点占绝大多数；Anthropic 与 Gemini 原生协议支持各自的专有能力",
+        "enum": ["openai", "anthropic", "gemini"],
+        "enumLabels": ["OpenAI 兼容", "Anthropic", "Gemini"],
+        "default": "openai"
+      },
       "baseURL": {
         "type": "string",
         "title": "接口地址 (Base URL)",
@@ -66,6 +74,26 @@
         "model": "gpt-4.1-mini"
       },
       "models": ["gpt-4.1-mini", "gpt-4o-mini"]
+    },
+    {
+      "id": "anthropic",
+      "label": "Anthropic",
+      "config": {
+        "protocol": "anthropic",
+        "baseURL": "https://api.anthropic.com/v1",
+        "model": "claude-sonnet-4-5"
+      },
+      "models": ["claude-sonnet-4-5", "claude-opus-4-1", "claude-haiku-4-5"]
+    },
+    {
+      "id": "gemini",
+      "label": "Google Gemini",
+      "config": {
+        "protocol": "gemini",
+        "baseURL": "https://generativelanguage.googleapis.com/v1beta",
+        "model": "gemini-2.5-flash"
+      },
+      "models": ["gemini-2.5-flash", "gemini-2.5-pro"]
     },
     {
       "id": "deepseek",

@@ -3,8 +3,16 @@
  * 合法性校验在 core 保存 profile 时已做，插件这里只是兜底。
  */
 
+import type { Protocol } from "./protocol";
+
 const TRAILING_SLASH_RE = /\/+$/;
-const CHAT_COMPLETIONS_SUFFIX = "/chat/completions";
+
+/** 用户常直接粘贴完整端点地址，按协议剥掉已存在的路径后缀 */
+const ENDPOINT_SUFFIX: Record<Protocol, string> = {
+  anthropic: "/messages",
+  gemini: "/models",
+  openai: "/chat/completions",
+};
 
 function parseBase(input: string): URL {
   try {
@@ -17,23 +25,18 @@ function parseBase(input: string): URL {
   }
 }
 
-function normalizeBaseUrl(input: string): string {
+export function normalizeBaseUrl(input: string, protocol: Protocol): string {
   const url = parseBase(input);
   let pathname = url.pathname.replace(TRAILING_SLASH_RE, "");
-  if (pathname.endsWith(CHAT_COMPLETIONS_SUFFIX)) {
-    pathname = pathname.slice(0, -CHAT_COMPLETIONS_SUFFIX.length);
+  const suffix = ENDPOINT_SUFFIX[protocol];
+  if (pathname.endsWith(suffix)) {
+    pathname = pathname.slice(0, -suffix.length);
   }
   return `${url.origin}${pathname}${url.search}`;
 }
 
-export function buildChatCompletionUrl(base: string): string {
-  const url = parseBase(normalizeBaseUrl(base));
-  url.pathname = `${url.pathname.replace(TRAILING_SLASH_RE, "")}${CHAT_COMPLETIONS_SUFFIX}`;
-  return url.toString();
-}
-
 export function buildModelsUrl(base: string): string {
-  const url = parseBase(normalizeBaseUrl(base));
+  const url = parseBase(normalizeBaseUrl(base, "openai"));
   url.pathname = `${url.pathname.replace(TRAILING_SLASH_RE, "")}/models`;
   return url.toString();
 }

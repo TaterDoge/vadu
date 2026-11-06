@@ -31,7 +31,10 @@ test("真实内置 manifest 经 service 注入 glossary 并进入插件请求", 
     fetch: (_url, init) => {
       requestBody = JSON.parse(String(init?.body));
       return Promise.resolve(
-        Response.json({ choices: [{ message: { content: "指定译词" } }] })
+        new Response(
+          'data: {"choices":[{"delta":{"content":"指定译词"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+          { headers: { "content-type": "text/event-stream" } }
+        )
       );
     },
     log: {

@@ -2,10 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { buildChatCompletionUrl, normalizeBaseUrl } from "../../core/url";
-import {
-  buildModelsUrl,
-  buildChatCompletionUrl as buildPluginUrl,
-} from "./url";
+import { buildModelsUrl } from "./url";
 
 const SCHEME_ERROR_RE = /开头/;
 const CREDENTIALS_ERROR_RE = /用户名或密码/;
@@ -90,22 +87,4 @@ describe("buildModelsUrl", () => {
       "https://api.openai.com/v1/models?api-version=2025-01-01"
     );
   });
-});
-
-test("core 与 plugin 拼接 pathname 不改变 query", () => {
-  for (const build of [buildChatCompletionUrl, buildPluginUrl]) {
-    for (const base of [
-      "https://example.invalid/v1?api-version=2025-01-01&x=a%2Fb",
-      "https://example.invalid/v1/chat/completions/?api-version=2025-01-01&x=a%2Fb",
-    ]) {
-      assert.equal(
-        build(base),
-        "https://example.invalid/v1/chat/completions?api-version=2025-01-01&x=a%2Fb"
-      );
-    }
-    assert.equal(
-      build("https://example.invalid?x=1"),
-      "https://example.invalid/chat/completions?x=1"
-    );
-  }
 });

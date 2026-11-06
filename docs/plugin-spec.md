@@ -12,7 +12,7 @@ my-plugin/
 ```
 
 - 插件目录名不参与识别，`manifest.id` 才是身份。
-- 插件**不支持** `dependencies` / 构建步骤 / TS 源码。入口必须是可直接 `import()` 的 JS（`.mjs` 或 CJS `.js`）。内置插件在打包时由 electron-vite 编译成该形态。
+- 插件**不支持** `dependencies` / 构建步骤 / TS 源码。入口必须是可直接 `import()` 的 JS（`.mjs` 或 CJS `.js`）。内置插件在打包时由 electron-vite 编译成该形态，允许构建期把第三方库打进产物（目录里仍没有 `node_modules`，`ai` 插件就是这样带的 AI SDK）；第三方插件没有构建期，不能引用未随目录交付的包。
 - **内置插件的产物是 CJS `index.js`**（本项目 `package.json` 没有 `"type": "module"`，electron-vite 的 main 构建输出 CJS），所以它的 `manifest.json` 写 `"main": "index.js"`；第三方插件推荐 `.mjs`。两种都由加载器用 `import()` 处理：ESM 取具名导出 `createPlugin`，CJS 取 `mod.createPlugin ?? mod.default?.createPlugin ?? mod.default`。
 - 插件目录内的相对路径读取是允许的（它是自身资源）；跨出自身目录的路径访问不允许，也不会被宿主帮助。
 
@@ -163,6 +163,8 @@ type ConfigSchema = {
    - **origin**：已保存 profile 只允许已登记的 `allowedOrigins`（保存 profile 时自动登记该 profile 的 baseURL origin），未登记 origin 返回 `PERMISSION_DENIED`；草稿临时用本次 baseURL 派生 origin，取不到合法 baseURL 报 `INVALID_CONFIG`。
 
    返回的 `ModelInfo[]` 宿主去重并截断到 500 条，适配器侧截断到 200 条；单次调用超时 30s。
+
+   **健康检测**：「选择模型」前还有「健康检测」按钮。它用固定文本 `Hello`、`en → zh-CN` 真正调用一次插件的 `translate()`，**不新增任何插件契约字段，也不升 `apiVersion`**。草稿 profile、本次表单密钥与 origin 约束和模型列表完全一致（已保存 profile 改到未登记 origin 不会被静默放行）。只有插件完整返回非空输出才算成功；错误按 §7 展示既有 `code` + `message`，空输出、取消、超时都算失败。宿主不返回、渲染层不展示也不记录译文正文。超时 30s，插件即使忽略 `AbortSignal` 也由宿主 deadline 竞速 settle 并清理任务；模型、配置、密钥变化或组件卸载时取消并丢弃旧结果。高级 `type: "json"` 字段无法解析时，不得拿旧配置发起检测或显示成功。
 
    **模型选择器只对 `translator` 生效。** `ocr` / `tts` 没有 `listModels` 契约，枚举选项（如音色、输出格式）用 `type: "string"` + `enum` 声明，渲染层直接出下拉框。
 5. 字段顺序 = `properties` 的书写顺序。

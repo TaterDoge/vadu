@@ -33,7 +33,9 @@ vadu 的首选翻译形态。一个内置插件 `vadu.ai` 覆盖所有 AI 厂商
 
 > **适配器数量恒等于协议数量（3），与厂商数量无关。** 新增厂商只能加 preset 数据，不能加适配器、不能在适配器里写 `if (baseURL.includes(...))`。**
 
-适配器只做两件事：把 `TranslateRequest` 编成该协议的 HTTP body；把该协议的流解析成 `string` 增量。任何厂商特有的参数走 `profile.config.extra`（一个 JSON 对象输入框）原封不动透传进请求体，适配器**不做参数名映射**（`top_p` / `topP` / `reasoning_effort` 各协议就写各协议的写法，让用户自己填）。这样厂商差异永远不会变成代码分支。自定义请求头走 `profile.config.headers`（JSON 对象），适配器清洗后并入请求头，保留头（authorization、content-type、cookie 等）与敏感名会被丢弃，不会覆盖认证头；上限 10 条、头名 ≤128 字符、值 ≤500 字符且仅可打印 ASCII。请求头值以明文存在 `config.json`，不要往里放密钥（密钥走 `secret` 字段与 `runtime.secrets`）。
+协议实现交给 AI SDK（`ai` + `@ai-sdk/openai-compatible` / `@ai-sdk/anthropic` / `@ai-sdk/google`），插件只做三件事：profile → provider 装配、错误码归一、模型列表。请求编码与流解析不再手写。
+
+厂商特有的参数走 `profile.config.extra`（一个 JSON 对象输入框），**只有 openai 协议原样并入请求体**：`@ai-sdk/openai-compatible` 会把 option schema 之外的键展开进 body，与 `model` / `messages` / `stream` / `temperature` 同名时以插件为准。anthropic / gemini 只接受 SDK 已声明的字段，其余丢弃——两家原生 API 对未知顶层字段本来就不宽容。参数名不做映射（`top_p` / `topP` / `reasoning_effort` 各协议就写各协议的写法，让用户自己填）。新增厂商仍然只加 preset 数据，不加代码分支。自定义请求头走 `profile.config.headers`（JSON 对象），适配器清洗后并入请求头，保留头（authorization、content-type、cookie 等）与敏感名会被丢弃，不会覆盖认证头；上限 10 条、头名 ≤128 字符、值 ≤500 字符且仅可打印 ASCII。请求头值以明文存在 `config.json`，不要往里放密钥（密钥走 `secret` 字段与 `runtime.secrets`）。
 
 厂商差异只在两处落数据，不落代码：
 
@@ -146,12 +148,17 @@ data: {...}
 
 原生 `streamGenerateContent` **默认返回 NDJSON**（每行一个完整 `GenerateContentResponse` JSON），加 `?alt=sse` 才是 SSE。适配器统一用 `?alt=sse`，省掉两种解析路径。文本在 `candidates[0].content.parts[*].text`，注意 `parts` 可能是数组且混有非文本 part。
 
-### 共性实现约束
+### 实现归属
 
-- **按行切帧要处理跨 chunk 截断**：`TextDecoder` 用 `{ stream: true }`，缓冲区保留最后不完整的一行，下次拼接。
-- **不缓冲全量再输出**：收到一个 delta 就 `yield` 一个，否则流式无意义。
-- 上游 `stream: true` 但对方直接返回完整 JSON（部分兼容实现如此），要降级为单次 yield，不要卡死等待更多帧。
-- 非 2xx 时先读 response body 的文本再抛错——AI 厂商的错误原因（模型不存在、额度不足）几乎都在 body 里。
+三种协议的请求编码与流解析由 AI SDK 完成（`src/main/plugins/ai/translate.ts`），插件不再自己切帧。两条硬约束：
+
+- **消费 `fullStream`，不要 `textStream`**：后者会把上游错误静默吞掉，表现为「空译文当成功」。错误以 `{ type: "error" }` 分片出现，插件在此映射错误码。
+- **`maxRetries: 0`**：SDK 默认重试 2 次，与「流式不自动重试」冲突。
+- **`allowSystemInMessages: true`**：system 提示词是常量，只有原文走 user 消息。
+
+已知不支持：上游声明 `stream: true` 却直接返回整包 JSON（部分兼容实现如此）。SDK 会以 `NETWORK` + 「上游流提前结束」结束，不再降级为单次 yield。
+
+非 2xx 的错误原因仍在 body 里：从 `APICallError.responseBody` 解析出机器可读 `code`，只映射码、不落原文。
 
 ## 5. 超时、重试、取消
 
@@ -159,7 +166,7 @@ data: {...}
 - **不自动重试流式请求**。已经向用户显示了半句话之后再重来会闪烁，且部分厂商按 token 计费会重复扣。重试只在"首个 chunk 之前失败"时允许，且最多 1 次、仅对 `NETWORK` / `TIMEOUT` / `429`。
 - 取消一律通过 `AbortSignal` 下传到 `runtime.fetch`。适配器在 `catch` 里判断 `signal.aborted` 后抛 `code = "ABORTED"`，由宿主静默处理。
 
-> **本阶段状态（实现切片）**：仅 `openai` 适配器已交付。超时已实现（首输出 20s / 总计 120s，宿主层 watchdog）；**当前不自动重试**流式请求、**无缓存**。设置页为「服务商列表 + 表单」左右布局：左侧按插件 profile 列出服务商（搜索、按启用/未启用过滤、独立滚动，底部固定「新增自定义 OpenAI」，新增走居中 dialog 并复用右侧同一个表单组件，保存后新服务商出现在列表顶部并选中），右侧由插件 `configSchema` 动态生成表单，模型字段保留手动输入，右上「选择模型」按钮打开可搜索列表，支持刷新与失败重试。保存串行化，渲染层传入的 allowedOrigins 不参与授权，保存时主进程自动把 baseURL 的 origin 登记进白名单并随 profile 持久化，受控 `runtime.fetch` 只发往已登记 origin；密钥按 profileId 经 `safeStorage` 异步 API 加密落盘，Linux `basic_text`/加密不可用时仅会话内存并明确告知，不提供明文落盘选项。新增服务商无需保存即可拉取模型列表：请求带当前表单里的未保存密钥（仅本次请求、不落盘、不进日志），草稿的访问域临时由其 baseURL origin 派生，保存后仍受已登记白名单约束。服务商启用开关随 profile 持久化（`enabled`），仅影响设置页列表过滤，翻译不受影响。高级选项已可用：温度、提供商选项（extra）、请求头（headers）随 schema 的 `x-advanced` 字段收进表单折叠区（默认收起），参数真正进入模型请求。
+> **本阶段状态（实现切片）**：三种协议（openai / anthropic / gemini）已接入，经 AI SDK 统一调用；插件侧只剩装配、错误码映射与 `listModels`。`listModels` 只实现 OpenAI 兼容 `GET /models`，anthropic / gemini 报 `INVALID_CONFIG` 提示手填，UI 回落到 preset 候选。超时已实现（首输出 20s / 总计 120s，宿主层 watchdog）；**不自动重试**流式请求、**无缓存**。设置页为「服务商列表 + 表单」左右布局：左侧按插件 profile 列出服务商（搜索、按启用/未启用过滤、独立滚动，底部固定「新增自定义 OpenAI」，新增走居中 dialog 并复用右侧同一个表单组件，保存后新服务商出现在列表顶部并选中），右侧由插件 `configSchema` 动态生成表单，模型字段保留手动输入，右上「选择模型」按钮打开可搜索列表，支持刷新与失败重试。保存串行化，渲染层传入的 allowedOrigins 不参与授权，保存时主进程自动把 baseURL 的 origin 登记进白名单并随 profile 持久化，受控 `runtime.fetch` 只发往已登记 origin；密钥按 profileId 经 `safeStorage` 异步 API 加密落盘，Linux `basic_text`/加密不可用时仅会话内存并明确告知，不提供明文落盘选项。新增服务商无需保存即可拉取模型列表：请求带当前表单里的未保存密钥（仅本次请求、不落盘、不进日志），草稿的访问域临时由其 baseURL origin 派生，保存后仍受已登记白名单约束。服务商启用开关随 profile 持久化（`enabled`），仅影响设置页列表过滤，翻译不受影响。高级选项已可用：温度、提供商选项（extra）、请求头（headers）随 schema 的 `x-advanced` 字段收进表单折叠区（默认收起），参数真正进入模型请求。
 
 ## 6. core 侧的译文校验
 

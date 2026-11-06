@@ -9,6 +9,7 @@ import ts from "typescript";
 import { VaduError } from "../../../shared/errors";
 import type { Profile } from "../../../shared/ipc";
 import type { PluginRuntime, TranslatorPlugin } from "../../../shared/plugin";
+import { withDeadline as realWithDeadline } from "./deadline";
 
 // 取消 origin 确认弹窗后，runtime.fetch 的 origin gate 是唯一强制点，单独守住
 const PROFILE: Profile = {
@@ -23,7 +24,10 @@ const PROFILE: Profile = {
 
 function loadHost(
   fetchCalls: { init: RequestInit; url: URL }[],
-  opts?: { getSecret?: (profileId: string, name: string) => string | undefined }
+  opts?: {
+    getSecret?: (profileId: string, name: string) => string | undefined;
+    realDeadline?: boolean;
+  }
 ) {
   const exports: Record<string, unknown> = {};
   const source = readFileSync(join(import.meta.dirname, "host.ts"), "utf8");
@@ -40,7 +44,11 @@ function loadHost(
       hasSecret: (profileId: string, name: string) =>
         (opts?.getSecret?.(profileId, name) ?? undefined) !== undefined,
     },
-    "./deadline": { withDeadline: (work: Promise<unknown>) => work },
+    "./deadline": {
+      withDeadline: opts?.realDeadline
+        ? realWithDeadline
+        : (work: Promise<unknown>) => work,
+    },
   };
   const fetchStub = (input: string, init: RequestInit) => {
     fetchCalls.push({ init, url: new URL(input) });
@@ -81,6 +89,21 @@ function loadHost(
       secrets?: Record<string, string>;
       timeoutMs?: number;
     }) => Promise<unknown>;
+    hostProbeTranslate: (args: {
+      create: (runtime: PluginRuntime) => TranslatorPlugin;
+      pluginId: string;
+      profile: Profile;
+      req: {
+        config: Record<string, unknown>;
+        source: string;
+        target: string;
+        text: string;
+      };
+      requestId: string;
+      secrets?: Record<string, string>;
+      signal?: AbortSignal;
+      timeoutMs?: number;
+    }) => Promise<{ hasOutput: boolean }>;
   };
 }
 
@@ -160,4 +183,119 @@ test("未登记的 origin 被拒，登记后强制 redirect:error", async () => 
   assert.equal(calls[0]?.url.origin, "https://api.example.com");
   // 3xx 直接失败，避免重定向把密钥带出白名单
   assert.equal(calls[0]?.init.redirect, "error");
+});
+
+test("健康探针完整消费输出并只判定是否非空", async () => {
+  const { hostProbeTranslate } = loadHost([]);
+  let seenText = "";
+  const result = await hostProbeTranslate({
+    create: () => ({
+      translate: (req) =>
+        (async function* probe() {
+          seenText = req.text;
+          await Promise.resolve();
+          yield " ";
+          yield "译";
+        })(),
+    }),
+    pluginId: "vadu.ai",
+    profile: PROFILE,
+    req: {
+      config: {},
+      source: "en",
+      target: "zh-CN",
+      text: "Hello",
+    },
+    requestId: "probe-1",
+  });
+  assert.equal(seenText, "Hello");
+  assert.equal(result.hasOutput, true);
+});
+
+test("健康探针把纯空白输出判为空", async () => {
+  const { hostProbeTranslate } = loadHost([]);
+  const result = await hostProbeTranslate({
+    create: () => ({
+      translate: () =>
+        (async function* blank() {
+          await Promise.resolve();
+          yield " \n ";
+        })(),
+    }),
+    pluginId: "vadu.ai",
+    profile: PROFILE,
+    req: {
+      config: {},
+      source: "en",
+      target: "zh-CN",
+      text: "Hello",
+    },
+    requestId: "probe-blank",
+  });
+  assert.equal(result.hasOutput, false);
+});
+
+test("插件忽略 signal 时健康探针仍按 deadline settle 为 TIMEOUT", async () => {
+  const { hostProbeTranslate } = loadHost([], { realDeadline: true });
+  const startedAt = Date.now();
+  await assert.rejects(
+    hostProbeTranslate({
+      create: () => ({
+        translate: () =>
+          (async function* hang() {
+            await new Promise(() => undefined);
+            yield "never";
+          })(),
+      }),
+      pluginId: "vadu.ai",
+      profile: PROFILE,
+      req: {
+        config: {},
+        source: "en",
+        target: "zh-CN",
+        text: "Hello",
+      },
+      requestId: "probe-timeout",
+      timeoutMs: 20,
+    }),
+    { code: "TIMEOUT" }
+  );
+  assert.ok(Date.now() - startedAt < 1000);
+});
+
+test("发起方 signal 取消健康探针归一化为 ABORTED", async () => {
+  const { hostProbeTranslate } = loadHost([], { realDeadline: true });
+  const controller = new AbortController();
+  const pending = hostProbeTranslate({
+    create: () => ({
+      translate: (_req, { signal }) =>
+        (async function* abortable() {
+          await new Promise((_resolve, reject) => {
+            if (signal.aborted) {
+              reject(new DOMException("Aborted", "AbortError"));
+              return;
+            }
+            signal.addEventListener(
+              "abort",
+              () => reject(new DOMException("Aborted", "AbortError")),
+              { once: true }
+            );
+          });
+          yield "never";
+        })(),
+    }),
+    pluginId: "vadu.ai",
+    profile: PROFILE,
+    req: {
+      config: {},
+      source: "en",
+      target: "zh-CN",
+      text: "Hello",
+    },
+    requestId: "probe-abort",
+    signal: controller.signal,
+    timeoutMs: 5000,
+  });
+  controller.abort();
+  await assert.rejects(pending, { code: "ABORTED" });
 });

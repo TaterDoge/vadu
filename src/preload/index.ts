@@ -7,6 +7,8 @@ import type {
   InAppHotkeyState,
   IpcChannel,
   IpcResult,
+  ModelHealthCheckParams,
+  ModelHealthCheckResult,
   OcrParams,
   OcrResult,
   PluginDescriptor,
@@ -94,6 +96,13 @@ const vadu: VaduApi = {
   },
   platform,
   plugins: {
+    cancelHealthCheck: (requestId: string): void => {
+      ipcRenderer.send(IPC.plugins.cancelHealthCheck, { requestId });
+    },
+    healthCheck: (
+      params: ModelHealthCheckParams
+    ): Promise<IpcResult<ModelHealthCheckResult>> =>
+      ipcRenderer.invoke(IPC.plugins.healthCheck, params),
     list: (): Promise<IpcResult<PluginDescriptor[]>> =>
       ipcRenderer.invoke(IPC.plugins.list),
     listModels: (

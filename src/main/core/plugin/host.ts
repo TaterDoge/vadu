@@ -26,6 +26,7 @@ import { withDeadline } from "./deadline";
 export const FIRST_BYTE_TIMEOUT_MS = 20_000;
 export const TOTAL_TIMEOUT_MS = 120_000;
 export const MODELS_TIMEOUT_MS = 30_000;
+export const HEALTH_TIMEOUT_MS = 30_000;
 
 const SECRET_PATTERNS: RegExp[] = [/sk-[A-Za-z0-9_-]+/g, /Bearer\s+\S+/g];
 
@@ -177,6 +178,7 @@ async function runPluginCall<TPlugin extends PluginBase, TResult>(args: {
   pluginId: string;
   profile: Profile;
   secrets?: Record<string, string>;
+  signal?: AbortSignal;
   timeoutMs: number;
   deadlineMessage: string;
   run: (
@@ -190,18 +192,23 @@ async function runPluginCall<TPlugin extends PluginBase, TResult>(args: {
     pluginId,
     profile,
     secrets,
+    signal: callerSignal,
     timeoutMs,
     deadlineMessage,
     run,
   } = args;
-  const signal = AbortSignal.timeout(timeoutMs);
+  const deadline = AbortSignal.timeout(timeoutMs);
+  const signal = callerSignal
+    ? AbortSignal.any([callerSignal, deadline])
+    : deadline;
   const runtime = makeRuntime(pluginId, profile, signal, secrets);
+  const callerAborted = (): boolean => callerSignal?.aborted === true;
   let plugin: TPlugin;
   try {
     plugin = create(runtime);
   } catch (error) {
     throw normalizePluginError(error, {
-      callerAborted: false,
+      callerAborted: callerAborted(),
       timedOut: false,
     });
   }
@@ -214,8 +221,8 @@ async function runPluginCall<TPlugin extends PluginBase, TResult>(args: {
     );
   } catch (error) {
     throw normalizePluginError(error, {
-      callerAborted: false,
-      timedOut: signal.aborted,
+      callerAborted: callerAborted(),
+      timedOut: !callerAborted() && deadline.aborted,
     });
   } finally {
     // 清理不阻塞返回：dispose 挂起或抛错均不影响本次请求完成
@@ -257,6 +264,50 @@ export function hostListModels(args: {
       return listModels(config, runtime);
     },
     secrets,
+    timeoutMs,
+  });
+}
+
+export function hostProbeTranslate(args: {
+  create: (runtime: PluginRuntime) => TranslatorPlugin;
+  pluginId: string;
+  profile: Profile;
+  req: TranslateRequest;
+  requestId: string;
+  secrets?: Record<string, string>;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}): Promise<{ hasOutput: boolean }> {
+  const {
+    create,
+    pluginId,
+    profile,
+    req,
+    requestId,
+    secrets,
+    signal,
+    timeoutMs = HEALTH_TIMEOUT_MS,
+  } = args;
+  return runPluginCall({
+    create,
+    deadlineMessage: "健康检测超时",
+    pluginId,
+    profile,
+    run: async (plugin, _runtime, callSignal) => {
+      let hasOutput = false;
+      // 不累积正文：健康检测只判定是否完整返回过非空内容
+      for await (const delta of plugin.translate(req, {
+        requestId,
+        signal: callSignal,
+      })) {
+        if (delta.trim() !== "") {
+          hasOutput = true;
+        }
+      }
+      return { hasOutput };
+    },
+    secrets,
+    signal,
     timeoutMs,
   });
 }

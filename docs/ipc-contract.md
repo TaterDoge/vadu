@@ -83,6 +83,8 @@ export function handle<TArg, TResult>(
 | `vadu:plugins:rescan` | invoke | — | `PluginDescriptor[]` |
 | `vadu:plugins:setEnabled` | invoke | `{ pluginId: string; enabled: boolean }` | `PluginDescriptor` |
 | `vadu:plugins:listModels` | invoke | `{ pluginId: string; profileId: string; config: Record<string, unknown>; secrets?: Record<string, string> }` | `ModelInfo[]` |
+| `vadu:plugins:healthCheck` | invoke | `ModelHealthCheckParams` | `{ elapsedMs: number }` |
+| `vadu:plugins:cancelHealthCheck` | send（renderer→main） | `{ requestId: string }` | — |
 | `vadu:plugins:changed` | send（main→renderer） | `PluginDescriptor[]` | — |
 | `vadu:plugins:install` | invoke | —（主进程自己弹目录选择框，见 §5）（M3） | `PluginDescriptor` |
 | `vadu:plugins:uninstall` | invoke | `{ pluginId: string }`（M3） | `void` |
@@ -270,6 +272,27 @@ export type AppSettings = {
 - 超时 30s，错误归一化与翻译一致（`TIMEOUT` / `NETWORK` / `AUTH_FAILED` …）。
 - `ModelInfo = { id: string; label?: string }`，来自 `src/shared/plugin.ts`。
 
+### 模型健康检测（`vadu:plugins:healthCheck` / `vadu:plugins:cancelHealthCheck`）
+
+服务商设置中模型字段「健康检测」按钮的真实调用通道。**不改插件契约**：复用 `translator.translate()`，不新增插件方法、字段或 `apiVersion`。
+
+```ts
+export type ModelHealthCheckParams = {
+  requestId: string;
+  pluginId: string;
+  profileId: string;
+  config: Record<string, unknown>;
+  secrets?: Record<string, string>;
+};
+```
+
+- 固定请求：文本 `Hello`、`source: "en"`、`target: "zh-CN"`，不读取用户输入文本；`config` 必须是当前表单值且含非空 `model`，否则 `INVALID_CONFIG`。
+- `config` 与 `secrets` 的形状/长度校验、`profileId` 可草稿、密钥覆盖与 origin 约束与 `listModels` 一致；`config` 还会按插件 `configSchema` 清洗（剔除 secret/未知字段，类型与必填不合规即拒绝）。已保存 profile 只用落盘 `allowedOrigins`；草稿只用本次 `baseURL` 派生 origin，新 origin 不静默放行；profile 属于其他插件时报 `INVALID_CONFIG`，草稿使用合成 id，绝不回落到其他 profile 的密钥桶。
+- 成功只在插件完整返回过一次非空输出时成立；空输出、插件错误、取消、超时都为失败。返回结果只有 `elapsedMs`，**不返回、不记录译文正文**。
+- 超时 30s，插件即使忽略 `AbortSignal` 也由宿主 deadline 竞速 settle，并清理任务表。
+- `cancelHealthCheck` 是「发了就不管」的 send 通道；`requestId` 由渲染层生成，只有发起窗口能取消自己的任务，发送方窗口销毁即中止。渲染层在模型/配置/密钥变化或组件卸载时取消并丢弃旧结果。
+- 请求只有本次调用副作用：不写 config，不修改 profile，不持久化任何密钥或检测结果。
+
 ### 密钥
 
 | 通道 | 方向 | 入参 | 返回 |
@@ -342,6 +365,8 @@ const vadu = {
     rescan: () => call(IPC.plugins.rescan),
     setEnabled: (pluginId: string, enabled: boolean) => call(IPC.plugins.setEnabled, { enabled, pluginId }),
     listModels: (pluginId: string, profileId: string, config: Record<string, unknown>, secrets?: Record<string, string>) => call(IPC.plugins.listModels, { pluginId, profileId, config, secrets }),
+    healthCheck: (params: ModelHealthCheckParams) => call(IPC.plugins.healthCheck, params),
+    cancelHealthCheck: (requestId: string) => ipcRenderer.send(IPC.plugins.cancelHealthCheck, { requestId }),
     onChanged: (fn: (plugins: PluginDescriptor[]) => void) => subscribe(IPC.plugins.changed, fn),
   },
   translate: {

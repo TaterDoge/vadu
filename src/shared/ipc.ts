@@ -21,6 +21,8 @@ export const IPC = {
     recognize: "vadu:ocr:recognize",
   },
   plugins: {
+    cancelHealthCheck: "vadu:plugins:cancelHealthCheck",
+    healthCheck: "vadu:plugins:healthCheck",
     list: "vadu:plugins:list",
     listModels: "vadu:plugins:listModels",
   },
@@ -197,6 +199,17 @@ export type Profile = {
   createdAt: number;
 };
 
+/** 模型健康检测：用固定短文本真正走一次 translate()，不返回译文 */
+export type ModelHealthCheckParams = {
+  requestId: string;
+  pluginId: string;
+  profileId: string;
+  config: Record<string, unknown>;
+  secrets?: Record<string, string>;
+};
+
+export type ModelHealthCheckResult = { elapsedMs: number };
+
 // ── 翻译 ────────────────────────────────────────────────────────────────────
 
 export type TranslateParams = {
@@ -295,6 +308,10 @@ export type VaduApi = {
       /** 本次表单未保存的密钥明文：仅用于本次模型列表请求，不落盘、不记录日志 */
       secrets?: Record<string, string>
     ) => Promise<IpcResult<ModelInfo[]>>;
+    healthCheck: (
+      params: ModelHealthCheckParams
+    ) => Promise<IpcResult<ModelHealthCheckResult>>;
+    cancelHealthCheck: (requestId: string) => void;
   };
   ocr: {
     recognize: (params: OcrParams) => Promise<IpcResult<OcrResult>>;

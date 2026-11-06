@@ -40,7 +40,11 @@ import type {
 
 import { KIND_ADD, KIND_LABEL } from "../kinds";
 import { ModelPicker } from "../model-picker";
-import { type EditorState, mergeJsonFields } from "../provider-editor";
+import {
+  type EditorState,
+  hasInvalidJsonFields,
+  mergeJsonFields,
+} from "../provider-editor";
 
 type FieldProps = {
   controlId: string;
@@ -260,7 +264,6 @@ type EditorFormProps = {
   secretAvailable: boolean;
   selectedId: string | null;
   secretHas: Record<string, boolean>;
-  showPluginName: boolean;
 };
 
 function EditorFormShell({
@@ -282,7 +285,6 @@ function EditorFormShell({
   secretAvailable,
   selectedId,
   secretHas,
-  showPluginName,
 }: EditorFormShellProps): ReactNode {
   const fieldEntries = Object.entries(schema?.properties ?? {});
   // 表单会同时出现在右侧面板与新增 dialog，field id 必须唯一
@@ -293,6 +295,8 @@ function EditorFormShell({
   const advancedFields = fieldEntries.filter(
     ([, field]) => field["x-advanced"] === true
   );
+  const pickerConfig = mergeJsonFields(editor, schema);
+  const pickerConfigInvalid = hasInvalidJsonFields(editor, schema);
   const deleteControls: ReactNode = isNew ? null : (
     <AlertDialog.Root>
       <AlertDialog.Trigger
@@ -375,20 +379,25 @@ function EditorFormShell({
             <span className="text-muted-foreground text-xs">未保存</span>
           ) : null}
         </div>
-        {showPluginName && plugin ? (
-          <p className="-mt-2 text-muted-foreground text-xs" key="plugin-name">
-            {plugin.name}
-          </p>
-        ) : null}
-        <Field className="gap-1.5" key="name">
-          <FieldLabel htmlFor={`${idPrefix}-name`}>名称</FieldLabel>
-          <Input
-            disabled={saving}
-            id={`${idPrefix}-name`}
-            onChange={(event) => onPatch({ name: event.target.value })}
-            value={editor.name}
-          />
-        </Field>
+        <div className="flex items-end gap-4" key="name">
+          <Field className="gap-1.5">
+            <FieldLabel htmlFor={`${idPrefix}-name`}>名称</FieldLabel>
+            <Input
+              disabled={saving}
+              id={`${idPrefix}-name`}
+              onChange={(event) => onPatch({ name: event.target.value })}
+              value={editor.name}
+            />
+          </Field>
+          <div className="flex h-8 items-center">
+            <Switch
+              aria-label="启用服务商"
+              checked={editor.enabled}
+              disabled={saving}
+              onCheckedChange={(enabled) => onPatch({ enabled })}
+            />
+          </div>
+        </div>
         {basicFields.map(([key, field]) => {
           if (
             kind === "translator" &&
@@ -399,8 +408,8 @@ function EditorFormShell({
           ) {
             return (
               <ModelPicker
-                config={mergeJsonFields(editor, schema)}
-                description={field.description}
+                config={pickerConfig}
+                configInvalid={pickerConfigInvalid}
                 disabled={saving}
                 key={key}
                 model={String(editor.config.model ?? "")}
@@ -496,4 +505,10 @@ function TtsForm(props: EditorFormProps): ReactNode {
   return <EditorFormShell {...props} kind="tts" />;
 }
 
-export { OcrForm, TranslatorForm, TtsForm };
+const FORM_FOR_KIND: Record<PluginKind, typeof TranslatorForm> = {
+  ocr: OcrForm,
+  translator: TranslatorForm,
+  tts: TtsForm,
+};
+
+export { FORM_FOR_KIND, OcrForm, TranslatorForm, TtsForm };

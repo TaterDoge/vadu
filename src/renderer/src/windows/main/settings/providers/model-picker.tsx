@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { AnimateIcon } from "@animate-ui/react/icons";
+import { Activity } from "@renderer/components/animate-ui/icons/activity";
 import { List } from "@renderer/components/animate-ui/icons/list";
 import { RefreshCw } from "@renderer/components/animate-ui/icons/refresh-cw";
 import { Button } from "@renderer/components/ui/button";
@@ -20,11 +21,13 @@ import {
   isModelRequestInvalid,
   modelDisplayLabel,
   modelsConfigSignature,
+  secretsSignature,
 } from "./provider-editor";
+import { useModelHealthCheck } from "./use-model-health";
 
 type ModelPickerProps = {
   config: Record<string, unknown>;
-  description?: string;
+  configInvalid?: boolean;
   disabled?: boolean;
   model: string;
   onModelChange: (model: string) => void;
@@ -36,10 +39,10 @@ type ModelPickerProps = {
   title?: string;
 };
 
-// 未保存草稿也允许拉模型列表：密钥随本次请求临时传递，不落盘、不入日志。
+// 未保存草稿也允许拉模型列表/做健康检测：密钥随本次请求临时传递，不落盘、不入日志。
 function ModelPicker({
   config,
-  description,
+  configInvalid = false,
   disabled = false,
   model,
   onModelChange,
@@ -56,17 +59,22 @@ function ModelPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const configSig = modelsConfigSignature(config);
-  const secretsSig = JSON.stringify(
-    Object.entries(secrets)
-      .filter(([, value]) => value !== "")
-      .sort(([a], [b]) => a.localeCompare(b))
-  );
+  const secretsSig = secretsSignature(secrets);
   // 密钥变化同样作废旧响应：中途改 Key 后不应沿用旧列表
   const sig = `${configSig}\u0000${secretsSig}`;
   const seqRef = useRef(0);
   const profileIdRef = useRef(profileId);
   const pluginIdRef = useRef(pluginId);
   const sigRef = useRef(sig);
+  const healthCheck = useModelHealthCheck({
+    config,
+    configInvalid,
+    disabled,
+    model,
+    pluginId,
+    profileId,
+    secrets,
+  });
 
   // 切换服务商或请求配置/密钥时丢弃旧响应，避免把上一接口的模型填入当前配置。
   useEffect(() => {
@@ -146,6 +154,7 @@ function ModelPicker({
   };
 
   const filtered = filterModels(cached ?? [], query);
+  const healthChecking = healthCheck.checking;
   // 同一页面可能同时渲染面板表单与新增 dialog 表单，id 不能硬编码
   const controlId = useId();
   const showLoading = busy && cached === null;
@@ -182,19 +191,45 @@ function ModelPicker({
       value={model}
     >
       <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <label className="font-medium text-sm" htmlFor={controlId}>
             {title}
             {required ? <span className="text-destructive"> *</span> : null}
           </label>
-          <AnimateIcon animateOnHover asChild>
-            <ComboboxTrigger
-              render={<Button size="sm" type="button" variant="outline" />}
-            >
-              <List aria-hidden="true" className="size-4" />
-              <span>选择模型</span>
-            </ComboboxTrigger>
-          </AnimateIcon>
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <AnimateIcon animateOnHover asChild>
+              <Button
+                aria-busy={healthChecking}
+                aria-label={
+                  healthChecking ? "正在健康检测当前模型" : "健康检测当前模型"
+                }
+                disabled={disabled || healthChecking}
+                onClick={healthCheck.run}
+                size="sm"
+                title="会实际发起一次固定短文本翻译，可能产生少量费用"
+                type="button"
+                variant="outline"
+              >
+                {healthChecking ? (
+                  <RefreshCw
+                    aria-hidden="true"
+                    className="size-3.5 animate-spin motion-reduce:animate-none"
+                  />
+                ) : (
+                  <Activity aria-hidden="true" className="size-3.5" />
+                )}
+                <span>{healthChecking ? "检测中…" : "健康检测"}</span>
+              </Button>
+            </AnimateIcon>
+            <AnimateIcon animateOnHover asChild>
+              <ComboboxTrigger
+                render={<Button size="sm" type="button" variant="outline" />}
+              >
+                <List aria-hidden="true" className="size-4" />
+                <span>选择模型</span>
+              </ComboboxTrigger>
+            </AnimateIcon>
+          </div>
         </div>
         <Input
           disabled={disabled}
@@ -203,9 +238,6 @@ function ModelPicker({
           placeholder={placeholder ?? "输入或选择模型"}
           value={model}
         />
-        {description ? (
-          <p className="text-muted-foreground text-xs">{description}</p>
-        ) : null}
       </div>
       <ComboboxContent align="end">
         <div className="flex items-center gap-1.5 border-b p-2">
@@ -266,18 +298,8 @@ function ModelPicker({
           <ComboboxList>
             {filtered.map((entry) => (
               <ComboboxItem key={entry.id} value={entry.id}>
-                <span
-                  className="flex min-w-0 flex-1 flex-col gap-0.5"
-                  title={entry.id}
-                >
-                  <span className="wrap-anywhere">
-                    {modelDisplayLabel(entry)}
-                  </span>
-                  {entry.label && entry.label !== entry.id ? (
-                    <span className="wrap-anywhere text-muted-foreground text-xs">
-                      {entry.id}
-                    </span>
-                  ) : null}
+                <span className="wrap-anywhere" title={entry.id}>
+                  {modelDisplayLabel(entry)}
                 </span>
               </ComboboxItem>
             ))}

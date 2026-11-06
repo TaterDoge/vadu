@@ -1,5 +1,6 @@
 import { type ComponentType, type JSX, useState } from "react";
 import { SidebarProvider } from "@renderer/components/ui/sidebar";
+import { Toaster } from "@renderer/components/ui/sonner";
 import { TooltipProvider } from "@renderer/components/ui/tooltip";
 import { AccentProvider } from "@renderer/lib/accent";
 import { IS_MAC } from "@renderer/lib/platform";
@@ -47,6 +48,7 @@ function App(): JSX.Element {
               <AppSidebar onSectionChange={setSection} section={section} />
               <PageFrame>{Section ? <Section /> : <NotReady />}</PageFrame>
             </SidebarProvider>
+            <Toaster />
           </TooltipProvider>
         </AccentProvider>
       </StyleProvider>

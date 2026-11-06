@@ -6,10 +6,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { AnimateIcon } from "@animate-ui/react/icons";
-import { Dialog } from "@animate-ui/react/primitives/base-ui/dialog";
-import { X } from "@renderer/components/animate-ui/icons/x";
-import { Button } from "@renderer/components/ui/button";
 import {
   Tabs,
   TabsContent,
@@ -18,255 +14,26 @@ import {
 } from "@renderer/components/ui/tabs";
 import type { PluginDescriptor, PluginKind, Profile } from "@shared/ipc";
 
-import { OcrForm, TranslatorForm, TtsForm } from "./components/providers-form";
+import { FORM_FOR_KIND } from "./components/providers-form";
 import { LeftPanel } from "./components/providers-list";
 import { KIND_ADD, KIND_LABEL, KIND_ORDER } from "./kinds";
+import { type Creating, NewProfileDialog } from "./new-profile-dialog";
+import {
+  bootProviders,
+  kindOfPlugin,
+  loadSecretHas,
+  performSave,
+} from "./page-flow";
 import {
   EMPTY_EDITOR,
   type EditorState,
   type FilterState,
-  buildConfigPayload,
-  buildSavePayload,
   editorFromProfile,
   isDirty,
-  mergeSecretRetry,
   secretFieldNames,
 } from "./provider-editor";
 
 type PendingSwitch = { kind: PluginKind } | { id: string } | { create: true };
-
-/** 新增 dialog 的编辑态：baseline 用于判断关闭时是否需要确认 */
-type Creating = { baseline: EditorState; editor: EditorState };
-
-function kindOfPlugin(
-  plugins: PluginDescriptor[],
-  pluginId: string
-): PluginKind | undefined {
-  return plugins.find((entry) => entry.id === pluginId)?.kind;
-}
-
-async function saveProfileWithSecrets(
-  payload: Profile,
-  secrets: Record<string, string>
-): Promise<{ error?: string; profile?: Profile }> {
-  let saved: Awaited<ReturnType<typeof window.vadu.config.saveProfile>>;
-  try {
-    saved = await window.vadu.config.saveProfile(payload);
-  } catch (reason) {
-    return { error: String(reason) };
-  }
-  if (!saved.ok) {
-    return { error: saved.error.message };
-  }
-  const pending = Object.entries(secrets).filter(([, value]) => value !== "");
-  if (pending.length === 0) {
-    return { profile: saved.data };
-  }
-  try {
-    const outcomes = await Promise.all(
-      pending.map(async ([name, value]) => {
-        const result = await window.vadu.secrets.set(
-          saved.data.id,
-          name,
-          value
-        );
-        return {
-          error: result.ok ? undefined : result.error.message,
-          name,
-          ok: result.ok,
-        };
-      })
-    );
-    const failed = outcomes.find((entry) => !entry.ok);
-    if (failed) {
-      return { error: failed.error, profile: saved.data };
-    }
-  } catch (reason) {
-    return { error: String(reason), profile: saved.data };
-  }
-  return { profile: saved.data };
-}
-
-async function loadSecretHas(
-  profileId: string,
-  secretNames: string[],
-  seqRef: { current: number },
-  setSecretHas: React.Dispatch<
-    React.SetStateAction<Record<string, Record<string, boolean>>>
-  >
-): Promise<void> {
-  seqRef.current += 1;
-  const seq = seqRef.current;
-  const entries = await Promise.all(
-    secretNames.map(async (name) => {
-      try {
-        const result = await window.vadu.secrets.has(profileId, name);
-        return [name, result.ok ? result.data : false] as const;
-      } catch {
-        return [name, false] as const;
-      }
-    })
-  );
-  if (seq !== seqRef.current) {
-    return;
-  }
-  setSecretHas((current) => ({
-    ...current,
-    [profileId]: Object.fromEntries(entries),
-  }));
-}
-
-async function bootProviders(
-  aliveRef: { current: boolean },
-  dispatch: {
-    setError: (message: string) => void;
-    setSecretAvailable: (available: boolean) => void;
-    setPlugins: (plugins: PluginDescriptor[]) => void;
-    setProfiles: (profiles: Profile[]) => void;
-    setSelectedId: (id: string) => void;
-    setBaseline: (editor: EditorState) => void;
-    setEditor: (editor: EditorState) => void;
-    setReady: (ready: boolean) => void;
-    setSecretHas: React.Dispatch<
-      React.SetStateAction<Record<string, Record<string, boolean>>>
-    >;
-  },
-  seqRef: { current: number }
-): Promise<void> {
-  try {
-    const [pluginsResult, storageResult] = await Promise.all([
-      window.vadu.plugins.list(),
-      window.vadu.app.getSecretStorage(),
-    ]);
-    if (!aliveRef.current) {
-      return;
-    }
-    if (storageResult.ok) {
-      dispatch.setSecretAvailable(storageResult.data.available);
-    } else {
-      dispatch.setError(
-        storageResult.error.message ?? storageResult.error.code
-      );
-    }
-    if (!pluginsResult.ok) {
-      dispatch.setError(
-        pluginsResult.error.message ?? pluginsResult.error.code
-      );
-      return;
-    }
-    dispatch.setPlugins(pluginsResult.data);
-    const profilesResult = await window.vadu.config.listProfiles();
-    if (!aliveRef.current) {
-      return;
-    }
-    if (!profilesResult.ok) {
-      dispatch.setError(
-        profilesResult.error.message ?? profilesResult.error.code
-      );
-      return;
-    }
-    dispatch.setProfiles(profilesResult.data);
-    const translatorIds = new Set(
-      pluginsResult.data
-        .filter((entry) => entry.kind === "translator")
-        .map((entry) => entry.id)
-    );
-    // 默认只选翻译 kind 的最新 profile：末尾可能已经是语音/识别 profile
-    const latest =
-      profilesResult.data
-        .filter((entry) => translatorIds.has(entry.pluginId))
-        .at(-1) ?? null;
-    if (!latest) {
-      return;
-    }
-    const latestPlugin =
-      pluginsResult.data.find((entry) => entry.id === latest.pluginId) ?? null;
-    const next = editorFromProfile(latest, latestPlugin);
-    dispatch.setSelectedId(latest.id);
-    dispatch.setBaseline(next);
-    dispatch.setEditor(next);
-    await loadSecretHas(
-      latest.id,
-      secretFieldNames(latestPlugin?.configSchema),
-      seqRef,
-      dispatch.setSecretHas
-    );
-  } catch (reason) {
-    if (aliveRef.current) {
-      dispatch.setError(String(reason));
-    }
-  } finally {
-    // 初始化无论成败都结束：成功后放开新增入口，失败由错误条显式反馈
-    dispatch.setReady(true);
-  }
-}
-
-type SaveApi = {
-  existing: Profile | null;
-  /** 保存成功后的额外收尾（新增 dialog 用它关闭自己） */
-  onSaved?: () => void;
-  plugin: PluginDescriptor | null;
-  readPlugins: () => PluginDescriptor[];
-  setBaseline: (editor: EditorState) => void;
-  setEditor: (editor: EditorState) => void;
-  setError: (message: string) => void;
-  setInfo: (message: string) => void;
-  setProfiles: (profiles: Profile[]) => void;
-  setSelectedId: (id: string) => void;
-  setSaving: (saving: boolean) => void;
-  setSecretHas: React.Dispatch<
-    React.SetStateAction<Record<string, Record<string, boolean>>>
-  >;
-  seqRef: { current: number };
-};
-
-async function performSave(editor: EditorState, api: SaveApi): Promise<void> {
-  const built = buildConfigPayload(editor, api.plugin?.configSchema);
-  if (built.error) {
-    api.setError(built.error);
-    return;
-  }
-  const payload = buildSavePayload(editor, api.existing, built.config);
-  api.setSaving(true);
-  api.setError("");
-  api.setInfo("");
-  try {
-    const outcome = await saveProfileWithSecrets(payload, editor.secrets);
-    if (outcome.profile) {
-      const savedPlugin =
-        api
-          .readPlugins()
-          .find((entry) => entry.id === outcome.profile?.pluginId) ?? null;
-      const savedEditor = editorFromProfile(outcome.profile, savedPlugin);
-      const next = outcome.error
-        ? mergeSecretRetry(editor, savedEditor)
-        : savedEditor;
-      api.setBaseline(next);
-      api.setEditor(next);
-      api.setSelectedId(outcome.profile.id);
-      loadSecretHas(
-        outcome.profile.id,
-        secretFieldNames(savedPlugin?.configSchema),
-        api.seqRef,
-        api.setSecretHas
-      ).catch(() => undefined);
-      api.onSaved?.();
-    }
-    const listResult = await window.vadu.config.listProfiles();
-    if (listResult.ok) {
-      api.setProfiles(listResult.data);
-    }
-    if (outcome.error) {
-      api.setError(outcome.error);
-    } else {
-      api.setInfo("已保存");
-    }
-  } catch (reason) {
-    api.setError(String(reason));
-  } finally {
-    api.setSaving(false);
-  }
-}
 
 function ProvidersPage(): ReactNode {
   const [plugins, setPlugins] = useState<PluginDescriptor[]>([]);
@@ -281,8 +48,6 @@ function ProvidersPage(): ReactNode {
   const [filter, setFilter] = useState<FilterState>("all");
   const [secretAvailable, setSecretAvailable] = useState(true);
   const [saving, setSaving] = useState(false);
-  // 开关切换独立于保存：共用 saving 会让详情表单按钮闪成「保存中…」
-  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingSwitch | null>(null);
@@ -464,36 +229,6 @@ function ProvidersPage(): ReactNode {
     setEditor((current) => (current ? { ...current, ...patch } : current));
   };
 
-  const toggleEnabled = async (
-    profile: Profile,
-    enabled: boolean
-  ): Promise<void> => {
-    if (saving || togglingId !== null) {
-      return;
-    }
-    setTogglingId(profile.id);
-    setError(null);
-    try {
-      const result = await window.vadu.config.saveProfile({
-        ...profile,
-        enabled,
-      });
-      if (result.ok) {
-        setProfiles((current) =>
-          current.map((entry) =>
-            entry.id === result.data.id ? result.data : entry
-          )
-        );
-      } else {
-        setError(result.error.message);
-      }
-    } catch (reason) {
-      setError(String(reason));
-    } finally {
-      setTogglingId(null);
-    }
-  };
-
   const onSave = async (event?: FormEvent): Promise<void> => {
     event?.preventDefault();
     if (!(editor && !saving && selectedId !== null)) {
@@ -673,12 +408,6 @@ function ProvidersPage(): ReactNode {
     : null;
   const schema = selectedPlugin?.configSchema;
   const dirty = editor !== null && isDirty(editor, baseline);
-
-  const FORM_FOR_KIND: Record<PluginKind, typeof TranslatorForm> = {
-    ocr: OcrForm,
-    translator: TranslatorForm,
-    tts: TtsForm,
-  };
   const FormForKind = FORM_FOR_KIND[kind];
 
   return (
@@ -700,7 +429,7 @@ function ProvidersPage(): ReactNode {
           ))}
         </TabsList>
         <TabsContent className="min-h-0" value={kind}>
-          <div className="grid h-full min-h-0 grid-cols-1 items-start gap-6 md:grid-cols-[16rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] md:items-stretch">
+          <div className="grid h-full min-h-0 grid-cols-1 items-start gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] md:items-stretch">
             <LeftPanel
               addDisabled={!ready || firstPluginOfKind(kind) === null}
               filter={filter}
@@ -714,13 +443,11 @@ function ProvidersPage(): ReactNode {
               onQueryChange={setQuery}
               onReorder={onReorder}
               onSelect={requestSelection}
-              onToggleEnabled={toggleEnabled}
               query={query}
               saving={saving}
               selectedId={selectedId}
-              togglingId={togglingId}
             />
-            <section className="min-h-0 min-w-0 md:overflow-y-auto md:px-2">
+            <section className="md:scrollbar-gutter-stable min-h-0 min-w-0 md:overflow-y-auto md:overflow-x-clip md:px-2">
               {editor === null ? (
                 <p className="text-muted-foreground text-sm">
                   从左侧选择服务商进行配置，或点击「{KIND_ADD[kind]}」。
@@ -745,68 +472,28 @@ function ProvidersPage(): ReactNode {
                   secretAvailable={secretAvailable}
                   secretHas={secretHas[selectedId ?? ""] ?? {}}
                   selectedId={selectedId}
-                  showPluginName={plugins.length > 1}
                 />
               )}
             </section>
           </div>
         </TabsContent>
       </Tabs>
-      <Dialog.Root
-        onOpenChange={(open) => {
-          if (!open) {
-            requestCloseCreate();
-          }
-        }}
-        open={creating !== null}
-      >
-        <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/20 supports-backdrop-filter:backdrop-blur-xs" />
-          <Dialog.Popup
-            aria-label={KIND_ADD[kind]}
-            className="fixed inset-0 z-50 m-auto flex h-fit max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-xl flex-col overflow-y-auto rounded-xl border bg-popover p-6 text-popover-foreground shadow-lg outline-none"
-          >
-            <AnimateIcon animateOnHover asChild>
-              <Dialog.Close
-                render={
-                  <Button
-                    // StaggerList 的行残留 filter，会建 stacking context 压住按钮，必须抬 z-index
-                    className="absolute top-3 right-3 z-10"
-                    disabled={saving}
-                    size="icon-sm"
-                    variant="ghost"
-                  />
-                }
-              >
-                <X aria-hidden="true" className="size-4" />
-                <span className="sr-only">取消新增</span>
-              </Dialog.Close>
-            </AnimateIcon>
-            {creating ? (
-              <FormForKind
-                dirty={creatingDirty}
-                editor={creating.editor}
-                error={error}
-                info={info}
-                isNew
-                onCancelDiscard={() => setClosePending(false)}
-                onConfirmDiscard={closeCreate}
-                onDelete={() => undefined}
-                onPatch={patchCreating}
-                onSave={onCreateSave}
-                pending={closePending}
-                plugin={creatingPlugin}
-                saving={saving}
-                schema={creatingPlugin?.configSchema}
-                secretAvailable={secretAvailable}
-                secretHas={{}}
-                selectedId={null}
-                showPluginName={plugins.length > 1}
-              />
-            ) : null}
-          </Dialog.Popup>
-        </Dialog.Portal>
-      </Dialog.Root>
+      <NewProfileDialog
+        creating={creating}
+        dirty={creatingDirty}
+        error={error}
+        info={info}
+        kind={kind}
+        onCancelDiscard={() => setClosePending(false)}
+        onConfirmDiscard={closeCreate}
+        onPatch={patchCreating}
+        onRequestClose={requestCloseCreate}
+        onSave={onCreateSave}
+        pending={closePending}
+        plugin={creatingPlugin}
+        saving={saving}
+        secretAvailable={secretAvailable}
+      />
     </>
   );
 }

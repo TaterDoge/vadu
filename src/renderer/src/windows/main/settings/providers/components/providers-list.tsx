@@ -17,7 +17,6 @@ import {
 } from "@renderer/components/ui/dropdown-menu";
 import { Input } from "@renderer/components/ui/input";
 import { StaggerList } from "@renderer/components/ui/stagger-list";
-import { Switch } from "@renderer/components/ui/switch";
 import type { PluginKind, Profile } from "@shared/ipc";
 import { cn } from "cn";
 
@@ -28,23 +27,19 @@ import { PluginIcon } from "./provider-icon";
 type RowProps = {
   index: number;
   onSelect: () => void;
-  onToggle: (enabled: boolean) => void;
   profile: Profile;
   reorderable: boolean;
   saving: boolean;
   selected: boolean;
-  toggling: boolean;
 };
 
 function ProviderRow({
   index,
   onSelect,
-  onToggle,
   profile,
   reorderable,
   saving,
   selected,
-  toggling,
 }: RowProps): ReactNode {
   const { ref, handleRef, isDragging } = useSortable({
     disabled: !reorderable || saving,
@@ -90,24 +85,13 @@ function ProviderRow({
           {profile.name}
         </span>
       </Button>
-      <span
-        className={cn(
-          "shrink-0 rounded-full px-1.5 py-0.5 text-[0.6875rem]",
-          profile.enabled
-            ? "bg-primary/10 text-primary"
-            : "bg-muted text-muted-foreground"
-        )}
-      >
-        {profile.enabled ? "已启用" : "未启用"}
-      </span>
-      <Switch
-        aria-label={`启用 ${profile.name}`}
-        checked={profile.enabled}
-        disabled={saving || toggling}
-        onCheckedChange={onToggle}
-        onClick={(event) => event.stopPropagation()}
-        size="sm"
-      />
+      {profile.enabled ? (
+        <span
+          aria-label="已启用"
+          className="size-2 shrink-0 rounded-full bg-green-500"
+          role="img"
+        />
+      ) : null}
     </div>
   );
 }
@@ -137,16 +121,12 @@ type LeftPanelProps = {
   onReorder: (ordered: Profile[]) => void;
   /** 点击某行，请求切换到该 profile 的编辑态 */
   onSelect: (id: string) => void;
-  /** 切换某 profile 的启用开关 */
-  onToggleEnabled: (profile: Profile, enabled: boolean) => void;
   /** 搜索关键词（受控），非空时禁用拖拽排序 */
   query: string;
-  /** 保存中，禁用拖拽、启用开关与新增按钮 */
+  /** 保存中，禁用拖拽与新增按钮 */
   saving: boolean;
   /** 当前选中项 id */
   selectedId: string | null;
-  /** 正在切换启用状态的 profile id，只锁对应行的开关，不影响表单保存态 */
-  togglingId: string | null;
 };
 
 function LeftPanel({
@@ -162,11 +142,9 @@ function LeftPanel({
   onQueryChange,
   onReorder,
   onSelect,
-  onToggleEnabled,
   query,
   saving,
   selectedId,
-  togglingId,
 }: LeftPanelProps): ReactNode {
   // 过滤态下 filtered 只是子集，拖拽落盘的顺序会错位；保持全量可见才允许拖拽
   const reorderable = filter === "all" && query.trim() === "";
@@ -262,12 +240,10 @@ function LeftPanel({
                     index={index}
                     key={profile.id}
                     onSelect={() => onSelect(profile.id)}
-                    onToggle={(enabled) => onToggleEnabled(profile, enabled)}
                     profile={profile}
                     reorderable={reorderable}
                     saving={saving}
                     selected={selectedId === profile.id}
-                    toggling={togglingId === profile.id}
                   />
                 ))
               : null}

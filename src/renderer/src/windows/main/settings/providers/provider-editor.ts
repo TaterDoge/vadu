@@ -34,6 +34,50 @@ export function modelsConfigSignature(config: Record<string, unknown>): string {
   return JSON.stringify(keys.map((key) => [key, config[key]]));
 }
 
+/** 本次表单里非空密钥的确定性签名；空值不参与请求，也不参与失效判定 */
+export function secretsSignature(secrets: Record<string, string>): string {
+  return JSON.stringify(
+    Object.entries(secrets)
+      .filter(([, value]) => value !== "")
+      .sort(([a], [b]) => a.localeCompare(b))
+  );
+}
+
+/** 健康检测签名：模型/密钥/配置/JSON 合法性任一变化都必须作废旧成功状态 */
+export function healthCheckSignature(
+  config: Record<string, unknown>,
+  model: string,
+  secrets: Record<string, string>,
+  configInvalid: boolean
+): string {
+  return `${modelsConfigSignature(config)}\u0000${secretsSignature(secrets)}\u0000${model}\u0000${configInvalid ? "invalid" : "valid"}`;
+}
+
+/**
+ * 高级 JSON 字段是否有无法解析的文本。mergeJsonFields 会静默丢弃非法值，
+ * 健康检测会真实发起翻译，必须在请求前拦住，避免拿旧配置误报成功。
+ */
+export function hasInvalidJsonFields(
+  editor: { jsonText: Record<string, string> },
+  schema?: ConfigSchema
+): boolean {
+  for (const [key, field] of Object.entries(schema?.properties ?? {})) {
+    if (field.type !== "json") {
+      continue;
+    }
+    const text = editor.jsonText[key] ?? "";
+    if (text.trim() === "") {
+      continue;
+    }
+    try {
+      JSON.parse(text);
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** 模型列表展示名：label 可省略，回退 id */
 export function modelDisplayLabel(info: {
   id: string;
@@ -118,12 +162,14 @@ export type EditorState = {
   name: string;
   pluginId: string;
   config: Record<string, unknown>;
+  enabled: boolean;
   secrets: Record<string, string>;
   jsonText: Record<string, string>;
 };
 
 export const EMPTY_EDITOR: EditorState = {
   config: {},
+  enabled: true,
   jsonText: {},
   name: "",
   pluginId: "",
@@ -185,6 +231,7 @@ export function editorFromProfile(
   }
   return {
     config,
+    enabled: profile?.enabled ?? true,
     jsonText,
     name: profile?.name ?? "",
     pluginId: plugin?.id ?? "",
@@ -199,7 +246,7 @@ export function secretFieldNames(schema: ConfigSchema | undefined): string[] {
 }
 
 export function isDirty(editor: EditorState, baseline: EditorState): boolean {
-  if (editor.name !== baseline.name) {
+  if (editor.name !== baseline.name || editor.enabled !== baseline.enabled) {
     return true;
   }
   const keys = new Set([
@@ -261,7 +308,7 @@ export function buildSavePayload(
     allowedOrigins: [],
     config,
     createdAt: existing?.createdAt ?? Date.now(),
-    enabled: existing?.enabled ?? true,
+    enabled: editor.enabled,
     id: existing?.id ?? "",
     name: editor.name.trim(),
     pluginId: editor.pluginId,

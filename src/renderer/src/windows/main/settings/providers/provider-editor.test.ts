@@ -4,13 +4,32 @@ import { describe, test } from "node:test";
 import type { ModelInfo } from "@shared/ipc";
 
 import {
+  EMPTY_EDITOR,
+  buildSavePayload,
   filterModels,
+  hasInvalidJsonFields,
+  healthCheckSignature,
+  isDirty,
   isModelRequestInvalid,
   mergeJsonFields,
   mergeSecretRetry,
   modelDisplayLabel,
   modelsConfigSignature,
+  secretsSignature,
 } from "./provider-editor";
+
+describe("enabled", () => {
+  test("启用状态参与脏检查并进入保存 payload", () => {
+    const baseline = {
+      ...EMPTY_EDITOR,
+      name: "OpenAI",
+      pluginId: "vadu.ai",
+    };
+    const editor = { ...baseline, enabled: false };
+    assert.equal(isDirty(editor, baseline), true);
+    assert.equal(buildSavePayload(editor, null, {}).enabled, false);
+  });
+});
 
 describe("mergeSecretRetry", () => {
   test("secret 保存失败时保留已输入密钥，其余以已保存为准", () => {
@@ -154,6 +173,76 @@ describe("modelDisplayLabel", () => {
       modelDisplayLabel({ id: "gpt-4o", label: "GPT-4o" }),
       "GPT-4o"
     );
+  });
+});
+
+describe("secretsSignature", () => {
+  test("忽略空值，非空键序无关", () => {
+    assert.equal(
+      secretsSignature({ apiKey: "k", org: "" }),
+      secretsSignature({ apiKey: "k" })
+    );
+  });
+
+  test("密钥值变化签名变化", () => {
+    assert.notEqual(
+      secretsSignature({ apiKey: "a" }),
+      secretsSignature({ apiKey: "b" })
+    );
+  });
+});
+
+describe("healthCheckSignature", () => {
+  const config = { baseURL: "https://x/v1", model: "m1" };
+  const secrets = { apiKey: "k" };
+
+  test("相同输入签名稳定", () => {
+    assert.equal(
+      healthCheckSignature(config, "m1", secrets, false),
+      healthCheckSignature({ ...config }, "m1", { ...secrets }, false)
+    );
+  });
+
+  test("模型、密钥或 JSON 合法性变化都作废旧成功", () => {
+    const base = healthCheckSignature(config, "m1", secrets, false);
+    assert.notEqual(base, healthCheckSignature(config, "m2", secrets, false));
+    assert.notEqual(
+      base,
+      healthCheckSignature(config, "m1", { apiKey: "k2" }, false)
+    );
+    assert.notEqual(base, healthCheckSignature(config, "m1", secrets, true));
+  });
+});
+
+describe("hasInvalidJsonFields", () => {
+  const schema = {
+    properties: {
+      extra: { title: "额外参数", type: "json" as const },
+      headers: { title: "请求头", type: "json" as const },
+      model: { title: "模型", type: "string" as const },
+    },
+    type: "object" as const,
+  };
+
+  test("空或合法 JSON 不阻断健康检测", () => {
+    assert.equal(
+      hasInvalidJsonFields(
+        { jsonText: { extra: "", headers: '{"X":1}' } },
+        schema
+      ),
+      false
+    );
+  });
+
+  test("任一高级 JSON 字段无法解析即阻断", () => {
+    assert.equal(
+      hasInvalidJsonFields({ jsonText: { extra: "{bad" } }, schema),
+      true
+    );
+  });
+
+  test("无 schema 时不影响基础字段", () => {
+    assert.equal(hasInvalidJsonFields({ jsonText: {} }), false);
   });
 });
 

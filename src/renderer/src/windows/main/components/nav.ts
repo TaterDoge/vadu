@@ -2,6 +2,7 @@ import { Blocks } from "@renderer/components/animate-ui/icons/blocks";
 import { BookText } from "@renderer/components/animate-ui/icons/book-text";
 import { Keyboard } from "@renderer/components/animate-ui/icons/keyboard";
 import { Palette } from "@renderer/components/animate-ui/icons/palette";
+import { RotateCcw } from "@renderer/components/animate-ui/icons/rotate-ccw";
 import { Server } from "@renderer/components/animate-ui/icons/server";
 import { Settings } from "@renderer/components/animate-ui/icons/settings";
 import type { IconComponent } from "@renderer/lib/icons";
@@ -12,7 +13,8 @@ export type SectionId =
   | "providers"
   | "appearance"
   | "general"
-  | "shortcuts";
+  | "shortcuts"
+  | "backup";
 
 export type NavItem = {
   id: SectionId;
@@ -51,6 +53,11 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Keyboard,
     id: "shortcuts",
     label: "快捷键",
+  },
+  {
+    icon: RotateCcw,
+    id: "backup",
+    label: "备份/恢复",
   },
 ];
 

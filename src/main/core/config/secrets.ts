@@ -8,6 +8,7 @@ import { join } from "node:path";
 
 import { app, safeStorage } from "electron";
 
+import { VaduError } from "../../../shared/errors";
 import type { SecretStorageState } from "../../../shared/ipc";
 
 type SecretsFile = {
@@ -15,12 +16,16 @@ type SecretsFile = {
   entries: Record<string, Record<string, { cipher: string }>>;
 };
 
+export type SecretBuckets = Record<string, Record<string, string>>;
+
 let mode: "disk" | "memory" = "memory";
 let backend: string | undefined;
+let loadState: "uninitialized" | "ready" | "failed" = "uninitialized";
+let loadError: Error | null = null;
 const memory = new Map<string, Map<string, string>>();
 let writeChain: Promise<void> = Promise.resolve();
 
-function secretsPath(): string {
+export function secretsFilePath(): string {
   return join(app.getPath("userData"), "secrets.bin");
 }
 
@@ -46,7 +51,7 @@ async function persist(snapshot = memory): Promise<void> {
     entries: Object.fromEntries(await Promise.all(buckets)),
     version: 1,
   };
-  const target = secretsPath();
+  const target = secretsFilePath();
   const tmp = `${target}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify(file), "utf8");
   renameSync(tmp, target);
@@ -74,7 +79,7 @@ function enqueueMutation(
 
 function readSecretsFile(): SecretsFile | null {
   try {
-    const raw: unknown = JSON.parse(readFileSync(secretsPath(), "utf8"));
+    const raw: unknown = JSON.parse(readFileSync(secretsFilePath(), "utf8"));
     if (!isRecord(raw) || raw.version !== 1 || !isRecord(raw.entries)) {
       throw new Error("Invalid secrets file");
     }
@@ -90,7 +95,7 @@ function readSecretsFile(): SecretsFile | null {
     }
     return raw as SecretsFile;
   } catch (cause) {
-    if (existsSync(secretsPath())) {
+    if (existsSync(secretsFilePath())) {
       throw new Error("密钥文件损坏，已保留原文件", { cause });
     }
     return null;
@@ -133,25 +138,99 @@ async function loadDiskSecrets(file: SecretsFile): Promise<boolean> {
   return needsReEncrypt;
 }
 
+function markSessionOnly(reason?: Error): void {
+  mode = "memory";
+  if (existsSync(secretsFilePath())) {
+    // 文件在但没读到：可能含旧密钥，完整导出必须拒绝
+    loadState = "failed";
+    loadError = reason ?? new Error("密钥文件存在但当前密钥存储不可读取");
+    return;
+  }
+  loadState = "ready";
+  loadError = null;
+}
+
 export async function initSecrets(): Promise<void> {
+  loadState = "uninitialized";
+  loadError = null;
   if (process.platform === "linux") {
     backend = safeStorage.getSelectedStorageBackend();
     if (backend === "basic_text") {
+      markSessionOnly();
       return;
     }
   }
   if (!(await safeStorage.isAsyncEncryptionAvailable())) {
+    markSessionOnly();
     return;
   }
-  const file = readSecretsFile();
-  const needsReEncrypt = file ? await loadDiskSecrets(file) : false;
-  mode = "disk";
-  if (needsReEncrypt) {
-    // 密钥环轮换：回写新密文，否则某次系统更新后 key 会解不开
-    enqueueMutation(() => undefined).catch(() => {
-      // 回写失败仅影响下次解密，不阻断启动
-    });
+  try {
+    const file = readSecretsFile();
+    const needsReEncrypt = file ? await loadDiskSecrets(file) : false;
+    mode = "disk";
+    loadState = "ready";
+    if (needsReEncrypt) {
+      // 密钥环轮换：回写新密文，否则某次系统更新后 key 会解不开
+      enqueueMutation(() => undefined).catch(() => {
+        // 回写失败仅影响下次解密，不阻断启动
+      });
+    }
+  } catch (error) {
+    mode = "memory";
+    loadState = "failed";
+    loadError = error instanceof Error ? error : new Error(String(error));
+    throw error;
   }
+}
+
+/** 导出必须等先前写入落盘；初始化失败/未读取旧文件时拒绝“完整”导出 */
+export async function snapshotSecrets(
+  profileIds: string[]
+): Promise<SecretBuckets> {
+  if (loadState === "uninitialized") {
+    throw new VaduError("INTERNAL", "密钥存储尚未初始化，无法完整导出");
+  }
+  if (loadState === "failed" || loadError) {
+    throw new VaduError("INTERNAL", "密钥文件未完整读取，无法完整导出");
+  }
+  await writeChain.catch(() => undefined);
+  // null prototype：profileId 来自配置，避免 "__proto__" 之类的键改写普通对象原型
+  const snapshot: SecretBuckets = Object.create(null) as SecretBuckets;
+  for (const profileId of new Set(profileIds)) {
+    const bucket = memory.get(profileId);
+    if (bucket && bucket.size > 0) {
+      snapshot[profileId] = Object.fromEntries(bucket);
+    }
+  }
+  return snapshot;
+}
+
+export function canPersistSecrets(): boolean {
+  return mode === "disk" && loadState === "ready" && loadError === null;
+}
+
+/** 批量把新 profile 的密钥并入现有桶；持久化失败会保留旧内存/旧桶 */
+export function mergeSecrets(buckets: SecretBuckets): Promise<void> {
+  const entries = Object.entries(buckets).filter(
+    ([, names]) => Object.keys(names).length > 0
+  );
+  if (entries.length === 0) {
+    return Promise.resolve();
+  }
+  if (!canPersistSecrets()) {
+    return Promise.reject(
+      new VaduError("INTERNAL", "系统无法安全持久化密钥，已取消恢复")
+    );
+  }
+  return enqueueMutation((snapshot) => {
+    for (const [profileId, names] of entries) {
+      const bucket = snapshot.get(profileId) ?? new Map<string, string>();
+      for (const [name, value] of Object.entries(names)) {
+        bucket.set(name, value);
+      }
+      snapshot.set(profileId, bucket);
+    }
+  });
 }
 
 export function setSecret(

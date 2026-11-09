@@ -40,6 +40,17 @@ describe("TaskRegistry", () => {
     assert.equal(registry.size(), 3);
   });
 
+  test("abortAll 中止所有窗口的任务，恢复配置前不再回写事件", () => {
+    const registry = new TaskRegistry();
+    const taskA = registry.register("r1", sender(1));
+    const taskB = registry.register("r2", sender(2));
+    registry.abortAll();
+    assert.equal(taskA?.suppressed, true);
+    assert.equal(taskA?.controller.signal.aborted, true);
+    assert.equal(taskB?.suppressed, true);
+    assert.equal(taskB?.controller.signal.aborted, true);
+  });
+
   test("remove 清理任务", () => {
     const registry = new TaskRegistry();
     registry.register("r1", sender(1));

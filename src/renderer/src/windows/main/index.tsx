@@ -11,6 +11,7 @@ import { AppSidebar } from "./components/app-sidebar";
 import { DEFAULT_SECTION, type SectionId } from "./components/nav";
 import { PageFrame } from "./components/page-frame";
 import { AppearancePage } from "./settings/appearance";
+import { BackupPage } from "./settings/backup";
 import { GeneralPage } from "./settings/general";
 import { ProvidersPage } from "./settings/providers";
 import { ShortcutsPage } from "./settings/shortcuts";
@@ -18,6 +19,7 @@ import { ShortcutsPage } from "./settings/shortcuts";
 /** 已实现的分区；其余分区保留在导航里做后续里程碑入口，先渲染占位 */
 const SECTIONS: Partial<Record<SectionId, ComponentType>> = {
   appearance: AppearancePage,
+  backup: BackupPage,
   general: GeneralPage,
   providers: ProvidersPage,
   shortcuts: ShortcutsPage,
@@ -48,7 +50,7 @@ function App(): JSX.Element {
               <AppSidebar onSectionChange={setSection} section={section} />
               <PageFrame>{Section ? <Section /> : <NotReady />}</PageFrame>
             </SidebarProvider>
-            <Toaster />
+            <Toaster position="top-center" />
           </TooltipProvider>
         </AccentProvider>
       </StyleProvider>

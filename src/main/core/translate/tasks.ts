@@ -63,6 +63,14 @@ export class TaskRegistry {
     this.tasks.delete(requestId);
   }
 
+  /** 恢复配置前终止全部在途翻译：旧任务不应继续使用被替换的配置 */
+  abortAll(): void {
+    for (const task of this.tasks.values()) {
+      task.suppressed = true;
+      task.controller.abort();
+    }
+  }
+
   size(): number {
     return this.tasks.size;
   }

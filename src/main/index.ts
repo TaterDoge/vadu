@@ -20,6 +20,7 @@ import {
   setHotkeySuspended,
 } from "./hotkey";
 import { handle } from "./ipc";
+import { registerBackupIpc } from "./ipc/backup";
 import { registerConfigIpc } from "./ipc/config";
 import { registerOcrIpc } from "./ipc/ocr";
 import { registerPluginsIpc } from "./ipc/plugins";
@@ -66,6 +67,7 @@ function start(): void {
     }
 
     registerConfigIpc();
+    registerBackupIpc();
     registerPluginsIpc();
     registerSecretsIpc();
     registerTranslateIpc();

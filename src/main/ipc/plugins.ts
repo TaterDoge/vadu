@@ -279,6 +279,11 @@ async function healthCheck(
   }
 }
 
+/** 恢复配置前中止健康检测：它们持有旧 profile 快照，不应继续跑完 */
+export function abortHealthChecks(): void {
+  healthTaskRegistry.abortAll();
+}
+
 export function registerPluginsIpc(): void {
   handle<null, PluginDescriptor[]>(IPC.plugins.list, () =>
     Promise.resolve(registry.list())

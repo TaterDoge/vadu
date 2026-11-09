@@ -221,8 +221,12 @@ CSP 需要 `media-src 'self' blob:`，否则播放被拦。
 | `vadu:config:saveProfile` | invoke | `Profile` | `Profile` |
 | `vadu:config:reorderProfiles` | invoke | `{ orderedIds: string[] }` | `Profile[]` |
 | `vadu:config:deleteProfile` | invoke | `{ profileId: string }` | `void` |
-| `vadu:config:getSettings` | invoke | — | `AppSettings` |
-| `vadu:config:saveSettings` | invoke | `AppSettings` | `AppSettings` |
+| `vadu:config:getAppearance` | invoke | — | `AppearanceSettings` |
+| `vadu:config:setAppearance` | invoke | `AppearancePatch` | `AppearanceSettings` |
+| `vadu:config:migrateAppearance` | invoke | `AppearancePatch`（旧 localStorage 值） | `AppearanceSettings` |
+| `vadu:config:appearanceChanged` | send（main→renderer） | `AppearanceSettings` | — |
+| `vadu:config:exportBackup` | invoke | —（风险确认在设置页 UI；主进程只弹保存框） | `BackupExportResult` |
+| `vadu:config:importBackup` | invoke | —（主进程自己弹打开/确认框） | `BackupImportResult` |
 
 ```ts
 export type Profile = {
@@ -238,6 +242,14 @@ export type Profile = {
   createdAt: number;
 };
 
+export type AppearanceSettings = {
+  theme: "system" | "light" | "dark";
+  style: "nova" | "lyra";
+  accent: "neutral" | "blue" | "emerald" | "amber" | "rose" | "violet";
+};
+
+export type AppearancePatch = Partial<AppearanceSettings>;
+
 export type AppSettings = {
   defaultProfileId?: string;
   hotkey: string | null;   // 全局快捷键，如 "CommandOrControl+Shift+T"；null = 用户解绑
@@ -246,16 +258,57 @@ export type AppSettings = {
     openSettings: string | null; // 浮窗内打开设置，默认 "CommandOrControl+,"
     togglePin: string | null; // 浮窗内切换固定窗口，默认 "CommandOrControl+P"
   };
-  theme: "system" | "light" | "dark";
+  theme: AppearanceSettings["theme"];
+  style: AppearanceSettings["style"];
+  accent: AppearanceSettings["accent"];
   historyLimit: number;    // 默认 50
   /** 启动时是否弹出主窗，默认 false（静默驻留托盘，从托盘/Dock 进设置） */
   showMainWindowOnStartup: boolean;
   /** 全局术语表，M3 实现。渲染层不按请求传术语，core 统一注入 */
   glossary: { from: string; to: string }[];
 };
+
+export type BackupExportResult =
+  | { canceled: true }
+  | { canceled: false; profileCount: number; secretCount: number };
+
+export type BackupImportResult =
+  | { canceled: true }
+  | {
+      canceled: false;
+      profileCount: number;
+      secretCount: number;
+      /** v1 旧备份无密钥，UI 明确提示需重填 */
+      legacy: boolean;
+      restarting: true;
+    };
 ```
 
 保存 profile 时主进程串行校验；新 id 由宿主生成，已有 id 不可更改 pluginId。渲染层的 allowedOrigins 被忽略；保存时主进程把 `config.baseURL` 的 origin 自动登记进 `allowedOrigins`（不弹窗、只作受控 fetch 的运行时边界）。配置值必须通过插件 `configSchema` 清洗：未知字段忽略、secret 字段剔除、类型/enum/min/max/required 违规即拒绝保存。`enabled` 只接受布尔，缺省视为 `true`（旧 profile 无此字段时按启用处理）。
+
+**外观**
+
+`getAppearance` / `setAppearance` / `migrateAppearance` 只读写 `AppSettings` 的三个外观字段，写入与 profile 保存共用主进程配置写队列。`setAppearance` 接受部分字段，未传的字段保持不变；非法取值返回 `INVALID_CONFIG` 且不写盘。写成功后主进程向所有窗口 `send` `vadu:config:appearanceChanged`，两窗各自更新 DOM，不把 localStorage 当第二真值。
+
+`migrateAppearance` 只负责本功能之前的外观迁移：配置缺少 `style` / `accent`（旧版本）时三个字段都可由旧 localStorage 补入；一旦配置带 `style` / `accent`（恢复或新保存过），三个字段都不被旧缓存覆盖。渲染层迁移成功后删除旧键 `vadu:theme` / `vadu:style` / `vadu:accent`；失败则保留旧键供下次重试，但仍回读主进程真值。`localStorage` 的 `vadu:appearance` 只作首帧缓存。
+
+**设置备份/恢复**
+
+`exportBackup` / `importBackup` 的路径选择都由主进程弹原生对话框，**入参不接受路径，也不回备份正文**。导出风险确认在渲染层设置页用 UI 弹窗完成，确认后才调用 `exportBackup`，因此该通道进来直接弹保存框。备份 JSON 固定 `format: "vadu-settings-backup"`、`formatVersion: 2`，`schemaVersion` 与当前配置版本一致；v1 旧备份仍可导入。文件上限 8 MiB、服务商上限 200。
+
+**v2 完整备份**：每个 profile 含 `config` 与独立 `secrets: { [name]: string }`，覆盖当前 profile 的全部已保存密钥（所有 kind、启用/停用、多 secret 字段），不含无关联旧桶；空桶写 `{}`。`config` 里 schema secret 字段仍剔除，密钥只来自 secrets 桶。`headers` / `extra` 等自由 JSON 按现有 schema 原样保留，不再因为含 `Authorization` 等已保存配置而拒绝。只有用户主动导出的 JSON 含明文密钥；本机 `config.json` / renderer / 日志 / 错误永不含密钥，`secrets.bin` 仍由 `safeStorage` 加密。
+
+`exportBackup` 在设置页确认后直接弹保存对话框；设置页取消、Esc 或关闭不调用该通道，保存框取消也不读配置/密钥、不写文件，不调用 `readSettings`，不产生损坏留档副作用。保存确认后用 `readBackupSnapshot()` + `snapshotSecrets()` 取有序快照：密钥快照等待 secret 写链；初始化/解密失败或存在未读取密钥文件时拒绝完整导出，纯会话密钥可导出。导出只写用户选择的 JSON 路径，不日志备份正文，不复制 `secrets.bin`；POSIX 下临时文件以 `0600` 创建并在 rename 后保留该权限（Windows 跳过）。
+
+导入是**全量替换**，不是逐条保存：
+
+- 先严格校验版本/类型/重复 ID/`defaultProfileId` 引用/快捷键语法/服务商数量/插件存在且 `ready`/`configSchema`。v2 必须每个 profile 有合法 `secrets` 对象；密钥名 1–100、值非空且 ≤4096、字段必须是插件 `secret`、单 profile ≤64 个，拒绝原型污染键；错误不带密钥值。导出与导入复用同一套 secrets 校验：旧 schema 字段、超限值或坏桶会让导出整次失败并指出服务商，不静默丢掉密钥，也不生成不可导入的备份。v1 无 secrets，按无密钥处理。
+- 含密钥时先检查 `canPersistSecrets()`；无法安全持久化则在改 config 前明确拒绝，不得“恢复成功后重启丢钥匙”。本机无明文降级不变。
+- 所有 profile 换新 UUID，`defaultProfileId` 重映射；`allowedOrigins` 忽略并按 `baseURL` 重建；新 UUID 密钥映射到新 profile。旧 `secrets.bin` 桶保留，不搬移/复用/删除。
+- 原生确认：v2 显示密钥数量与明文文件风险；v1 明确旧备份不含密钥、恢复后需重填 API Key。取消零写入、零重启。
+- 提交前写单份 `config.before-restore.json` 快照；先通过 secret 写链/safeStorage 合并新 UUID 密钥，再原子写 `config.json`。密钥写失败 config 不变、不封锁、不重启；config 最后写失败旧 profile/key 仍可用，新 ID 孤儿密文允许保留。
+- `commitBackupImport` 是 async；调用方必须 await 成功后才在同一个同步队列回调内 `lockConfigWrites()` 并重启。提交失败不封锁、不重启。写封锁持续到重启，队列后续操作和直接 `updateSettings` / `saveProfile` / `writeConfigRaw` 全部 `ABORTED`。
+- 导出目标不得是运行中的 `config.json` / `secrets.bin` / 恢复快照，符号链接与硬链接别名同样拦截。
 
 ### 模型列表（`vadu:plugins:listModels`）
 
@@ -398,7 +451,8 @@ contextBridge.exposeInMainWorld("vadu", vadu);
 - `ipc/` 层对每个入参做形状校验，不合法直接返回 `{ ok: false, error: { code: "INVALID_CONFIG" } }`。
 - 字符串字段有长度上限（`text` ≤ 50,000 字符，`name` ≤ 100，URL ≤ 2,000）。
 - `pluginId` / `profileId` 必须存在于当前内存表，不接受渲染层传入任意路径。
-- 文件路径类入参（M3 的 `plugins:install`）只接受用户通过系统文件对话框选择的结果：主进程自己弹 `dialog.showOpenDialog`，**不接受渲染层传入路径字符串**。这是防目录穿越的硬要求。
+- 文件路径类入参（M3 的 `plugins:install`、`config:exportBackup` / `config:importBackup`）只接受用户通过系统文件对话框选择的结果：主进程自己弹 `dialog.showOpenDialog` / `showSaveDialog`，**不接受渲染层传入路径字符串**。这是防目录穿越的硬要求。
+- 备份内容与文件大小也在主进程校验：渲染层拿不到密钥，也不能借路径覆盖 `config.json` / `secrets.bin`。
 
 ## 6. 日志与可观测
 

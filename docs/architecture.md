@@ -14,7 +14,7 @@
 **约束**
 
 1. 渲染层受 CSP 限制，不能直连厂商 API（且多数 API 不允许浏览器直连）。
-2. 密钥必须加密落盘，不能停留在渲染层或明文配置里。
+2. 密钥必须加密落盘，不能停留在渲染层或明文配置里（用户主动导出的完整备份 JSON 是唯一例外，见 ADR-016）。
 3. 项目当前零运行时校验库、零状态管理库、零网络库。新增依赖要有明确理由。
 4. Electron 主进程是 Node 环境，插件以本地文件形态加载，不经过 npm 依赖解析。
 
@@ -89,7 +89,33 @@
 - `secrets.bin`：`safeStorage` 加密后的密钥表，结构 `{ version: 1, entries: { [profileId]: { [secretName]: { cipher: base64 } } } }`；runtime 只读取本次 profile 的密钥。
 - 两者都由 `store.ts` / `secrets.ts` 独占，其它模块只拿接口。
 - **写入只能走 `updateSettings(patch)`**：它会读→合并→原子写。`settings` 与 `profiles` 同居一个文件，任何「拿整个 `AppSettings` 盖回去」的写法都会静默抹掉 `profiles`。
-- 形状清洗（旧版本字段、手改的坏值）集中在 `config/settings.ts` 的 `toSettings()`，纯函数、有单测；`store.ts` 只管磁盘 IO。profile 配置再经 `config/validate.ts` 按插件 `configSchema` 清洗（未知字段忽略、secret 剔除、类型/enum/min/max/required 校验），`enabled` 缺省视为 `true`。
+- **配置写序列共用 `serial.ts` 的一条队列**：外观保存、服务商保存/删除/排序与恢复导入都会读→改→写整文件（或跨 await），交错执行会互相覆盖。队列只解决本进程内的写串行，不是通用事务框架；跨进程双开由单实例锁挡住。
+- 形状清洗（旧版本字段、手改的坏值）集中在 `config/settings.ts` 的 `toSettings()`，纯函数、有单测；`store.ts` 只管磁盘 IO 与读→合并→写入口。profile 配置再经 `config/validate.ts` 按插件 `configSchema` 清洗（未知字段忽略、secret 剔除、类型/enum/min/max/required 校验），`enabled` 缺省视为 `true`。
+
+**外观真值**
+
+`theme` / `style` / `accent` 存进 `AppSettings`，主进程是唯一真值。主窗与浮窗各自挂 `ThemeProvider` / `StyleProvider` / `AccentProvider`，通过 `vadu:config:getAppearance` 拉取、`setAppearance` 写入；主进程写成功后用 `vadu:config:appearanceChanged` 广播给所有窗口，避免各窗口自己维护第二份真值。
+
+渲染层 `localStorage` 只剩两种用途：
+
+1. 启动缓存 `vadu:appearance`：首帧先用上次确认的值，IPC 返回后覆盖。
+2. 旧版本键 `vadu:theme` / `vadu:style` / `vadu:accent` 的一次迁移：本功能之前的配置没有 `style` / `accent`，此时三个字段都允许由旧缓存补入（旧 config 里的 `theme` 只可能是默认值或手改，不是 UI 保存值）。一旦配置带 `style` / `accent`（恢复或新保存过），三个字段都不被旧缓存覆盖。迁移成功后渲染层删掉旧键；失败时保留旧键供下次重试，但仍回读主进程真值并提示，旧缓存不冒充已确认状态。
+
+**备份与恢复**
+
+固定格式 `vadu-settings-backup`：`formatVersion: 2`，`schemaVersion` 保持 `1`。v2 每个 profile 含 `config` 与独立的 `secrets: { [secretName]: string }` 桶，包含当前 profile 的全部已保存密钥（翻译/OCR/TTS、启用/停用都覆盖、支持多个 secret 字段），不导出无关联旧桶；空桶写 `{}`，不按 schema 凭空造 key。`formatVersion: 1` 旧备份仍可导入，但确认时明确不含密钥。文件上限 8 MiB、服务商上限 200。
+
+**只有用户主动导出的备份 JSON 含明文密钥**；本机 `config.json` 永不写密钥，`secrets.bin` 仍由 `safeStorage` 加密，密钥不进入 Profile.config、renderer、日志或错误信息。导出先在渲染层设置页用 UI 弹窗完成风险确认（明确“含明文 API Key”），确认后才调用主进程弹保存对话框；设置页取消/Esc/关闭不调用通道，保存框取消也不读配置/密钥、不写文件。确认后用只读 `readBackupSnapshot()`（损坏时抛错，不像 `readSettings` 那样改名留档）与 `snapshotSecrets()` 取一致快照；后者等待先前 secret 写链，初始化/解密失败或存在未读取的密钥文件时拒绝“完整导出”，纯会话密钥允许导出。导出不复制 `secrets.bin`，只写用户选择的 JSON 路径；POSIX 下新建临时文件即以 `0600` 创建，原子 rename 后目标继承该权限（Windows 跳过）。
+
+恢复是全量替换，不是逐个 `saveProfile`：
+
+1. 先完整校验文件：版本、类型、重复 ID、`defaultProfileId` 引用、快捷键、插件存在且 `ready`、`configSchema`。v2 还必须每个 profile 有合法 `secrets` 对象；密钥名限 1–100、值必须非空且 ≤4096、字段必须是目标插件的 `secret` 类型、单 profile ≤64 个，拒绝 `__proto__` / `constructor` / `prototype`，错误不带密钥值。`config` 的 schema secret 字段仍剔除，密钥只从独立桶导入。导出与导入复用同一套 secrets 校验：旧 schema 字段、超限值或坏桶会让导出整次失败并指出服务商，不静默丢掉用户密钥，也不生成自己无法导入的备份。v1 无 secrets，按无密钥备份处理。
+2. 含密钥时先检查本机能否安全持久化；`canPersistSecrets()` 为 false（无密钥环、会话内存、初始化失败）则改配置前明确拒绝恢复，绝不允许“恢复成功但重启后丢钥匙”。本机配置的明文降级规则不变：从不写明文密钥。
+3. 原生确认写明范围：v2 显示密钥数量并说明备份文件为明文；v1 明确旧备份不含密钥、恢复后需重填 API Key。取消是正常结果，零写入。
+4. 提交前写单份 `config.before-restore.json` 快照；所有 profile 生成新 UUID、`defaultProfileId` 重映射、`allowedOrigins` 由校验后的 `baseURL` 重建。随后先把新 UUID 的密钥批量合并进现有 `secrets.bin`（复用 secret 写链与 safeStorage），成功后才原子切换 `config.json`。密钥写失败：config 不变、不封锁、不重启；config 最后写失败：旧 profile/key 仍可用，新 ID 的孤儿密文允许保留。旧密钥桶不搬移、不复用、不删除。
+5. commit 是 async，调用方必须 await 后才在同一个同步队列回调里封锁旧写并 relaunch/quit。提交失败不封锁、不重启。成功后 `app.relaunch()` + `app.quit()`，避免旧设置/旧任务写回。
+
+`headers` / `extra` 等 schema 允许的自由 JSON 按现有 `configSchema` 原样保留，不再因为包含 `Authorization` 等已保存配置而拒绝完整备份；它们属于用户配置的一部分，不是本机密钥存储。
 
 **密钥存储必须用异步 API。** `safeStorage` 的同步 API（`isEncryptionAvailable` / `encryptString` / `decryptString`）自 Electron 45 起弃用、46 移除，本项目从第一天就用异步形态：
 
@@ -127,11 +153,12 @@ src/
 │   │   ├── index.ts          # 统一注册入口
 │   │   ├── translate.ts
 │   │   ├── plugins.ts
+│   │   ├── backup.ts         # 备份/恢复：对话框、确认、重启
 │   │   └── config.ts
 │   ├── core/
 │   │   ├── plugin/{manifest,loader,registry,host}.ts
 │   │   ├── translate/{service,cache,language}.ts
-│   │   ├── config/{store,secrets}.ts
+│   │   ├── config/{store,secrets,settings,validate,serial,backup,backup-file}.ts
 │   │   └── log.ts
 │   └── plugins/
 │       └── ai/
@@ -147,7 +174,7 @@ src/
     ├── windows/
     │   ├── main/            # 主窗：index.tsx 是壳，components/ 是侧边栏与页面骨架，settings/ 是各设置分区（一个分区一个目录，index.tsx 是入口，页面私有的子组件/纯逻辑放同目录）
     │   └── quick/           # 翻译浮窗（独立窗口）：index.tsx 是入口，components/ 是其专属子件
-    ├── lib/                  # 渲染层通用能力（主题、主题色、shadcn style 切换）
+    ├── lib/                  # 渲染层通用能力（外观真值缓存/迁移、快捷键、图标）
     ├── hooks/
     └── components/
         ├── animate-ui/icons/  # 动画图标：一个图标一个文件，来自 animate-ui 注册表
@@ -326,6 +353,9 @@ function sanitize(meta: Record<string, unknown>): Record<string, unknown> {
 | ADR-011 | `kind` 从一个 `translator` 扩为 `translator` / `ocr` / `tts`，**一个插件只声明一种** | manifest 一份能力声明、registry id→单 kind、profile 归属唯一 tab，三者都干净；同一厂商的 chat / vision / speech 本来就是三套 config 与模型 | 同账号要填多次 key（`secrets.bin` 按 profileId 分桶，不共享凭据）；跨 kind 不做凭据复用 |
 | ADR-012 | 增 `kind` 可用值**不升** `apiVersion`；只有破坏已有插件的改动才 `+1` | 升版会废弃全部已装插件，换取 0 行为收益；新 kind 由清单校验拒绝，安全性不依赖版本号 | 插件无法用版本号判断「宿主是否支持某 kind」，靠文档与错误文案 |
 | ADR-013 | OCR / TTS 走一次性 invoke，不流式、不提供取消通道 | 浏览器 `<audio>` 的暂停不需要上游取消；OCR 本来就是一次全量返回 | 长文本合成超时即整段失败，没有渐进播放；要流式音频需新契约 + 任务生命周期 |
+| ADR-014 | 外观（theme/style/accent）真值随 `AppSettings` 落盘；localStorage 只做启动缓存与一次性迁移，写入后跨窗口广播 | 两窗口各自读 localStorage 会产生第二真值，主窗改了浮窗可能不变；与备份/恢复同源才能一起替换 | 首帧仍可能因缓存过期闪一下；旧键迁移要保证不覆盖已保存/恢复的值 |
+| ADR-015 | 设置备份是固定 JSON + 全量替换：v2 含独立 secrets 桶，导入换新 profile UUID、密钥跟新 ID、默认服务商重映射、忽略导入 origin、保留单份恢复前快照、成功后重启 | 密钥按 profileId 分桶，复用 ID 等于把旧密钥静默接到新配置；逐条保存会留下半恢复状态；不重启会让旧设置/旧任务写回 | 旧 secret 桶成为孤儿但保留（不删）；快照只有一份，第二次恢复会覆盖；v1 备份只能恢复配置，密钥需重填 |
+| ADR-016 | 用户主动导出的完整备份 JSON 可含明文 API Key；本机仍只用 safeStorage 加密持久化，renderer/日志/错误永不出现密钥 | 用户明确要求可迁移完整备份且接受安全取舍；不加密码门槛，避免把密钥迁移变成逐个重填 | 备份文件一旦泄露等同泄露全部密钥；导出必须先风险确认（设置页 UI 明文提示）；本备份不承诺对任意自由文本做密钥扫描 |
 
 ## 8. 明确不做
 

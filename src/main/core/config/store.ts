@@ -10,15 +10,23 @@ import { join } from "node:path";
 import { app } from "electron";
 
 import { VaduError } from "../../../shared/errors";
-import type { AppSettings, Profile } from "../../../shared/ipc";
+import type {
+  AppSettings,
+  AppearancePatch,
+  AppearanceSettings,
+  Profile,
+} from "../../../shared/ipc";
+import { assertConfigWritesAllowed } from "./serial";
 import {
   DEFAULT_SETTINGS,
+  appearanceOf,
   mergeConfig,
   mergeProfiles,
+  pickLegacyAppearance,
   toSettings,
 } from "./settings";
 
-function configPath(): string {
+export function configFilePath(): string {
   return join(app.getPath("userData"), "config.json");
 }
 
@@ -39,8 +47,10 @@ function parseConfig(path: string): Record<string, unknown> | null {
   }
 }
 
-function writeConfigRaw(payload: Record<string, unknown>): void {
-  const target = configPath();
+export function writeConfigRaw(payload: Record<string, unknown>): void {
+  // 恢复成功后所有写入口（含直接 updateSettings / saveProfile）都必须停下
+  assertConfigWritesAllowed();
+  const target = configFilePath();
   // tmp 带 pid：即使锁失效被双开，两个实例也不会写同一个临时文件
   const tmp = `${target}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify(payload, null, 2), "utf8");
@@ -48,7 +58,12 @@ function writeConfigRaw(payload: Record<string, unknown>): void {
 }
 
 function writeConfig(settings: AppSettings): void {
-  writeConfigRaw(mergeConfig(parseConfig(configPath()), settings));
+  writeConfigRaw(mergeConfig(parseConfig(configFilePath()), settings));
+}
+
+/** 当前磁盘配置原样（解析失败返回 null），供恢复快照与顶层字段合并 */
+export function readConfigRaw(): Record<string, unknown> | null {
+  return parseConfig(configFilePath());
 }
 
 function readLegacy(): AppSettings | null {
@@ -61,7 +76,7 @@ function readLegacy(): AppSettings | null {
 }
 
 export function readSettings(): AppSettings {
-  const path = configPath();
+  const path = configFilePath();
   if (!existsSync(path)) {
     const migrated = readLegacy();
     if (migrated) {
@@ -82,9 +97,33 @@ export function readSettings(): AppSettings {
 
 /** 读→合并→原子写。调用方只提交要改的字段，整对象提交会冲掉别处刚写的设置 */
 export function updateSettings(patch: Partial<AppSettings>): AppSettings {
+  assertConfigWritesAllowed();
   const next = { ...readSettings(), ...patch };
   writeConfig(next);
   return next;
+}
+
+export function readAppearance(): AppearanceSettings {
+  return appearanceOf(readSettings());
+}
+
+export function updateAppearance(patch: AppearancePatch): AppearanceSettings {
+  return appearanceOf(updateSettings(patch));
+}
+
+/** 旧 localStorage 外观只补写磁盘上缺的字段；写盘成功后才返回新值 */
+export function migrateAppearance(legacy: AppearancePatch): AppearanceSettings {
+  const raw = parseConfig(configFilePath());
+  const persisted = raw?.settings;
+  const patch = pickLegacyAppearance(
+    persisted && typeof persisted === "object" && !Array.isArray(persisted)
+      ? (persisted as Record<string, unknown>)
+      : null,
+    legacy
+  );
+  return Object.keys(patch).length === 0
+    ? readAppearance()
+    : appearanceOf(updateSettings(patch));
 }
 
 function toProfile(value: unknown): Profile | null {
@@ -121,16 +160,50 @@ function toProfile(value: unknown): Profile | null {
 
 /** profiles 与未知顶层字段不动，只替换/追加 profiles 数组 */
 export function readProfiles(): Profile[] {
-  const raw = parseConfig(configPath());
+  const raw = parseConfig(configFilePath());
   const list = raw && Array.isArray(raw.profiles) ? raw.profiles : [];
   return list
     .map(toProfile)
     .filter((profile): profile is Profile => profile !== null);
 }
 
+export type BackupConfigSnapshot = {
+  settings: AppSettings;
+  profiles: Profile[];
+};
+
+/** 导出用只读快照：同一个文件只解析一次，损坏时抛错而不是改名留档 */
+export function readBackupSnapshot(): BackupConfigSnapshot {
+  const path = configFilePath();
+  if (!existsSync(path)) {
+    return { profiles: [], settings: { ...DEFAULT_SETTINGS } };
+  }
+  const raw = parseConfig(path);
+  if (!raw) {
+    throw new VaduError("INVALID_CONFIG", "配置文件损坏，无法导出备份");
+  }
+  if (raw.profiles !== undefined && !Array.isArray(raw.profiles)) {
+    throw new VaduError("INVALID_CONFIG", "配置中的 profiles 不是数组");
+  }
+  const list = Array.isArray(raw.profiles) ? raw.profiles : [];
+  const profiles: Profile[] = [];
+  for (const entry of list) {
+    const profile = toProfile(entry);
+    if (!profile) {
+      throw new VaduError(
+        "INVALID_CONFIG",
+        "配置中有损坏的服务商，无法导出完整备份"
+      );
+    }
+    profiles.push(profile);
+  }
+  return { profiles, settings: toSettings(raw.settings) };
+}
+
 export function deleteProfile(id: string): void {
-  const raw = parseConfig(configPath());
-  if (!raw && existsSync(configPath())) {
+  assertConfigWritesAllowed();
+  const raw = parseConfig(configFilePath());
+  if (!raw && existsSync(configFilePath())) {
     throw new VaduError("INVALID_CONFIG", "配置文件损坏，请先恢复配置");
   }
   const profiles = readProfiles().filter((entry) => entry.id !== id);
@@ -139,8 +212,9 @@ export function deleteProfile(id: string): void {
 
 /** 按给定 id 顺序重排；未列出的 profile 按原相对顺序追加在末尾，未知 id 忽略 */
 export function reorderProfiles(orderedIds: string[]): Profile[] {
-  const raw = parseConfig(configPath());
-  if (!raw && existsSync(configPath())) {
+  assertConfigWritesAllowed();
+  const raw = parseConfig(configFilePath());
+  if (!raw && existsSync(configFilePath())) {
     throw new VaduError("INVALID_CONFIG", "配置文件损坏，请先恢复配置");
   }
   const profiles = readProfiles();
@@ -163,8 +237,9 @@ export function reorderProfiles(orderedIds: string[]): Profile[] {
 }
 
 export function saveProfile(profile: Profile): Profile {
-  const raw = parseConfig(configPath());
-  if (!raw && existsSync(configPath())) {
+  assertConfigWritesAllowed();
+  const raw = parseConfig(configFilePath());
+  if (!raw && existsSync(configFilePath())) {
     throw new VaduError("INVALID_CONFIG", "配置文件损坏，请先恢复配置");
   }
   const profiles = readProfiles();

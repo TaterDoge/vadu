@@ -37,14 +37,27 @@ test("config IPC 自动登记 origin，忽略 renderer 授权，保存串行且�
       target: ts.ScriptTarget.ES2022,
     },
   });
+  let chain: Promise<unknown> = Promise.resolve();
   const imports: Record<string, unknown> = {
     "../../../shared/errors": { VaduError },
     "../../shared/errors": { VaduError },
-    "../../shared/ipc": { IPC },
+    "../../shared/ipc": {
+      ACCENT_NAMES: ["neutral", "blue", "emerald", "amber", "rose", "violet"],
+      IPC,
+      STYLE_NAMES: ["nova", "lyra"],
+      THEME_NAMES: ["system", "light", "dark"],
+    },
     "../core/config/secrets": {
       clearProfileSecrets: (profileId: string) => {
         clearedSecrets.push(profileId);
         return Promise.resolve();
+      },
+    },
+    "../core/config/serial": {
+      serializeConfigWrite: (operation: () => Promise<unknown>) => {
+        const run = chain.catch(() => undefined).then(operation);
+        chain = run;
+        return run;
       },
     },
     "../core/config/store": {
@@ -54,6 +67,16 @@ test("config IPC 自动登记 origin，忽略 renderer 授权，保存串行且�
           profiles.splice(index, 1);
         }
       },
+      migrateAppearance: () => ({
+        accent: "neutral",
+        style: "nova",
+        theme: "system",
+      }),
+      readAppearance: () => ({
+        accent: "neutral",
+        style: "nova",
+        theme: "system",
+      }),
       readProfiles: () => profiles,
       reorderProfiles: (orderedIds: string[]) => {
         const next = [
@@ -74,6 +97,12 @@ test("config IPC 自动登记 origin，忽略 renderer 授权，保存串行且�
         }
         return profile;
       },
+      updateAppearance: (patch: Record<string, unknown>) => ({
+        accent: "neutral",
+        style: "nova",
+        theme: "system",
+        ...patch,
+      }),
     },
     "../core/config/validate": { validateConfigAgainstSchema },
     "../core/plugin/registry": {
@@ -88,6 +117,7 @@ test("config IPC 自动登记 origin，忽略 renderer 授权，保存串行且�
         handler: (raw: unknown, ctx: unknown) => Promise<unknown>
       ) => handlers.set(channel, handler),
     },
+    electron: { BrowserWindow: { getAllWindows: () => [] } },
     "node:crypto": {
       randomUUID: () => {
         sequence += 1;

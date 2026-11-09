@@ -2,6 +2,10 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import type {
   AppPlatform,
+  AppearancePatch,
+  AppearanceSettings,
+  BackupExportResult,
+  BackupImportResult,
   HotkeyState,
   InAppHotkeyAction,
   InAppHotkeyState,
@@ -68,12 +72,30 @@ const vadu: VaduApi = {
   config: {
     deleteProfile: (profileId: string): Promise<IpcResult<null>> =>
       ipcRenderer.invoke(IPC.config.deleteProfile, { profileId }),
+    exportBackup: (): Promise<IpcResult<BackupExportResult>> =>
+      ipcRenderer.invoke(IPC.config.exportBackup),
+    getAppearance: (): Promise<IpcResult<AppearanceSettings>> =>
+      ipcRenderer.invoke(IPC.config.getAppearance),
+    importBackup: (): Promise<IpcResult<BackupImportResult>> =>
+      ipcRenderer.invoke(IPC.config.importBackup),
     listProfiles: (pluginId?: string): Promise<IpcResult<Profile[]>> =>
       ipcRenderer.invoke(IPC.config.listProfiles, pluginId ? { pluginId } : {}),
+    migrateAppearance: (
+      legacy: AppearancePatch
+    ): Promise<IpcResult<AppearanceSettings>> =>
+      ipcRenderer.invoke(IPC.config.migrateAppearance, legacy),
+    onAppearanceChanged: (
+      fn: (appearance: AppearanceSettings) => void
+    ): (() => void) =>
+      subscribe<AppearanceSettings>(IPC.config.appearanceChanged, fn),
     reorderProfiles: (orderedIds: string[]): Promise<IpcResult<Profile[]>> =>
       ipcRenderer.invoke(IPC.config.reorderProfiles, { orderedIds }),
     saveProfile: (profile: Profile): Promise<IpcResult<Profile>> =>
       ipcRenderer.invoke(IPC.config.saveProfile, profile),
+    setAppearance: (
+      patch: AppearancePatch
+    ): Promise<IpcResult<AppearanceSettings>> =>
+      ipcRenderer.invoke(IPC.config.setAppearance, patch),
   },
   hotkey: {
     get: (): Promise<IpcResult<HotkeyState>> =>

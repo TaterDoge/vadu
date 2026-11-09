@@ -6,10 +6,17 @@ export type { ModelInfo, OcrResult, PluginKind } from "./plugin";
 
 export const IPC = {
   config: {
+    // 外观真值在主进程，变更后广播给所有窗口（主窗与浮窗各有一份 DOM 状态）
+    appearanceChanged: "vadu:config:appearanceChanged",
     deleteProfile: "vadu:config:deleteProfile",
+    exportBackup: "vadu:config:exportBackup",
+    getAppearance: "vadu:config:getAppearance",
+    importBackup: "vadu:config:importBackup",
     listProfiles: "vadu:config:listProfiles",
+    migrateAppearance: "vadu:config:migrateAppearance",
     reorderProfiles: "vadu:config:reorderProfiles",
     saveProfile: "vadu:config:saveProfile",
+    setAppearance: "vadu:config:setAppearance",
   },
   getHotkey: "vadu:app:getHotkey",
   getInAppHotkey: "vadu:app:getInAppHotkey",
@@ -84,6 +91,31 @@ export const DEFAULT_HOTKEYS = {
   },
 } satisfies { global: string; inApp: InAppHotkeyState };
 
+export const THEME_NAMES = ["system", "light", "dark"] as const;
+export type Theme = (typeof THEME_NAMES)[number];
+
+export const STYLE_NAMES = ["nova", "lyra"] as const;
+export type StyleName = (typeof STYLE_NAMES)[number];
+
+export const ACCENT_NAMES = [
+  "neutral",
+  "blue",
+  "emerald",
+  "amber",
+  "rose",
+  "violet",
+] as const;
+export type AccentName = (typeof ACCENT_NAMES)[number];
+
+/** 外观真值随 AppSettings 落盘；渲染层 localStorage 只做启动缓存与旧值迁移 */
+export type AppearanceSettings = {
+  theme: Theme;
+  style: StyleName;
+  accent: AccentName;
+};
+
+export type AppearancePatch = Partial<AppearanceSettings>;
+
 export type AppSettings = {
   defaultProfileId?: string;
   /** null = 用户解绑了全局热键 */
@@ -92,11 +124,28 @@ export type AppSettings = {
   inAppHotkeys: InAppHotkeyState;
   /** 启动时是否弹出主窗；关掉后只能从托盘 / Dock 唤起 */
   showMainWindowOnStartup: boolean;
-  theme: "system" | "light" | "dark";
+  theme: Theme;
+  style: StyleName;
+  accent: AccentName;
   historyLimit: number;
   /** 全局术语表，M3 实现。渲染层不按请求传术语，core 统一注入 */
   glossary: { from: string; to: string }[];
 };
+
+export type BackupExportResult =
+  | { canceled: true }
+  | { canceled: false; profileCount: number; secretCount: number };
+
+export type BackupImportResult =
+  | { canceled: true }
+  | {
+      canceled: false;
+      profileCount: number;
+      secretCount: number;
+      /** v1 备份不含密钥，UI 需要明确提示 */
+      legacy: boolean;
+      restarting: true;
+    };
 
 // ── 插件 & 配置 ──────────────────────────────────────────────────────────────
 
@@ -328,10 +377,25 @@ export type VaduApi = {
   };
   config: {
     deleteProfile: (profileId: string) => Promise<IpcResult<null>>;
+    /** 导出由主进程弹保存对话框并写文件；渲染层不传路径、拿不到密钥 */
+    exportBackup: () => Promise<IpcResult<BackupExportResult>>;
+    getAppearance: () => Promise<IpcResult<AppearanceSettings>>;
+    /** 恢复由主进程弹打开/确认对话框，成功提交后重启；取消是正常结果 */
+    importBackup: () => Promise<IpcResult<BackupImportResult>>;
     listProfiles: (pluginId?: string) => Promise<IpcResult<Profile[]>>;
+    /** 只补写磁盘上缺失的外观字段，已有值（含恢复后的值）不覆盖 */
+    migrateAppearance: (
+      legacy: AppearancePatch
+    ) => Promise<IpcResult<AppearanceSettings>>;
+    onAppearanceChanged: (
+      fn: (appearance: AppearanceSettings) => void
+    ) => () => void;
     /** orderedIds 是持久化顺序（config.json 数组顺序），返回重排后的完整列表 */
     reorderProfiles: (orderedIds: string[]) => Promise<IpcResult<Profile[]>>;
     saveProfile: (profile: Profile) => Promise<IpcResult<Profile>>;
+    setAppearance: (
+      patch: AppearancePatch
+    ) => Promise<IpcResult<AppearanceSettings>>;
   };
   secrets: {
     has: (profileId: string, name: string) => Promise<IpcResult<boolean>>;

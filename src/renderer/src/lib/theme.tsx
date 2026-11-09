@@ -8,13 +8,11 @@ import {
   useState,
 } from "react";
 
-import { useStorageSync } from "./use-storage-sync";
+import type { Theme } from "./appearance";
+import { updateAppearance, useAppearance } from "./appearance";
 
-/**
- * 主题真值目前只存在渲染层 localStorage（`AppSettings.theme` 是接 config 通道后的落盘点）。
- * 在那之前不要再从主进程读它，否则会出现两个互相矛盾的值。
- */
-export type Theme = "system" | "light" | "dark";
+export type { Theme } from "./appearance";
+
 type ResolvedTheme = "light" | "dark";
 
 type ThemeContextValue = {
@@ -23,15 +21,9 @@ type ThemeContextValue = {
   setTheme: (theme: Theme) => void;
 };
 
-const STORAGE_KEY = "vadu:theme";
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
-
-function readStoredTheme(): Theme {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  return stored === "light" || stored === "dark" ? stored : "system";
-}
 
 function resolveTheme(theme: Theme, systemDark: boolean): ResolvedTheme {
   if (theme === "system") {
@@ -52,7 +44,7 @@ export function ThemeProvider({
 }: {
   children: ReactNode;
 }): ReactNode {
-  const [theme, setStoredTheme] = useState<Theme>(readStoredTheme);
+  const { theme } = useAppearance();
   const [systemDark, setSystemDark] = useState(
     () => window.matchMedia(DARK_QUERY).matches
   );
@@ -66,26 +58,15 @@ export function ThemeProvider({
     return () => query.removeEventListener("change", onChange);
   }, []);
 
-  const applyTheme = useCallback((next: Theme): void => {
-    setStoredTheme(next);
-    paintTheme(resolveTheme(next, window.matchMedia(DARK_QUERY).matches));
-  }, []);
-
-  useStorageSync(STORAGE_KEY, readStoredTheme, applyTheme);
-
   const resolved = resolveTheme(theme, systemDark);
 
   useEffect(() => {
     paintTheme(resolved);
   }, [resolved]);
 
-  const setTheme = useCallback(
-    (next: Theme): void => {
-      applyTheme(next);
-      localStorage.setItem(STORAGE_KEY, next);
-    },
-    [applyTheme]
-  );
+  const setTheme = useCallback((next: Theme): void => {
+    updateAppearance({ theme: next });
+  }, []);
 
   const value = useMemo<ThemeContextValue>(
     () => ({ resolved, setTheme, theme }),

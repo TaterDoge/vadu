@@ -7,6 +7,7 @@ import {
   SCHEMA_VERSION,
   mergeConfig,
   mergeProfiles,
+  pickLegacyAppearance,
   toSettings,
 } from "./settings";
 
@@ -79,6 +80,45 @@ describe("toSettings", () => {
   test("未知字段原样保留，避免旧版本写入的配置被抹掉", () => {
     const settings = toSettings({ extra: "keep" });
     assert.equal((settings as Record<string, unknown>).extra, "keep");
+  });
+
+  test("风格与主题色走白名单", () => {
+    assert.equal(toSettings({ style: "lyra" }).style, "lyra");
+    assert.equal(toSettings({ style: "other" }).style, DEFAULT_SETTINGS.style);
+    assert.equal(toSettings({ accent: "rose" }).accent, "rose");
+    assert.equal(
+      toSettings({ accent: "pink" }).accent,
+      DEFAULT_SETTINGS.accent
+    );
+  });
+
+  test("旧 localStorage 外观只在本功能之前的配置上迁移", () => {
+    // 已有值（包括恢复或保存过的默认值）不能被旧缓存翻回去
+    assert.deepEqual(
+      pickLegacyAppearance(
+        { style: "nova", theme: "light" },
+        { accent: "rose", style: "lyra", theme: "dark" }
+      ),
+      { accent: "rose" }
+    );
+    assert.deepEqual(
+      pickLegacyAppearance(null, {
+        accent: "blue",
+        style: "lyra",
+        theme: "dark",
+      }),
+      { accent: "blue", style: "lyra", theme: "dark" }
+    );
+    // 带新字段的配置里 theme 是坏值也算「已保存」，不被旧缓存覆盖；留给 toSettings 容错
+    assert.deepEqual(
+      pickLegacyAppearance({ style: "nova", theme: null }, { theme: "dark" }),
+      {}
+    );
+    // 旧缓存里非法值直接忽略
+    assert.deepEqual(
+      pickLegacyAppearance({}, { theme: "purple" } as never),
+      {}
+    );
   });
 });
 

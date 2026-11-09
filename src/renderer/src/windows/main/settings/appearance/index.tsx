@@ -29,10 +29,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@renderer/components/ui/select";
-import { ACCENT_NAMES, type AccentName, useAccent } from "@renderer/lib/accent";
+import { useAccent } from "@renderer/lib/accent";
 import type { IconComponent } from "@renderer/lib/icons";
 import { type StyleName, useStyle } from "@renderer/lib/style";
 import { type Theme, useTheme } from "@renderer/lib/theme";
+import { ACCENT_NAMES, type AccentName } from "@shared/ipc";
 import { cn } from "cn";
 
 /** 只给读屏和无障碍用的名字：色板本身不显示文字 */

@@ -4,22 +4,30 @@
  */
 
 import {
+  ACCENT_NAMES,
+  type AccentName,
   type AppSettings,
+  type AppearancePatch,
+  type AppearanceSettings,
   DEFAULT_HOTKEYS,
   type InAppHotkeyState,
   type Profile,
+  STYLE_NAMES,
+  type StyleName,
+  THEME_NAMES,
+  type Theme,
 } from "../../../shared/ipc";
 
 export const SCHEMA_VERSION = 1;
 
-const THEMES: AppSettings["theme"][] = ["system", "light", "dark"];
-
 export const DEFAULT_SETTINGS: AppSettings = {
+  accent: "neutral",
   glossary: [],
   historyLimit: 50,
   hotkey: DEFAULT_HOTKEYS.global,
   inAppHotkeys: DEFAULT_HOTKEYS.inApp,
   showMainWindowOnStartup: false,
+  style: "nova",
   theme: "system",
 };
 
@@ -47,10 +55,25 @@ function pickInApp(
   );
 }
 
-function pickTheme(value: unknown): AppSettings["theme"] {
-  return THEMES.includes(value as AppSettings["theme"])
-    ? (value as AppSettings["theme"])
-    : DEFAULT_SETTINGS.theme;
+function oneOf<T extends string>(
+  values: readonly T[],
+  value: unknown
+): value is T {
+  return (
+    typeof value === "string" && (values as readonly string[]).includes(value)
+  );
+}
+
+function pickTheme(value: unknown): Theme {
+  return oneOf(THEME_NAMES, value) ? value : DEFAULT_SETTINGS.theme;
+}
+
+function pickStyle(value: unknown): StyleName {
+  return oneOf(STYLE_NAMES, value) ? value : DEFAULT_SETTINGS.style;
+}
+
+function pickAccent(value: unknown): AccentName {
+  return oneOf(ACCENT_NAMES, value) ? value : DEFAULT_SETTINGS.accent;
 }
 
 function pickHistoryLimit(value: unknown): number {
@@ -73,6 +96,7 @@ export function toSettings(value: unknown): AppSettings {
   return {
     ...DEFAULT_SETTINGS,
     ...partial,
+    accent: pickAccent(partial.accent),
     glossary: pickGlossary(partial.glossary),
     // 旧配置没有该字段；形状不对直接回默认，别让坏值混进运行时
     historyLimit: pickHistoryLimit(partial.historyLimit),
@@ -86,8 +110,46 @@ export function toSettings(value: unknown): AppSettings {
       typeof partial.showMainWindowOnStartup === "boolean"
         ? partial.showMainWindowOnStartup
         : DEFAULT_SETTINGS.showMainWindowOnStartup,
+    style: pickStyle(partial.style),
     theme: pickTheme(partial.theme),
   };
+}
+
+export function appearanceOf(settings: AppSettings): AppearanceSettings {
+  return {
+    accent: settings.accent,
+    style: settings.style,
+    theme: settings.theme,
+  };
+}
+
+/**
+ * 旧版本把外观放在渲染层 localStorage，config 里的 theme 只可能是默认值或手改。
+ * style/accent 两个新字段都不存在 = 本功能之前的配置，此时 theme 也要让旧缓存迁入；
+ * 恢复或新保存过的配置带 style/accent，不能被动。
+ */
+export function pickLegacyAppearance(
+  persisted: Record<string, unknown> | null,
+  legacy: AppearancePatch
+): AppearancePatch {
+  const patch: AppearancePatch = {};
+  const saved = persisted ?? {};
+  const beforeAppearanceFeature = !(
+    Object.hasOwn(saved, "style") || Object.hasOwn(saved, "accent")
+  );
+  if (
+    (beforeAppearanceFeature || !Object.hasOwn(saved, "theme")) &&
+    oneOf(THEME_NAMES, legacy.theme)
+  ) {
+    patch.theme = legacy.theme;
+  }
+  if (!Object.hasOwn(saved, "style") && oneOf(STYLE_NAMES, legacy.style)) {
+    patch.style = legacy.style;
+  }
+  if (!Object.hasOwn(saved, "accent") && oneOf(ACCENT_NAMES, legacy.accent)) {
+    patch.accent = legacy.accent;
+  }
+  return patch;
 }
 
 /**

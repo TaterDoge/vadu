@@ -17,7 +17,7 @@ import ts from "typescript";
 import { VaduError } from "../../../shared/errors";
 import { DEFAULT_HOTKEYS } from "../../../shared/ipc";
 
-function loadStore(directory: string) {
+function loadStore(directory: string, lock = { value: false }) {
   const exports: Record<string, unknown> = {};
   const source = readFileSync(join(import.meta.dirname, "store.ts"), "utf8");
   const { outputText } = ts.transpileModule(source, {
@@ -47,6 +47,15 @@ function loadStore(directory: string) {
       if (name === "../../../shared/ipc") {
         return { DEFAULT_HOTKEYS };
       }
+      if (name === "./serial") {
+        return {
+          assertConfigWritesAllowed: () => {
+            if (lock.value) {
+              throw new VaduError("ABORTED", "应用正在重启，配置写入已停止");
+            }
+          },
+        };
+      }
       if (name === "./settings") {
         return {
           DEFAULT_SETTINGS: {},
@@ -71,6 +80,12 @@ function loadStore(directory: string) {
       enabled: boolean;
       [key: string]: unknown;
     }) => { id: string; enabled: boolean };
+    readBackupSnapshot: () => {
+      profiles: Array<{ id: string }>;
+      settings: unknown;
+    };
+    updateSettings: (patch: { theme?: string }) => unknown;
+    writeConfigRaw: (payload: Record<string, unknown>) => void;
   };
 }
 
@@ -152,6 +167,55 @@ test("reorderProfiles 按传入 id 顺序写回，未列出的保持原相对顺
       [...store.readProfiles().map((profile) => profile.id)],
       ["c", "a", "b"]
     );
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("恢复后的写封锁覆盖直接 updateSettings 与 writeConfigRaw", () => {
+  const directory = mkdtempSync(join(tmpdir(), "vadu-store-lock-"));
+  const lock = { value: false };
+  try {
+    const store = loadStore(directory, lock);
+    lock.value = true;
+    assert.throws(() => store.updateSettings({ theme: "dark" }), {
+      code: "ABORTED",
+    });
+    assert.throws(() => store.writeConfigRaw({ schemaVersion: 1 }), {
+      code: "ABORTED",
+    });
+    assert.equal(existsSync(join(directory, "config.json")), false);
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("导出快照遇到损坏配置不改名留档，也不静默丢掉坏 profile", () => {
+  const directory = mkdtempSync(join(tmpdir(), "vadu-store-export-corrupt-"));
+  try {
+    const store = loadStore(directory);
+    writeFileSync(join(directory, "config.json"), "{broken", "utf8");
+    assert.throws(() => store.readBackupSnapshot(), {
+      code: "INVALID_CONFIG",
+    });
+    assert.equal(
+      readFileSync(join(directory, "config.json"), "utf8"),
+      "{broken"
+    );
+    assert.equal(existsSync(join(directory, "config.json.corrupt")), false);
+
+    writeFileSync(
+      join(directory, "config.json"),
+      JSON.stringify({
+        profiles: [{ id: "bad" }],
+        schemaVersion: 1,
+        settings: {},
+      }),
+      "utf8"
+    );
+    assert.throws(() => store.readBackupSnapshot(), {
+      code: "INVALID_CONFIG",
+    });
   } finally {
     rmSync(directory, { force: true, recursive: true });
   }

@@ -436,7 +436,6 @@ function ProvidersPage(): ReactNode {
               filtered={filteredProfiles}
               hasPlugins={visiblePlugins.length > 0}
               kind={kind}
-              kindCount={visibleProfiles.length}
               listRef={listRef}
               onAdd={startNew}
               onFilterChange={setFilter}

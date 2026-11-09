@@ -101,8 +101,6 @@ type LeftPanelProps = {
   addDisabled: boolean;
   /** 当前 tab 的插件 kind，决定文案 */
   kind: PluginKind;
-  /** 当前 kind 的 profile 总数（不受搜索/过滤影响），显示在标题旁 */
-  kindCount: number;
   /** 启用状态过滤，非 "all" 时禁用拖拽排序 */
   filter: FilterState;
   /** 已按 query 与 filter 过滤后的可见列表；拖拽只改这份顺序 */
@@ -132,7 +130,6 @@ type LeftPanelProps = {
 function LeftPanel({
   addDisabled,
   kind,
-  kindCount,
   filter,
   filtered,
   hasPlugins,
@@ -163,10 +160,6 @@ function LeftPanel({
 
   return (
     <aside className="flex min-h-0 flex-col gap-3 md:self-stretch">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-medium text-sm">服务商</h2>
-        <span className="text-muted-foreground text-xs">{kindCount}</span>
-      </div>
       <div className="relative">
         <Input
           aria-label="搜索服务商"

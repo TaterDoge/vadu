@@ -1,5 +1,8 @@
 # vadu 文档
 
+> 此目录保留 Electron 版设计，供 NSH 重写参考；不代表 `rewrite/nsh` 分支已经实现这些功能。
+> 原实现见 [`electron-final`](https://github.com/TaterDoge/vadu/tree/electron-final)，当前工程说明见[项目 README](../README.md)。
+
 vadu 是一个桌面翻译软件。翻译能力全部由「插件」提供，应用本身只负责调度、配置、UI 与插件生命周期管理。首要场景是 AI 翻译：用户填自己的 endpoint、密钥、模型。
 
 ## 文档地图

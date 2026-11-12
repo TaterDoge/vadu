@@ -1,5 +1,17 @@
 # AGENTS.md — vadu
 
+## 当前状态：NSH 重写
+
+当前 `rewrite/nsh` 分支只有 NSH 脚手架；Electron 版保留在 `main` 与 `electron-final` Tag。
+
+- `App.tsx` 是当前 UI 入口，`src/lib.rs` 提供原生模块，配置见 `nsh.json` 与 `Cargo.toml`。
+- 当前质量检查使用 `nsh check`，测试使用 `nsh test`；不要在本分支运行旧版 Bun / Electron 脚本。
+- `.nsh/` 与 `target/` 是生成文件，不提交。应用的 `Cargo.lock` 随代码提交。
+- `docs/` 和下文均为 Electron 版资料，仅作迁移参考，不是 NSH 当前目录、API 或工具链契约。
+- 下文安全红线中的保密与权限要求继续有效；`safeStorage` 等 Electron API 不作为 NSH 的实现方案。
+
+## Electron 历史约定
+
 桌面翻译软件。Electron 主进程承载翻译引擎与插件运行时，React 渲染层只做 UI。
 
 ## 先读哪份文档

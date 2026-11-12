@@ -1,6 +1,2 @@
-node_modules
-dist
-out
-.tmp
-.DS_Store
-*.log*
+.nsh/
+target/

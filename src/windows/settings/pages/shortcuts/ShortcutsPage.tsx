@@ -1,7 +1,8 @@
-import { Image, Text, View } from "nsh";
+import { Image, Text, View, token } from "nsh";
 import { Button, Switch } from "nsh/base";
 
 import { Item } from "../../../../components/ui/Item";
+import { Kbd, KbdGroup } from "../../../../components/ui/Kbd";
 import generalIcon from "../../icons/general.svg";
 import shortcutsIcon from "../../icons/shortcuts.svg";
 import pinIcon from "./pin.svg";
@@ -50,7 +51,7 @@ const shortcutGroups = [
 export function ShortcutsPage() {
 	return (
 		<View testID="settings-shortcuts-page" class="gap-6">
-			<Text class="text-xs leading-5 text-neutral-500">
+			<Text class="text-(length:--text-xs) leading-5 text-muted-foreground">
 				快捷键录入、保存与注册尚未迁移，以下仅为 macOS 默认快捷键预览。
 			</Text>
 			<Each of={shortcutGroups}>
@@ -59,7 +60,7 @@ export function ShortcutsPage() {
 						<Text
 							role="header"
 							accessibilityLevel={2}
-							class="text-sm font-semibold text-neutral-950"
+							class="text-(length:--text-sm) font-semibold text-foreground"
 						>
 							{group().title}
 						</Text>
@@ -72,6 +73,7 @@ export function ShortcutsPage() {
 									media={
 										<Image
 											src={shortcut().icon}
+											style={{ tintColor: token("foreground") }}
 											class="h-5 w-5"
 											accessibilityElementsHidden
 											importantForAccessibility="no-hide-descendants"
@@ -79,29 +81,25 @@ export function ShortcutsPage() {
 									}
 									actions={
 										<>
-											<View
+											<KbdGroup
 												accessible
 												accessibilityLabel={"默认快捷键 " + shortcut().keyLabel}
-												class="flex-row gap-1"
 											>
 												<Each of={shortcut().keys}>
-													{(key) => (
-														<View class="h-7 min-w-7 items-center justify-center rounded-lg bg-neutral-100 px-2">
-															<Text class="text-xs font-medium text-neutral-500">
-																{key()}
-															</Text>
-														</View>
-													)}
+													{(key) => <Kbd>{key()}</Kbd>}
 												</Each>
-											</View>
+											</KbdGroup>
 											<If when={shortcut().resettable}>
 												<Button
 													disabled
-													accessibilityLabel={"重置" + shortcut().title + "快捷键"}
-													class="h-8 w-8 items-center justify-center rounded-lg disabled:opacity-40"
+													accessibilityLabel={
+														"重置" + shortcut().title + "快捷键"
+													}
+													class="h-8 w-8 items-center justify-center rounded-(--radius-lg) disabled:opacity-40"
 												>
 													<Image
 														src={resetIcon}
+														style={{ tintColor: token("foreground") }}
 														class="h-5 w-5"
 														accessibilityElementsHidden
 														importantForAccessibility="no-hide-descendants"
@@ -112,10 +110,12 @@ export function ShortcutsPage() {
 												testID={"shortcut-" + shortcut().id + "-enabled"}
 												checked={false}
 												disabled
-												accessibilityLabel={"启用" + shortcut().title + "快捷键"}
+												accessibilityLabel={
+													"启用" + shortcut().title + "快捷键"
+												}
 												class="shrink-0 disabled:opacity-50"
-												trackClass="w-9 rounded-full bg-neutral-200 p-0.5"
-												thumbClass="h-4 w-4 rounded-full bg-white"
+												trackClass="w-9 rounded-full bg-input p-0.5"
+												thumbClass="h-4 w-4 rounded-full bg-background"
 											/>
 										</>
 									}

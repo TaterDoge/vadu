@@ -1,7 +1,17 @@
 {
-  "name": "vadu",
-  "id": "com.example.vadu",
-  "version": "1.0.0",
-  "build": 1,
-  "rust": "."
+	"name": "vadu",
+	"id": "com.example.vadu",
+	"version": "1.0.0",
+	"build": 1,
+	"rust": ".",
+	"window": {
+		"defaultSize": {
+			"width": 960,
+			"height": 620
+		},
+		"titleBar": {
+			"style": "hidden",
+			"height": 52
+		}
+	}
 }

@@ -8,13 +8,13 @@ export function Kbd(props: ViewProps) {
 		<View
 			{...rest}
 			class={
-				"pointer-events-none h-7 w-fit min-w-7 shrink-0 select-none flex-row items-center justify-center rounded-(--radius-md) bg-muted p-2 " +
+				"pointer-events-none h-7 w-fit min-w-7 shrink-0 select-none flex-row items-center justify-center rounded-md bg-muted p-1 group-hover/kbd:bg-background " +
 				(own.class ?? "")
 			}
 		>
 			{/* 快捷键符号独立选字体，避免跟随等宽字体时缺字。 */}
 			<Text
-				class="text-(length:--text-xs) font-medium leading-5 text-muted-foreground"
+				class="text-xs font-medium leading-5 text-muted-foreground"
 				style={{ fontFamily: token("font-key") }}
 			>
 				{own.children}

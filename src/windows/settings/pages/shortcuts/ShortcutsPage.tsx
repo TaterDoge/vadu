@@ -2,21 +2,22 @@ import {
 	Image,
 	Text,
 	View,
+	type ViewRef,
 	cleanup,
 	effect,
 	keymap,
 	lifecycle,
 	signal,
 	token,
-	type ViewRef,
 } from "nsh";
 import { Button, Switch } from "nsh/base";
-import { Settings, type AppSettings, type SettingsReply } from "vadu/native";
+import { type AppSettings, Settings, type SettingsReply } from "vadu/native";
 
 import { Item } from "../../../../components/ui/Item";
 import { Kbd, KbdGroup } from "../../../../components/ui/Kbd";
 import generalIcon from "../../icons/general.svg";
 import shortcutsIcon from "../../icons/shortcuts.svg";
+import infoIcon from "./info.svg";
 import pinIcon from "./pin.svg";
 import resetIcon from "./reset.svg";
 
@@ -59,9 +60,12 @@ export function ShortcutsPage() {
 	const recording = signal<string | null>(null);
 	const message = signal("");
 	const pending = signal(false);
+	let cancelledByBlur: string | null = null;
 	let captureKeys: string[] = [];
 	let disposed = false;
-	cleanup(() => { disposed = true; });
+	cleanup(() => {
+		disposed = true;
+	});
 
 	async function apply(action: () => Promise<SettingsReply>) {
 		if (pending() || disposed) return false;
@@ -88,9 +92,46 @@ export function ShortcutsPage() {
 		return Settings.read();
 	});
 
+	function isRecording(id: string) {
+		return recording() === id;
+	}
+
+	function shortcutLabel(id: string) {
+		const binding = settings()?.shortcuts.find((item) => item.id === id);
+		return binding ? keymap.label(binding.keystroke) : "不可用";
+	}
+
+	function shortcutKeys(id: string) {
+		return shortcutLabel(id).match(/[⌃⌥⇧⌘]|[^⌃⌥⇧⌘+]+/g) ?? [];
+	}
+
+	function clearBlurCancellation() {
+		cancelledByBlur = null;
+	}
+
 	function cancel() {
+		clearBlurCancellation();
 		recording.set(null);
 		message.set("");
+	}
+
+	function toggleRecording(id: string, field: ViewRef | undefined) {
+		if (pending()) {
+			clearBlurCancellation();
+			return;
+		}
+		const shouldCancel = isRecording(id) || cancelledByBlur === id;
+		cancel();
+		if (shouldCancel) return;
+		field?.focus();
+		recording.set(id);
+	}
+
+	function handleRecordingBlur(id: string) {
+		if (!isRecording(id)) return;
+		cancel();
+		// macOS 先失焦再派发点击，避免同次点击重新开始录制。
+		cancelledByBlur = id;
 	}
 
 	async function save(id: string, keystroke: string) {
@@ -100,13 +141,25 @@ export function ShortcutsPage() {
 		}
 	}
 
+	async function resetShortcut(id: string) {
+		if (await apply(() => Settings.resetShortcut(id))) {
+			recording.set(null);
+			message.set("快捷键已恢复默认。");
+		}
+	}
+
 	effect(() => {
 		const id = recording();
 		if (!id) return;
 
 		const stopCapture = keymap.bind(
 			Object.fromEntries(
-				captureKeys.map((key) => [key, () => { void save(id, key); }]),
+				captureKeys.map((key) => [
+					key,
+					() => {
+						void save(id, key);
+					},
+				]),
 			),
 			{ when: "always" },
 		);
@@ -123,19 +176,23 @@ export function ShortcutsPage() {
 	});
 
 	effect(() => {
-		if (lifecycle() !== "active" && recording()) cancel();
+		if (lifecycle() !== "active") {
+			clearBlurCancellation();
+			if (recording()) cancel();
+		}
 	});
 
 	return (
 		<View testID="settings-shortcuts-page" class="gap-6">
-			<Text class="text-(length:--text-xs) leading-5 text-muted-foreground">
-				点击键帽录入，按 Esc / Tab 或移开焦点取消。配置自动保存，快捷键注册尚未接线。
+			<Text class="text-xs leading-5 text-muted-foreground">
+				点击键帽录入，再次点击、按 Esc / Tab
+				或移开焦点取消。配置自动保存，快捷键注册尚未接线。
 			</Text>
 			<If when={message()}>
 				<Text
 					testID="shortcut-message"
 					role="alert"
-					class="text-(length:--text-xs) leading-5 text-muted-foreground"
+					class="text-xs leading-5 text-muted-foreground"
 				>
 					{message()}
 				</Text>
@@ -146,106 +203,125 @@ export function ShortcutsPage() {
 						<Text
 							role="header"
 							accessibilityLevel={2}
-							class="text-(length:--text-sm) font-semibold text-foreground"
+							class="text-sm font-semibold text-foreground"
 						>
 							{group().title}
 						</Text>
 						<Each of={group().items}>
 							{(shortcut) => {
 								let field: ViewRef | undefined;
-								const isRecording = () => recording() === shortcut().id;
-								const label = () => {
-									const binding = settings()?.shortcuts.find(
-										(item) => item.id === shortcut().id,
-									);
-									return binding ? keymap.label(binding.keystroke) : "不可用";
-								};
 
 								return (
-									<Item
-										testID={"shortcut-" + shortcut().id}
-										title={shortcut().title}
-										description={shortcut().description}
-										media={
-											<Image
-												src={shortcut().icon}
-												style={{ tintColor: token("foreground") }}
-												class="h-5 w-5"
-												accessibilityElementsHidden
-												importantForAccessibility="no-hide-descendants"
-											/>
-										}
-										actions={
-											<>
-												<KbdGroup
-													ref={(node) => { field = node; }}
-													testID={"shortcut-" + shortcut().id + "-input"}
-													accessible
-													role="button"
-													disabled={!settings()}
-													accessibilityLabel={
-														shortcut().title + "快捷键 " +
-														(isRecording() ? "正在录入，按 Esc 取消" : label())
-													}
-													accessibilityState={{ selected: isRecording() }}
-													class="rounded-(--radius-lg) border border-transparent p-1 hover:bg-accent focus-visible:border-primary disabled:opacity-40"
-													classList={{ "bg-accent border-primary": isRecording() }}
-													onPress={() => {
-														if (pending()) return;
-														field?.focus();
-														message.set("");
-														recording.set(shortcut().id);
-													}}
-													onBlur={() => { if (isRecording()) cancel(); }}
-												>
-													<If
-														when={isRecording()}
-														else={
-															<Each of={label().match(/[⌃⌥⇧⌘]|[^⌃⌥⇧⌘+]+/g) ?? []}>
-																{(key) => <Kbd>{key()}</Kbd>}
-															</Each>
-														}
-													>
-														<Kbd>请按快捷键…</Kbd>
-													</If>
-												</KbdGroup>
-												<If when={shortcut().resettable}>
-													<Button
-														disabled={!settings() || pending()}
-														onPress={async () => {
-															if (await apply(() => Settings.resetShortcut(shortcut().id))) {
-																recording.set(null);
-																message.set("快捷键已恢复默认。");
-															}
-														}}
-														accessibilityLabel={
-															"重置" + shortcut().title + "快捷键"
-														}
-														class="h-8 w-8 items-center justify-center rounded-(--radius-lg) disabled:opacity-40"
-													>
-														<Image
-															src={resetIcon}
-															style={{ tintColor: token("foreground") }}
-															class="h-5 w-5"
-															accessibilityElementsHidden
-															importantForAccessibility="no-hide-descendants"
-														/>
-													</Button>
-												</If>
-												<Switch
-													testID={"shortcut-" + shortcut().id + "-enabled"}
-													checked={false}
-													disabled
-													accessibilityLabel={
-														"启用" + shortcut().title + "快捷键"
-													}
-													class="shrink-0 disabled:opacity-50"
-													trackClass="w-9 rounded-full bg-input p-0.5"
-													thumbClass="h-4 w-4 rounded-full bg-background"
+									<>
+										<Item
+											testID={"shortcut-" + shortcut().id}
+											title={shortcut().title}
+											description={shortcut().description}
+											media={
+												<Image
+													src={shortcut().icon}
+													style={{ tintColor: token("foreground") }}
+													class="h-5 w-5"
+													accessibilityElementsHidden
+													importantForAccessibility="no-hide-descendants"
 												/>
-											</>
-										}
-									/>
+											}
+											actions={
+												<>
+													<KbdGroup
+														ref={(node) => {
+															field = node;
+														}}
+														testID={"shortcut-" + shortcut().id + "-input"}
+														accessible
+														role="button"
+														disabled={!settings()}
+														accessibilityLabel={
+															shortcut().title +
+															"快捷键 " +
+															(isRecording(shortcut().id)
+																? "正在录入，再次点击或按 Esc 取消"
+																: shortcutLabel(shortcut().id))
+														}
+														accessibilityState={{
+															selected: isRecording(shortcut().id),
+														}}
+														class="group/kbd rounded-lg p-1 hover:bg-accent focus-visible:bg-accent disabled:opacity-40"
+														classList={{
+															"bg-accent": isRecording(shortcut().id),
+														}}
+														onMouseEnter={clearBlurCancellation}
+														onFocus={clearBlurCancellation}
+														onPress={() =>
+															toggleRecording(shortcut().id, field)
+														}
+														onBlur={() => handleRecordingBlur(shortcut().id)}
+													>
+														<If
+															when={isRecording(shortcut().id)}
+															else={
+																<Each of={shortcutKeys(shortcut().id)}>
+																	{(key) => <Kbd>{key()}</Kbd>}
+																</Each>
+															}
+														>
+															<Kbd class="group-hover/kbd:bg-muted">
+																请按快捷键…
+															</Kbd>
+														</If>
+													</KbdGroup>
+													<If when={shortcut().resettable}>
+														<Button
+															disabled={!settings() || pending()}
+															onPress={() => resetShortcut(shortcut().id)}
+															accessibilityLabel={
+																"重置" + shortcut().title + "快捷键"
+															}
+															class="h-8 w-8 items-center justify-center rounded-lg disabled:opacity-40"
+														>
+															<Image
+																src={resetIcon}
+																style={{ tintColor: token("foreground") }}
+																class="h-4 w-4"
+																accessibilityElementsHidden
+																importantForAccessibility="no-hide-descendants"
+															/>
+														</Button>
+													</If>
+													<Switch
+														testID={"shortcut-" + shortcut().id + "-enabled"}
+														checked={false}
+														disabled
+														accessibilityLabel={
+															"启用" + shortcut().title + "快捷键"
+														}
+														class="shrink-0 disabled:opacity-50"
+														trackClass="w-9 rounded-full bg-input p-0.5"
+														thumbClass="h-4 w-4 rounded-full bg-background"
+													/>
+												</>
+											}
+										/>
+										<If when={isRecording(shortcut().id)}>
+											<View
+												testID={"shortcut-" + shortcut().id + "-tips"}
+												class="flex-row items-start gap-2 rounded-xl border border-border bg-card p-3"
+											>
+												<Image
+													src={infoIcon}
+													style={{ tintColor: token("foreground") }}
+													class="h-5 w-5 shrink-0"
+													accessibilityElementsHidden
+													importantForAccessibility="no-hide-descendants"
+												/>
+												<Text class="min-w-0 flex-1 text-xs leading-5 text-muted-foreground">
+													需要包含 ⌘ / Ctrl / Alt
+													等修饰键，主键可用字母、数字、方向键或标点键等；F1–F24
+													也可单独使用。
+												</Text>
+											</View>
+										</If>
+									</>
 								);
 							}}
 						</Each>

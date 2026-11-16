@@ -1,4 +1,4 @@
-import { type JSX, type ViewProps, Text, View, split } from "nsh";
+import { type JSX, Text, View, type ViewProps, split } from "nsh";
 
 export type ItemProps = Omit<ViewProps, "children"> & {
 	title: string;
@@ -20,7 +20,7 @@ export function Item(props: ItemProps) {
 		<View
 			{...rest}
 			class={
-				"flex-row flex-wrap items-center gap-4 rounded-(--radius-xl) border border-border bg-card p-4 " +
+				"flex-row flex-wrap items-center gap-4 rounded-xl border border-border bg-card p-4 " +
 				(own.class ?? "")
 			}
 		>
@@ -29,11 +29,11 @@ export function Item(props: ItemProps) {
 					<View class="shrink-0 pt-0.5">{own.media}</View>
 				</If>
 				<View class="min-w-0 flex-1 gap-1">
-					<Text class="text-(length:--text-sm) font-semibold leading-5 text-card-foreground">
+					<Text class="text-sm font-semibold leading-5 text-card-foreground">
 						{own.title}
 					</Text>
 					<If when={own.description}>
-						<Text class="text-(length:--text-xs) leading-5 text-muted-foreground">
+						<Text class="text-xs leading-5 text-muted-foreground">
 							{own.description}
 						</Text>
 					</If>

@@ -11,19 +11,19 @@ import {
 } from "../../../../theme";
 
 const choiceClass =
-	"group min-w-24 flex-1 gap-1 rounded-(--radius-md) border border-border px-3 py-2 checked:border-primary checked:bg-secondary hover:bg-accent focus-visible:border-foreground";
+	"group min-w-24 flex-1 gap-1 rounded-md border border-border px-3 py-2 checked:border-primary checked:bg-secondary hover:bg-accent focus-visible:border-foreground";
 
 export function AppearancePage() {
 	return (
 		<View testID="settings-appearance-page" class="gap-6">
-			<Text class="text-(length:--text-xs) leading-5 text-muted-foreground">
+			<Text class="text-xs leading-5 text-muted-foreground">
 				即时应用于所有窗口；当前选择仅在本次运行期间生效。
 			</Text>
 			<View role="group" accessibilityLabel="显示模式" class="gap-3">
 				<Text
 					role="header"
 					accessibilityLevel={2}
-					class="text-(length:--text-sm) font-semibold text-foreground"
+					class="text-sm font-semibold text-foreground"
 				>
 					显示模式
 				</Text>
@@ -45,7 +45,7 @@ export function AppearancePage() {
 								}
 							>
 								<View class="h-2 w-2 rounded-full bg-transparent group-checked:bg-primary" />
-								<Text class="text-(length:--text-sm) text-foreground">
+								<Text class="text-sm text-foreground">
 									{option().label}
 								</Text>
 							</Radio>
@@ -57,7 +57,7 @@ export function AppearancePage() {
 				<Text
 					role="header"
 					accessibilityLevel={2}
-					class="text-(length:--text-sm) font-semibold text-foreground"
+					class="text-sm font-semibold text-foreground"
 				>
 					主题色
 				</Text>
@@ -80,7 +80,7 @@ export function AppearancePage() {
 									class="h-4 w-4 shrink-0 rounded-full"
 									style={{ backgroundColor: token(option().token) }}
 								/>
-								<Text class="text-(length:--text-sm) text-foreground">
+								<Text class="text-sm text-foreground">
 									{option().label}
 								</Text>
 							</Radio>
@@ -92,7 +92,7 @@ export function AppearancePage() {
 				<Text
 					role="header"
 					accessibilityLevel={2}
-					class="text-(length:--text-sm) font-semibold text-foreground"
+					class="text-sm font-semibold text-foreground"
 				>
 					界面风格
 				</Text>
@@ -111,10 +111,10 @@ export function AppearancePage() {
 								}
 								class={choiceClass + " min-w-48"}
 							>
-								<Text class="text-(length:--text-sm) font-semibold text-foreground">
+								<Text class="text-sm font-semibold text-foreground">
 									{option().label}
 								</Text>
-								<Text class="text-(length:--text-xs) leading-5 text-muted-foreground">
+								<Text class="text-xs leading-5 text-muted-foreground">
 									{option().description}
 								</Text>
 							</Radio>
@@ -122,21 +122,21 @@ export function AppearancePage() {
 					</Each>
 				</RadioGroup>
 			</View>
-			<View class="gap-3 rounded-(--radius-lg) border border-border bg-card p-4">
+			<View class="gap-3 rounded-lg border border-border bg-card p-4">
 				<Text
 					testID="theme-preview-title"
-					class="text-(length:--text-xl) font-semibold leading-6 text-card-foreground"
+					class="text-xl font-semibold leading-6 text-card-foreground"
 				>
 					Aa 0123456789 · 你好
 				</Text>
-				<Text class="text-(length:--text-sm) leading-5 text-muted-foreground">
-					字体、圆角与强调色共用同一套主题 token。
+				<Text class="text-sm leading-5 text-muted-foreground">
+					字体与强调色随主题切换，字号与圆角使用 NSH 内置尺寸。
 				</Text>
 				<View class="flex-row flex-wrap items-center gap-3">
-					<View class="rounded-(--radius-md) bg-primary px-3 py-2">
+					<View class="rounded-md bg-primary px-3 py-2">
 						<Text
 							testID="theme-preview-primary"
-							class="text-(length:--text-sm) font-medium text-primary-foreground"
+							class="text-sm font-medium text-primary-foreground"
 						>
 							强调色预览
 						</Text>

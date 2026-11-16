@@ -90,7 +90,7 @@ export function SettingsWindow() {
 										onSelect={() => {
 											if (activeNav().id !== page().id) nav.replace(page());
 										}}
-										class="h-11 flex-row items-center gap-3 rounded-(--radius-xl) border border-transparent px-3 hover:bg-sidebar-accent focus-visible:border-sidebar-foreground"
+										class="h-11 flex-row items-center gap-3 rounded-xl border border-transparent px-3 hover:bg-sidebar-accent focus-visible:border-sidebar-foreground"
 										classList={{
 											"bg-sidebar-accent": activeNav().id === page().id,
 										}}
@@ -106,7 +106,7 @@ export function SettingsWindow() {
 											importantForAccessibility="no-hide-descendants"
 										/>
 										<Text
-											class="text-(length:--text-sm) text-sidebar-foreground"
+											class="text-sm text-sidebar-foreground"
 											classList={{
 												"font-semibold": activeNav().id === page().id,
 											}}
@@ -128,7 +128,7 @@ export function SettingsWindow() {
 							headerVisible={false}
 							animation="default"
 						>
-							<Scroll class="flex-1 rounded-(--radius-xl) border border-border bg-background">
+							<Scroll class="flex-1 rounded-xl border border-border bg-background">
 								<View
 									testID="settings-content"
 									role="region"

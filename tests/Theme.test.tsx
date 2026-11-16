@@ -68,14 +68,12 @@ test("六种强调色使用主题色值，深浅前景可读，恢复中性不�
 	}
 });
 
-test("Nova 与 Lyra 切换字体 圆角 字号，导航卸载后保留并可恢复", async () => {
+test("Nova 与 Lyra 切换字体但保持内置字号，导航卸载后保留并可恢复", async () => {
 	const app = await open("./fixtures/Theme.tsx", viewport);
 	await app.press("id:settings-appearance");
 	expect(status(app)).toMatchObject({
 		font: "Geist Mono",
 		keyFont: "Lucida Grande",
-		radius: 10,
-		radiusXl: 14,
 	});
 	expect(app.spanStyle("text:Aa 0123456789 · 你好").fontSize).toBe(20);
 	expect(app.spanStyle("text:强调色预览").fontSize).toBe(14);
@@ -87,13 +85,12 @@ test("Nova 与 Lyra 切换字体 圆角 字号，导航卸载后保留并可恢�
 		accent: "amber",
 		font: "JetBrains Mono",
 		keyFont: "Lucida Grande",
-		radius: 0,
-		radiusXl: 0,
 	});
-	expect(app.spanStyle("text:Aa 0123456789 · 你好").fontSize).toBe(18);
-	expect(app.spanStyle("text:强调色预览").fontSize).toBe(12);
+	expect(app.spanStyle("text:Aa 0123456789 · 你好").fontSize).toBe(20);
+	expect(app.spanStyle("text:强调色预览").fontSize).toBe(14);
 	await app.press("id:settings-shortcuts");
-	expect(app.spanStyle("text:全局快捷键").fontSize).toBe(12);
+	expect(app.spanStyle("text:全局快捷键").fontSize).toBe(14);
+	expect(app.spanStyle("text:唤起 / 隐藏翻译浮窗").fontSize).toBe(14);
 	expect(app.spanStyle("id:shortcut-toggle-translate >> text:⌘").fontSize).toBe(
 		12,
 	);
@@ -105,8 +102,7 @@ test("Nova 与 Lyra 切换字体 圆角 字号，导航卸载后保留并可恢�
 		style: "nova",
 		accent: "amber",
 		font: "Geist Mono",
-		radius: 10,
-		radiusXl: 14,
+		keyFont: "Lucida Grande",
 	});
 	expect(app.spanStyle("text:强调色预览").fontSize).toBe(14);
 });

@@ -23,11 +23,11 @@ export function TranslateWindow() {
 				<Text
 					role="header"
 					accessibilityLevel={1}
-					class="text-(length:--text-xl) font-semibold leading-6 text-foreground"
+					class="text-xl font-semibold leading-6 text-foreground"
 				>
 					翻译工作台
 				</Text>
-				<Text class="text-(length:--text-sm) leading-6 text-muted-foreground">
+				<Text class="text-sm leading-6 text-muted-foreground">
 					翻译功能尚未迁移。
 				</Text>
 			</View>

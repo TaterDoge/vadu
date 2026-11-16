@@ -19,8 +19,6 @@ function ThemeFixture() {
 						scheme: colorScheme(),
 						font: token("font-sans"),
 						keyFont: token("font-key"),
-						radius: token("radius"),
-						radiusXl: token("radius-xl"),
 						primary: token("primary"),
 						primaryForeground: token("primary-foreground"),
 						sidebarPrimary: token("sidebar-primary"),

@@ -21,11 +21,11 @@ export const accents = [
 ] as const;
 
 export const themeStyles = [
-	{ value: "nova", label: "Nova", description: "圆角 · Geist Mono" },
+	{ value: "nova", label: "Nova", description: "Geist Mono" },
 	{
 		value: "lyra",
 		label: "Lyra",
-		description: "直角 · 紧凑字号 · JetBrains Mono",
+		description: "JetBrains Mono",
 	},
 ] as const;
 
@@ -52,15 +52,6 @@ export function setThemePreferences(next: ThemePreferences) {
 	common["font-sans"] = font;
 	common["font-mono"] = font;
 	common["font-heading"] = font;
-
-	if (next.style === "lyra") {
-		for (const key of Object.keys(common)) {
-			if (key === "radius" || key.startsWith("radius-")) common[key] = 0;
-		}
-		common["text-sm"] = "0.75rem";
-		common["text-base"] = "0.75rem";
-		common["text-xl"] = "1.125rem";
-	}
 
 	const colors = (scheme: "light" | "dark") => {
 		if (next.accent === "neutral") return baseTheme.cssVars[scheme];

@@ -2,8 +2,11 @@
 //! TypeScript declarations are generated from these types into
 //! `.nsh/types/vadu/native.d.ts`.
 
+mod settings;
+
 use nsh_base::theme;
 use nsh_core::prelude::*;
+use settings::Settings;
 
 /// The crate's UI set (`nsh.json` `"rust"`).
 #[native_module("vadu/native")]
@@ -11,6 +14,7 @@ fn native(registry: &mut Registry) {
     registry
         .register::<Badge>()
         .module::<Format>()
+        .module::<Settings>()
         .class::<Counter>();
 }
 

@@ -1,55 +1,28 @@
 # vadu 文档
 
-> 此目录保留 Electron 版设计，供 NSH 重写参考；不代表 `rewrite/nsh` 分支已经实现这些功能。
-> 原实现见 [`electron-final`](https://github.com/TaterDoge/vadu/tree/electron-final)，当前工程说明见[项目 README](../README.md)。
+本目录只维护当前 NSH 项目需要的范围与设计，不保留 Electron 文档副本。**当前仅实现设置分类导航**；原生业务 API 与插件运行时均为目标设计，不能当作现成 API 使用。
 
-vadu 是一个桌面翻译软件。翻译能力全部由「插件」提供，应用本身只负责调度、配置、UI 与插件生命周期管理。首要场景是 AI 翻译：用户填自己的 endpoint、密钥、模型。
+## 从这里开始
 
-## 文档地图
+| 要做的事 | 阅读 |
+| --- | --- |
+| 查看运行命令与工程入口 | [项目 README](../README.md) |
+| 查看已完成内容、导航边界与下一步验证 | [迁移范围与进度](./nsh-migration.md) |
+| 理解窗口、运行时、核心分层、数据与信任边界 | [NSH 架构](./nsh/architecture.md) |
+| 设计 UI ↔ Rust 调用、任务流、取消或错误 | [原生 API 与任务契约](./nsh/native-api.md) |
+| 写插件、接入 AI 服务商、修改配置 schema 或权限 | [NSH 插件规范](./nsh/plugin-spec.md) |
 
-| 文档 | 内容 | 什么时候读 |
-| --- | --- | --- |
-| [architecture.md](./architecture.md) | 进程模型、分层、目录结构、数据流、架构决策记录 | 第一次接触本项目 / 要改整体结构 |
-| [plugin-spec.md](./plugin-spec.md) | 插件清单格式、运行契约、生命周期、权限、错误码、版本兼容 | 写插件 / 改插件加载器 |
-| [ai-provider.md](./ai-provider.md) | AI 翻译插件：预设厂商、协议适配器、prompt、流式解析、成本与多模态 | 接新的 AI 厂商 / 调翻译质量 |
-| [ipc-contract.md](./ipc-contract.md) | 主进程 ↔ 渲染层通道表、共享类型、流式事件协议 | 加功能要跨进程 / 改 preload |
-| [roadmap.md](./roadmap.md) | 里程碑、每阶段验收标准、明确不做的事 | 规划下一步 |
+## 文档分工
 
-## 30 秒心智模型
+- `nsh-migration.md` 只维护状态、范围与验证顺序，不复制接口。
+- `nsh/architecture.md` 维护职责、运行时与数据边界。
+- `nsh/native-api.md` 是原生业务调用、错误码与任务生命周期的唯一设计来源。
+- `nsh/plugin-spec.md` 是插件运行契约、权限与 AI 协议组织的唯一设计来源。
 
-```
-渲染层 (React)                 主进程 (Node)                    外部
-─────────────────────────────────────────────────────────────────────
-翻译面板 UI  ──IPC──▶  translate service ──▶ plugin registry ──▶ 插件
-   ▲                     │                        │              │
-   └──流式 chunk──────────┘                       │              ▼
-取词 / 朗读 UI ──IPC──▶  ocr / tts service ──▶ (同一 registry)   HTTP(S) 厂商 API
-                                                配置/密钥
-```
+文档区分“已实现”“目标设计”和“待验证”。行为变更与文档同次更新；没有通过 NSH 类型生成与发布构建验证的草案，不能写成已可用 SDK。
 
-- **插件是外部能力的唯一边界。** 主进程 core 不认识 OpenAI、DeepL 或任何厂商。
-- **一个插件一种能力（kind）。** `translator` / `ocr` / `tts` 各自一套契约与 profile，共享同一套密钥、schema 表单与受控 fetch。
-- **AI 是一个插件，多个协议适配器。** 不是「每厂商一个插件」，用户填 baseURL 就能覆盖大多数服务。
-- **流式是默认形态。** 插件产出增量文本，core 累积并转发，UI 边收边渲染。
-- **配置由清单驱动。** 插件的设置表单来自 `manifest.json` 的 schema，插件不写 UI 代码。
+## 历史资料
 
-## 术语表
+旧 Electron 的 IPC、架构、插件、AI 与里程碑文档已从本分支移除，必要业务原则并入上述 NSH 文档。不再使用旧目录、Electron API、Bun 脚本或旧路线图指导本分支开发。
 
-| 术语 | 含义 | 不是什么 |
-| --- | --- | --- |
-| **plugin** | 一种外部能力的实现（翻译 / 识别 / 朗读），目录形态，含 `manifest.json` + 入口模块 | 不是 npm 包，不走 npm 依赖解析 |
-| **kind** | 插件能力种类：`translator` / `ocr` / `tts`，一个插件只声明一种 | 不是插件名 |
-| **capabilities** | 插件声明支持的可选特性：`streaming`、`models`、`glossary`、`batch` | 不是权限 |
-| **permissions** | 插件运行需要的资源声明，如 `net:https://api.openai.com` | 不是 capabilities，权限由宿主校验 |
-| **apiVersion** | 插件契约版本号，整数递增，主版本不匹配即拒绝加载 | 不是插件自身版本 |
-| **profile** | 用户在 UI 里保存的一套配置实例，例如「DeepSeek-快速」「本地 Ollama」 | 不是插件，一个插件可挂多个 profile |
-| **preset** | 插件清单里预置的厂商模板（baseURL + 协议 + 默认模型），创建 profile 时填充 | 不是 profile，preset 只读 |
-| **adapter** | ai 插件内部把统一请求翻译成某家 HTTP 协议的实现（openai / anthropic / gemini） | 不是插件，不对外暴露 |
-| **runtime** | `PluginRuntime`：宿主注入给插件的长期上下文（受控 fetch、日志、密钥读取）。旧称 `ctx` | 不是全局对象，也不是每次调用新建 |
-| **call options** | `CallOptions`：每次调用新建的 `{ signal, requestId }` | 不是 runtime，不跨调用复用 |
-
-## 约定
-
-- 文档语言中文，代码标识符英文。
-- 接口签名以 `docs/` 为准，`src/shared/` 是它的落地实现；两者不一致视为 bug。
-- 架构决策改动请同步更新 [architecture.md](./architecture.md) 的决策记录表，不要只在 PR 描述里写。
+需要查历史时，查看 `main` 或 [`electron-final`](https://github.com/TaterDoge/vadu/tree/electron-final)；不承诺旧插件、备份或配置数据自动兼容。

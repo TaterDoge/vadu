@@ -2,17 +2,42 @@
 
 ## NSH 重写中
 
-当前 `rewrite/nsh` 分支仅包含 NSH（TSX + Rust）脚手架，Electron 版的翻译、插件和配置等功能尚未迁移。
+当前 `rewrite/nsh` 分支基于 NSH（TSX + Rust），已搭建设置主窗口的分类导航与独立翻译窗口壳。翻译工作台定位为仅通过快捷键唤起，快捷键尚未接线。翻译、插件和配置等业务功能尚未迁移；五个设置分类均由独立 Page 渲染；快捷键页保留设置项预览，其余页暂为空容器，不显示公共标题或占位说明。
 
 - 原 GitHub 仓库和提交历史继续保留，`main` 暂时保持 Electron 实现。
 - 重写前的 Electron 快照保存在 [`electron-final`](https://github.com/TaterDoge/vadu/tree/electron-final) Tag。
-- [docs/](./docs/README.md) 保留 Electron 版设计，仅作迁移参考，不代表当前 NSH 实现。
+- [迁移范围与进度](./docs/nsh-migration.md) 记录已实现内容、导航边界与后续验证顺序。
+- [NSH 文档索引](./docs/README.md) 维护当前架构、原生 API 与第三方 JS 插件设计；本分支不再保留 Electron 文档副本。
 
-## NSH 脚手架
+## NSH 工程
 
-A TSX app with a Rust crate of its own: `App.tsx` is the app, and the directory is also a crate (`Cargo.toml`,
-`src/lib.rs`; `nsh.json` `"rust": "."`) whose `#[native_module("vadu/native")]` exports a component (`Badge`), a
-module (`Format`) and a class (`Counter`) that `App.tsx` imports from `vadu/native`.
+`App.tsx` 只负责启动，窗口实现放在 `src/windows/`：
+
+```text
+App.tsx                                  # 挂载设置主窗口
+src/windows/settings/SettingsWindow.tsx   # 设置侧栏与内容路由
+src/components/ui/Item.tsx                # 可复用设置项容器
+src/windows/settings/pages/              # 五个分类的独立 Page；快捷键预览操作禁用
+src/windows/translate/TranslateWindow.tsx # 独立翻译窗口壳与唤起函数
+src/lib.rs                               # Rust 原生模块入口
+```
+
+设置窗口采用左右布局，侧栏包含品牌区与线框图标，使用常驻 MenuItem；NSH 0.5 的 Menu 是弹层，不适用于常驻导航。内容通过 `nsh/base` 的 NavStack / NavPage 路由。通用、服务商、外观、快捷键、备份恢复五个一级分类通过 `replace` 切换，默认通用，不累积返回历史；键盘通过 Tab 移动焦点、Enter / Space 激活。主窗口不提供翻译工作台入口；`openTranslateWindow()` 使用 `Window.open` 创建或重用独立窗口并聚焦，后续由快捷键调用。`App.test.tsx` 覆盖品牌与默认页、分类切换、无返回历史、矮窗口滚动、尺寸变化与键盘导航；独立翻译窗口的唤起按钮仅存在于测试 fixture。
+
+`Item` 用 NSH 的 `View` / `Text` 构建，`title` 必填，`description`、`media`、`actions` 可选；原生属性（如 `testID`、`style`、`class`、事件与可访问属性）继续透传到根容器。内容与操作区按可用宽度换行，业务状态由调用方拥有，不引入 React / shadcn 运行时。
+
+```tsx
+import { Item } from "./src/components/ui/Item";
+
+<Item
+  title="设置项标题"
+  description="设置项说明"
+  media={<Image src={icon} class="h-5 w-5" />}
+  actions={<Switch checked={enabled()} onChange={({ checked }) => enabled.set(checked)} accessibilityLabel="启用设置项" />}
+/>
+```
+
+当前目录也是 Rust crate（`Cargo.toml`、`src/lib.rs`；`nsh.json` 中 `"rust": "."`）。原生模块 `vadu/native` 暂时保留脚手架导出 `Badge`、`Format`、`Counter`，导航不依赖这些示例。
 
 ```sh
 nsh run                      # this machine's backend; --target ios, android, web, macos, linux, windows or gpui

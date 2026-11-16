@@ -1,66 +1,54 @@
 # AGENTS.md — vadu
 
-## 当前状态：NSH 重写
+## 当前工程
 
-当前 `rewrite/nsh` 分支只有 NSH 脚手架；Electron 版保留在 `main` 与 `electron-final` Tag。
+vadu 正在 `rewrite/nsh` 分支迁移到 NSH（TSX + Rust），当前依赖 NSH 0.5.0。已实现设置主窗口分类导航与独立翻译窗口壳，翻译、插件和配置业务尚未迁移。
 
-- `App.tsx` 是当前 UI 入口，`src/lib.rs` 提供原生模块，配置见 `nsh.json` 与 `Cargo.toml`。
-- 当前质量检查使用 `nsh check`，测试使用 `nsh test`；不要在本分支运行旧版 Bun / Electron 脚本。
-- `.nsh/` 与 `target/` 是生成文件，不提交。应用的 `Cargo.lock` 随代码提交。
-- `docs/` 和下文均为 Electron 版资料，仅作迁移参考，不是 NSH 当前目录、API 或工具链契约。
-- 下文安全红线中的保密与权限要求继续有效；`safeStorage` 等 Electron API 不作为 NSH 的实现方案。
+- `App.tsx`：NSH 启动入口，仅挂载设置主窗口；TSX 窗口实现放在 `src/windows/`。
+- `src/windows/settings/SettingsWindow.tsx`：左右布局，侧栏使用常驻 MenuItem，内容由 `nsh/base` 的 NavStack / NavPage 路由；五个一级分类通过 replace 切换，不累积返回历史。
+- `src/windows/translate/TranslateWindow.tsx`：翻译窗口壳与 `openTranslateWindow()`，通过 Window.open 创建、重用并聚焦独立窗口。
+- `App.test.tsx`：侧栏导航、键盘交互与尺寸变化测试；独立窗口唤起按钮仅在 `tests/fixtures/Windows.tsx` 中。
+- `src/lib.rs`：`vadu/native` 原生注册入口，目前只有 Badge / Format / Counter 示例。
+- `nsh.json`、`Cargo.toml`：应用与 Rust 依赖配置；CLI 与 `nsh-*` 版本保持一致。
+- 翻译工作台定位为仅快捷键唤起的独立窗口，不接入主窗口导航；窗口壳已实现，全局快捷键尚未接线。
 
-## Electron 历史约定
+## 按任务读文档
 
-桌面翻译软件。Electron 主进程承载翻译引擎与插件运行时，React 渲染层只做 UI。
-
-## 先读哪份文档
-
-按任务查表，不要从头读：
-
-| 你要做的事 | 必读 |
+| 任务 | 必读 |
 | --- | --- |
-| 新增/修改翻译服务方（含接新 AI 厂商） | [docs/ai-provider.md](docs/ai-provider.md) → [docs/plugin-spec.md](docs/plugin-spec.md) |
-| 写一个新插件（内置或第三方） | [docs/plugin-spec.md](docs/plugin-spec.md) |
-| 改主进程 ↔ 渲染层的通道、加新的 IPC | [docs/ipc-contract.md](docs/ipc-contract.md) |
-| 了解进程边界、分层、目录归属、架构决策 | [docs/architecture.md](docs/architecture.md) |
-| 查术语（profile / preset / adapter / kind …） | [docs/README.md](docs/README.md) |
-| 规划下一步做什么 | [docs/roadmap.md](docs/roadmap.md) |
+| 确认当前范围与实现状态 | [docs/nsh-migration.md](docs/nsh-migration.md) |
+| 调整分层、窗口、存储或信任边界 | [docs/nsh/architecture.md](docs/nsh/architecture.md) |
+| 新增原生 API、任务、取消或错误 | [docs/nsh/native-api.md](docs/nsh/native-api.md) |
+| 插件、AI 服务商、schema 或权限 | [docs/nsh/plugin-spec.md](docs/nsh/plugin-spec.md) |
 
-文档是唯一事实来源。代码与文档不一致时，先改文档再改代码，或同一次提交里一起改。
+文档是当前设计来源，但草案不等于已实现能力。修改行为时同步文档；先核实 NSH 绑定与发布模式，不能将设计签名写成已生成 API。Electron 历史只在 `main` / `electron-final` 查询，不恢复旧工程约定。
 
-## 硬性约定
+## 检查与文件纪律
 
-**分层**
-- 翻译能力只能来自插件。主进程 core 不得内联任何厂商的 HTTP 调用（含 OpenAI）。
-- 插件不得直接 `require("node:fs")` / 读写配置 / 存取明文密钥；一律走注入的 `ctx`。
-- 插件只做「一次翻译调用」。语言检测、术语表、缓存、重试、批量属于 core，不要在插件里重复实现。
-- 渲染层不直接发网络请求。所有外部请求经主进程插件，受 CSP 与 manifest 权限约束。
+- 运行、构建说明见 [README.md](README.md)。质量门：`nsh check`，然后 `nsh test`；不运行旧 Bun / Electron 脚本。
+- 新增非平凡逻辑带小测试；插件加载、流式网络、取消和权限还需发布构建验证，不只测开发模式。
+- `.nsh/` 与 `target/` 是生成文件，不提交；应用 `Cargo.lock` 随代码提交。
+- 不手改 `.nsh/types/`。UI ↔ Rust 的 DTO 由 Rust 声明生成，不两端各写一份接口。
+- 复用当前 NSH 组件与响应式模式，不迁入 React renderer、shadcn、preload 或 Electron 路由机制。
+- 生成或修改 TSX 时，JSX 元素的条件渲染优先使用 NSH 内置 `<If when={...} else={...}>...</If>`，尽量避免用三目表达式切换元素；文本、样式和普通属性值的计算不受此限制。
+- 注释用中文，只解释原因；不要设置 ring 样式，保留键盘焦点和可访问名称。
 
-**通道**
-- 主进程与渲染层共用的类型只放 `src/shared/`，两侧 import 同一份，禁止各写一份 `interface`。
-- IPC 通道名统一 `vadu:` 前缀，全部登记在 `src/shared/ipc.ts`，不要在业务代码里写裸字符串。
-- 长任务（流式翻译）必须可取消：每个请求带 `requestId`，`cancel` 通道可终止上游 fetch。
+## 架构硬约束
 
-**插件**
-- 插件清单是 `manifest.json`，`apiVersion` 主版本不匹配即拒绝加载，不做运行时适配。
-- 新增插件契约字段 = 破坏性变更，必须同时更新 `docs/plugin-spec.md` 与 `apiVersion`。
-- 新增权限字符串（`net:` 之外）必须先在 `docs/plugin-spec.md` 定义语义再实现。
-
-## 工程约定
-
-- 包管理器 `bun`，锁文件 `bun.lock`；脚本用 `bun run <script>`。
-- 质量门：`bun run typecheck` + `bun run check`（Biome + ultracite）。提交前必须两条都过。
-- 代码风格由 Biome 决定，不手工争论：导入分组见 `biome.jsonc`，禁止无意义注释。
-- 注释只写「为什么」，且用中文；不要写复述代码的注释。
-- 渲染层组件用 `@renderer/*` 别名；UI 基础件来自 shadcn（`base-nova` 风格，`@base-ui/react` 内核），不要另起一套设计系统。
-- 主进程与 preload 用 `tsconfig.node.json` 的规则，渲染层用 `tsconfig.web.json`；新增跨环境目录要同时进两个 tsconfig 的 `include`。
-- 不给 `window` 加未在 `src/preload/index.d.ts` 声明的能力。`contextIsolation` 保持开启，`nodeIntegration` 保持关闭。
-- 不要设置 ring 样式
+- UI → 带类型的原生 API → Rust 核心 → 能力插件；不建立字符串 IPC 通道或通用 RPC。
+- 厂商协议只放插件；UI 不直连厂商，核心不内联厂商 HTTP。插件只做一次调用，不自行持久化配置或实现核心重试 / 缓存策略。
+- 保留用户安装第三方 JS 插件。独立插件 VM 与受控宿主桥是待实现目标，不是现成安全保证；禁止用 UI 的 `eval` / `new Function` 装插件。
+- NSH 自有窗口共享应用 engine，不套用 Electron 多 renderer 模型；任务仍需 requestId、回调归属与生命周期清理。
+- 翻译要逐块输出且可取消上游；OCR / TTS 一次性、可取消。不要只停止 UI 更新而留下后台任务。
+- Plugin / Profile / Preset / Settings / Secrets 分离。明确选择 Profile，不暗取首个 AI 配置，不静默换厂商。
+- 插件契约破坏性变更需同时更新文档与 apiVersion；兼容可选字段不机械升版。新增权限先定义语义再实现。
 
 ## 安全红线
 
-- API key 只经 `safeStorage` 加密后落盘，禁止明文写入配置、日志、渲染层状态、崩溃报告。
-- 日志里不得出现完整 key / Authorization 头；截断到前 4 后 4 位。
-- 插件视为完全可信（同 Obsidian 模型）：引入第三方插件前必须展示其 `permissions`，不得静默启用。
-- 新增 `shell.openExternal`、`webSecurity`、`sandbox` 相关改动，先说明理由再动手。
+- 已保存密钥不回读 UI、不写普通配置、日志或崩溃报告；只经系统安全存储持久化。不可用时拒绝持久化，禁止明文降级，不使用 Electron `safeStorage`。
+- 用户新输入密钥仅走短期输入与提交路径，提交后清空；不进入共享或持久化 UI 状态。
+- 日志不得包含完整 key、Authorization 头、原文 / 译文或上游响应正文；默认只记状态。确需识别 key 时最多前 4 后 4 位，短 key 全遮蔽。
+- 插件只取得本次 Profile 的受控网络与凭据上下文，不注入文件、进程、UI 或任意原生能力；NSH 应用 capabilities 不能替代插件权限检查。
+- 第三方插件启用前展示来源与权限；权限扩大重新确认。独立 VM 不是 OS 沙箱，隔离验证前不开放安装入口。
+- 删除 Profile / 凭据、卸载伴随数据清理或备份覆盖需明确确认；不得因重写自动清理用户数据、导出明文密钥或承诺旧格式兼容。
+- 新增外链、文件 / 进程或其他敏感系统能力前说明理由，先定义并测试宿主侧授权；禁止原样透传系统接口。

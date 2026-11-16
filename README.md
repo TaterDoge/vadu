@@ -2,7 +2,7 @@
 
 ## NSH 重写中
 
-当前 `rewrite/nsh` 分支基于 NSH（TSX + Rust），已搭建设置主窗口的分类导航与独立翻译窗口壳。翻译工作台定位为仅通过快捷键唤起，快捷键尚未接线。翻译、插件和配置等业务功能尚未迁移；五个设置分类均由独立 Page 渲染；快捷键页保留设置项预览，其余页暂为空容器，不显示公共标题或占位说明。
+当前 `rewrite/nsh` 分支基于 NSH（TSX + Rust），已搭建设置主窗口的分类导航与独立翻译窗口壳。翻译工作台定位为仅通过快捷键唤起，快捷键尚未接线。翻译、插件和配置等业务功能尚未迁移；五个设置分类均由独立 Page 渲染；外观页提供原生主题切换，快捷键页保留设置项预览；通用、服务商、备份恢复页暂为空容器，不显示公共标题或占位说明。
 
 - 原 GitHub 仓库和提交历史继续保留，`main` 暂时保持 Electron 实现。
 - 重写前的 Electron 快照保存在 [`electron-final`](https://github.com/TaterDoge/vadu/tree/electron-final) Tag。
@@ -17,7 +17,9 @@
 App.tsx                                  # 挂载设置主窗口
 src/windows/settings/SettingsWindow.tsx   # 设置侧栏与内容路由
 src/components/ui/Item.tsx                # 可复用设置项容器
-src/windows/settings/pages/              # 五个分类的独立 Page；快捷键预览操作禁用
+src/theme.ts                             # 应用级外观偏好、字体与原生主题切换
+theme.json                               # shadcn 语义 token、深浅配色与强调色色板
+src/windows/settings/pages/              # 外观可切换，快捷键预览操作禁用
 src/windows/translate/TranslateWindow.tsx # 独立翻译窗口壳与唤起函数
 src/lib.rs                               # Rust 原生模块入口
 ```
@@ -36,6 +38,16 @@ import { Item } from "./src/components/ui/Item";
   actions={<Switch checked={enabled()} onChange={({ checked }) => enabled.set(checked)} accessibilityLabel="启用设置项" />}
 />
 ```
+
+## 原生主题
+
+设置 → 外观可选择浅色、深色或跟随系统，支持中性、蓝色、翠绿、琥珀、玫红、紫色六种强调色，以及 Nova / Lyra 两种风格。默认跟随系统、中性色、Nova；切换即时作用于设置与翻译窗口，切页或重开翻译窗口不重置。**当前只保留本次运行的选择，重启恢复默认；尚未接入 Rust Settings 持久化。**
+
+- `nsh.json` 通过 `theme` 加载 `theme.json`，使用 NSH 的 `setTheme` / `setColorScheme`，不引入 CSS、React 或 shadcn 运行时。
+- `theme.json` 是颜色的单一来源；色块预览也读取对应 token。非中性色只覆盖强调色及配对前景色，琥珀色始终使用深色文字。
+- Nova 使用 Geist Mono 与 10pt 基础圆角；Lyra 使用 JetBrains Mono、零圆角及紧凑字号。两种字体随应用打包，来源与 OFL 许可证见 `assets/fonts/`；快捷键符号使用 Lucida Grande，缺字由平台回退。
+- 新 UI 使用 `bg-background`、`text-foreground`、`border-border` 等语义类。可切换圆角与字号使用 `rounded-(--radius-md)`、`text-(length:--text-sm)`，不写死中性色和圆角。SVG 图标用原生 `tintColor` 跟随 token。
+- 原生滚动条宽 6pt，滑块使用前景色 20% / 悬停 35% 透明度。不设置 ring 样式；键盘焦点使用可见边框。窗口拖拽沿用原生 `desktop.windowDrag`，不迁入浏览器的 View Transition 或 `-webkit-*` 规则。
 
 当前目录也是 Rust crate（`Cargo.toml`、`src/lib.rs`；`nsh.json` 中 `"rust": "."`）。原生模块 `vadu/native` 暂时保留脚手架导出 `Badge`、`Format`、`Counter`，导航不依赖这些示例。
 

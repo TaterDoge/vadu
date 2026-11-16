@@ -46,8 +46,8 @@ import { Item } from "./src/components/ui/Item";
 
 - `nsh.json` 通过 `theme` 加载 `theme.json`，使用 NSH 的 `setTheme` / `setColorScheme`，不引入 CSS、React 或 shadcn 运行时。
 - `theme.json` 是颜色的单一来源；色块预览也读取对应 token。非中性色只覆盖强调色及配对前景色，琥珀色始终使用深色文字。
-- Nova 使用 Geist Mono 与 10pt 基础圆角；Lyra 使用 JetBrains Mono、零圆角及紧凑字号。两种字体随应用打包，来源与 OFL 许可证见 `assets/fonts/`；快捷键符号使用 Lucida Grande，缺字由平台回退。
-- 新 UI 使用 `bg-background`、`text-foreground`、`border-border` 等语义类。可切换圆角与字号使用 `rounded-(--radius-md)`、`text-(length:--text-sm)`，不写死中性色和圆角。SVG 图标用原生 `tintColor` 跟随 token。
+- Nova 使用 Geist Mono；Lyra 使用 JetBrains Mono，仅切换字体，不再改变字号与圆角。两种字体随应用打包，来源与 OFL 许可证见 `assets/fonts/`；快捷键符号使用 Lucida Grande，缺字由平台回退。
+- 新 UI 的颜色使用 `bg-background`、`text-foreground`、`border-border` 等语义类，不写死主题颜色；字号、行高、圆角与间距使用 `text-sm`、`leading-5`、`rounded-md`、`p-4` 等 NSH 内置类，不再定义主题尺寸 token。SVG 图标用原生 `tintColor` 跟随颜色 token。
 - 原生滚动条宽 6pt，滑块使用前景色 20% / 悬停 35% 透明度。不设置 ring 样式；键盘焦点使用可见边框。窗口拖拽沿用原生 `desktop.windowDrag`，不迁入浏览器的 View Transition 或 `-webkit-*` 规则。
 
 ## 快捷键与配置存储

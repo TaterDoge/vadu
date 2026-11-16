@@ -63,7 +63,7 @@ nsh package --target macos                        # macOS 发布包；其他目�
 - JSX 元素条件渲染优先使用 NSH 内置 `<If when={...} else={...}>`；列表沿用 `<Each>`。文本、样式与普通属性计算不受此限制。
 - 设置一级分类通过 `nav.replace` 切换，不累积返回历史；选中态直接读取路由栈，不再复制一份 signal。NSH 的 Menu 是弹层，不作为常驻侧栏容器。
 - 翻译窗口仅定位为快捷键唤起的独立窗口，不增加设置导航入口；唤起按钮只用于测试 fixture。NSH 自有窗口共享应用 engine，不建立 Electron 式窗口广播。
-- `theme.json` 是颜色单一来源；使用 `bg-background`、`text-foreground`、`border-border` 等语义类，圆角 / 字号读取 `--radius-*` / `--text-*`。SVG 用 `tintColor` 跟随 token，不写死主题颜色。
+- `theme.json` 是颜色单一来源；使用 `bg-background`、`text-foreground`、`border-border` 等语义类，字号、行高、圆角与间距使用 `text-sm`、`leading-5`、`rounded-md`、`p-4` 等 NSH 内置类，不再定义主题尺寸 token。SVG 用 `tintColor` 跟随 token，不写死主题颜色。
 - 不设置 ring 样式；保留可见键盘焦点、可访问名称和原生窗口拖拽。注释用中文，只解释原因。
 - UI → 带类型的 `vadu/native` → Rust 核心；DTO 由 Rust 声明生成，禁止手改 `.nsh/types/` 或两端各维护一份接口。
 - `Settings` 的 `ModuleCx` 方法在 TSX 侧返回 Promise；同时处理结构化业务错误与意外 Promise 拒绝。同步原生导出不做阻塞网络 / 磁盘 I/O。

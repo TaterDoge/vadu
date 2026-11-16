@@ -13,11 +13,11 @@
 | `src/windows/settings/pages/{general,providers,backup}/` | 三个分类的独立 Page 空容器，无公共标题或占位说明 | 页面内容与业务 |
 | `theme.json`、`src/theme.ts`、`src/windows/settings/pages/appearance/AppearancePage.tsx` | 原生语义 token、浅 / 深 / 跟随系统、六种强调色、Nova / Lyra、捆绑字体、原生细滚动条与即时预览，两窗口共用运行期主题 | Rust Settings 持久化；当前重启恢复默认 |
 | `src/windows/settings/pages/shortcuts/ShortcutsPage.tsx` | 全局 / 局内分组、键帽悬停与点击录入、平台标签、冲突校验、取消与清理、自动保存、全局项重置；启用开关仍禁用 | 实际全局 / 局内快捷键动作注册 |
-| `src/components/ui/Item.tsx` | 可复用的设置项容器：主题化标题（Nova 14pt / Lyra 12pt）、可选说明（12pt）/ 媒体 / 操作插槽、窄宽度换行，保留 NSH 响应式 props 与原生属性透传 | 不承载设置值、持久化或快捷键业务 |
-| `src/components/ui/Kbd.tsx` | 可复用的 Kbd / KbdGroup：参照 shadcn 的键帽样式：默认高度 / 最小宽度 28pt、四边各 8pt 内边距、主题圆角与配色、4pt 键间距与独立符号字体，保留原生属性及响应式样式透传 | 不承载快捷键录入或注册 |
+| `src/components/ui/Item.tsx` | 可复用的设置项容器：内置字号标题（14pt）、可选说明（12pt）/ 媒体 / 操作插槽、窄宽度换行，保留 NSH 响应式 props 与原生属性透传 | 不承载设置值、持久化或快捷键业务 |
+| `src/components/ui/Kbd.tsx` | 可复用的 Kbd / KbdGroup：参照 shadcn 的键帽样式：默认高度 / 最小宽度 28pt、四边各 4pt 内边距、内置圆角与主题配色、4pt 键间距与独立符号字体，保留原生属性及响应式样式透传 | 不承载快捷键录入或注册 |
 | `src/components/ui/motion.ts` | 可复用的 `createIconHoverMotion()`，封装图标悬停动画与卸载清理 | 其他动画按需添加 |
 | `src/windows/translate/TranslateWindow.tsx` | 独立窗口壳、创建与重用、隐藏唤起、关闭重开 | 快捷键唤起、翻译流与取消 |
-| `App.test.tsx`、`tests/Item.test.tsx`、`tests/Kbd.test.tsx`、`tests/Theme.test.tsx` | 五个分类的独立挂载与卸载、无公共标题与占位说明、快捷键与可访问名称、Item 可选插槽与响应式更新、Kbd 单键 / 组合键、响应式样式透传与方形尺寸回归、禁用状态和键盘交互、系统外观跟随与手动优先、强调色恢复、字体 / 字号 / 圆角切换与打开翻译窗口后的主题状态保留；矮窗口侧栏滚动测试仍依赖当前不存在的滚动容器，属于既有失败 | 翻译窗口生命周期与业务、插件与配置测试 |
+| `App.test.tsx`、`tests/Item.test.tsx`、`tests/Kbd.test.tsx`、`tests/Theme.test.tsx` | 五个分类的独立挂载与卸载、无公共标题与占位说明、快捷键与可访问名称、Item 可选插槽与响应式更新、Kbd 单键 / 组合键、响应式样式透传与方形尺寸回归、禁用状态和键盘交互、系统外观跟随与手动优先、强调色恢复、字体切换时保持内置字号与打开翻译窗口后的主题状态保留；矮窗口侧栏滚动测试仍依赖当前不存在的滚动容器，属于既有失败 | 翻译窗口生命周期与业务、插件与配置测试 |
 | `src/lib.rs`、`src/settings.rs`、`tests/Shortcuts.test.tsx` | `vadu/native` Settings、Rust 默认值与带版本配置文档、NSH Storage 持久化；Rust 配置测试与 TSX 录入 / 重置 / 冲突 / 清理 / 重开快照 / 配额 / Windows 语义测试；保留 Badge / Format / Counter 示例 | 其余业务核心、任务表、凭据服务、可靠落盘回执与真实磁盘恢复验证 |
 | 插件与备份恢复 | 配置文档及整包备份恢复设计见 [配置存储](./nsh/storage.md) | 独立 VM、第三方安装、受控 HTTP、安全凭据存储、备份导入 / 导出 API 与 UI |
 
@@ -38,11 +38,11 @@
 
 `App.tsx` 仅保留 NSH 启动代码，设置与翻译的 TSX 实现分别放在 `src/windows/settings/` 和 `src/windows/translate/`，不为每个窗口建立独立 engine 或 URL 入口。
 
-主窗口启动尺寸为 960 × 620 逻辑点（`nsh.json` 的 `window.defaultSize`），保留拖拽缩放。默认“通用”，尺寸变化不重置分类，重启不持久化该选择。窗口保持左右布局，侧栏使用常驻 MenuItem，选中项为主题侧栏强调背景与加粗文字，圆角跟随 Nova / Lyra；NSH 0.5 的 Menu 是弹层，不包裹常驻导航。内容由 `nsh/base` 的 `createNavStack` / `NavStack` / `NavPage` 承载；一级分类用 `replace` 切换，不压入返回历史。侧栏选中态直接读取路由栈，不另存一份 `signal`。鼠标进入任一菜单整行时，仅图标播放一次 300ms 的轻抬与轻摆动画，结束回原位；每项在组件体内创建一次 `src/components/ui/motion.ts` 的 `createIconHoverMotion()`，将 `style` 绑定到图标、悬停时调用 `play()`；底层通过 NSH 原生 `createMotion` 播放并遵循系统的减少动态效果设置，组件卸载时停止动画。悬停不切换分类。键盘通过 Tab 移动焦点、Enter / Space 激活，不再使用 Tabs 的方向键自动切页。
+主窗口启动尺寸为 960 × 620 逻辑点（`nsh.json` 的 `window.defaultSize`），保留拖拽缩放。默认“通用”，尺寸变化不重置分类，重启不持久化该选择。窗口保持左右布局，侧栏使用常驻 MenuItem，选中项为主题侧栏强调背景与加粗文字，圆角使用 NSH 内置尺寸，不随 Nova / Lyra 切换；NSH 0.5 的 Menu 是弹层，不包裹常驻导航。内容由 `nsh/base` 的 `createNavStack` / `NavStack` / `NavPage` 承载；一级分类用 `replace` 切换，不压入返回历史。侧栏选中态直接读取路由栈，不另存一份 `signal`。鼠标进入任一菜单整行时，仅图标播放一次 300ms 的轻抬与轻摆动画，结束回原位；每项在组件体内创建一次 `src/components/ui/motion.ts` 的 `createIconHoverMotion()`，将 `style` 绑定到图标、悬停时调用 `play()`；底层通过 NSH 原生 `createMotion` 播放并遵循系统的减少动态效果设置，组件卸载时停止动画。悬停不切换分类。键盘通过 Tab 移动焦点、Enter / Space 激活，不再使用 Tabs 的方向键自动切页。
 
 翻译工作台不是主窗口里的可切换页面，也不提供主窗口导航入口。`openTranslateWindow()` 使用 `Window.open`，固定窗口 ID 为 `translate`；重复调用重用窗口并聚焦，隐藏后可重新显示，关闭后可重新创建。窗口不指定设置窗口为父窗口；快捷键尚未接线，唤起按钮仅在测试 fixture 中。服务类别、选中 Profile 与编辑草稿属于后续页面状态，不升级为全局导航。
 
-五个分类通过独立 Page 渲染，窗口不再统一显示页面标题、分类说明或业务未迁移提示；通用、服务商、备份恢复页仅为空容器。外观页已提供显示模式、六种主题色、Nova / Lyra 与预览，选择只保留本次运行；主题细节见 [README](../README.md#原生主题)。快捷键页已支持三项组合的录入、校验与持久化；Esc / Tab、失焦、切页或退后台取消录入，全局项可恢复默认。开关仍为关闭且禁用，不假装已注册动作。配置通过 Rust Settings 保存，备份恢复只有设计、没有可用 UI 或 API。插件安装入口的具体 UI 留在插件管理切片中确定，不为此扩充本轮导航。
+五个分类通过独立 Page 渲染，窗口不再统一显示页面标题、分类说明或业务未迁移提示；通用、服务商、备份恢复页仅为空容器。外观页已提供显示模式、六种主题色、Nova / Lyra 字体切换与预览，字号、行高、圆角与间距使用 NSH 内置类，选择只保留本次运行；主题细节见 [README](../README.md#原生主题)。快捷键页已支持三项组合的录入、校验与持久化；录制时在对应 Item 下方显示独立的规则提示，键帽保留录制占位文案。再次点击当前录制键帽、Esc / Tab、失焦、切页或退后台取消录入，保留原绑定并停止捕获按键；全局项可恢复默认。开关仍为关闭且禁用，不假装已注册动作。配置通过 Rust Settings 保存，备份恢复只有设计、没有可用 UI 或 API。插件安装入口的具体 UI 留在插件管理切片中确定，不为此扩充本轮导航。
 
 ## 3. 已确认的迁移方向
 

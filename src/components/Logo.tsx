@@ -4,15 +4,19 @@ export function Logo() {
 	return (
 		<View class="flex-row items-center gap-3 px-5 pb-8 pt-10">
 			<View
-				class="h-8 w-8 items-center justify-center rounded-xl bg-neutral-900"
+				class="h-8 w-8 items-center justify-center rounded-(--radius-xl) bg-sidebar-primary"
 				accessibilityElementsHidden
 				importantForAccessibility="no-hide-descendants"
 			>
-				<Text class="text-lg font-bold text-white">v</Text>
+				<Text class="text-lg font-bold text-sidebar-primary-foreground">v</Text>
 			</View>
 			<View>
-				<Text class="text-base font-semibold text-neutral-950">vadu</Text>
-				<Text class="text-xs text-neutral-500">管理面板</Text>
+				<Text class="text-(length:--text-base) font-semibold text-sidebar-foreground">
+					vadu
+				</Text>
+				<Text class="text-(length:--text-xs) text-muted-foreground">
+					管理面板
+				</Text>
 			</View>
 		</View>
 	);

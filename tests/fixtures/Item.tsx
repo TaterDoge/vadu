@@ -1,4 +1,6 @@
 import { Text, View, mount, signal } from "nsh";
+import "../../src/theme";
+
 import { Button, Switch } from "nsh/base";
 
 import { Item } from "../../src/components/ui/Item";

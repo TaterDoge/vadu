@@ -1,10 +1,12 @@
 import { Text, View } from "nsh";
 import { Window } from "nsh/desktop";
 
+import "../../theme";
+
 export function TranslateWindow() {
 	return (
 		<View
-			class="flex-1 bg-slate-50"
+			class="flex-1 bg-background text-foreground"
 			style={{
 				paddingTop: "env(safe-area-inset-top)",
 				paddingRight: "env(safe-area-inset-right)",
@@ -21,11 +23,11 @@ export function TranslateWindow() {
 				<Text
 					role="header"
 					accessibilityLevel={1}
-					class="text-2xl font-semibold text-slate-900"
+					class="text-(length:--text-xl) font-semibold leading-6 text-foreground"
 				>
 					翻译工作台
 				</Text>
-				<Text class="text-sm leading-6 text-slate-600">
+				<Text class="text-(length:--text-sm) leading-6 text-muted-foreground">
 					翻译功能尚未迁移。
 				</Text>
 			</View>

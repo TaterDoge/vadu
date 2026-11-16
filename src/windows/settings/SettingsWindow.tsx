@@ -1,4 +1,4 @@
-import { Image, Scroll, Text, View } from "nsh";
+import { Image, Scroll, Text, View, token } from "nsh";
 import { MenuItem, NavPage, NavStack, createNavStack } from "nsh/base";
 
 import { Logo } from "../../components/Logo";
@@ -58,7 +58,7 @@ export function SettingsWindow() {
 			testID="settings-center"
 			role="region"
 			accessibilityLabel="设置中心"
-			class="flex-1 flex-row bg-white"
+			class="flex-1 flex-row bg-background text-foreground"
 			style={{
 				paddingTop: "env(safe-area-inset-top)",
 				paddingRight: "env(safe-area-inset-right)",
@@ -68,7 +68,7 @@ export function SettingsWindow() {
 		>
 			<View
 				testID="settings-sidebar"
-				class="w-48 shrink-0 border-r border-neutral-200 bg-neutral-50 md:w-60"
+				class="w-48 shrink-0 border-r border-sidebar-border bg-sidebar md:w-60"
 				desktop={{ windowDrag: true }}
 			>
 				<Logo />
@@ -90,20 +90,23 @@ export function SettingsWindow() {
 										onSelect={() => {
 											if (activeNav().id !== page().id) nav.replace(page());
 										}}
-										class="h-11 flex-row items-center gap-3 rounded-xl border border-transparent px-3 hover:bg-neutral-100 focus-visible:border-neutral-500"
+										class="h-11 flex-row items-center gap-3 rounded-(--radius-xl) border border-transparent px-3 hover:bg-sidebar-accent focus-visible:border-sidebar-foreground"
 										classList={{
-											"bg-neutral-100": activeNav().id === page().id,
+											"bg-sidebar-accent": activeNav().id === page().id,
 										}}
 									>
 										<Image
-											style={iconMotion.style}
+											style={{
+												...iconMotion.style,
+												tintColor: token("sidebar-foreground"),
+											}}
 											src={page().icon}
 											class="h-5 w-5 shrink-0"
 											accessibilityElementsHidden
 											importantForAccessibility="no-hide-descendants"
 										/>
 										<Text
-											class="text-sm text-neutral-950"
+											class="text-(length:--text-sm) text-sidebar-foreground"
 											classList={{
 												"font-semibold": activeNav().id === page().id,
 											}}
@@ -125,7 +128,7 @@ export function SettingsWindow() {
 							headerVisible={false}
 							animation="default"
 						>
-							<Scroll class="flex-1 rounded-xl border border-slate-200 bg-white">
+							<Scroll class="flex-1 rounded-(--radius-xl) border border-border bg-background">
 								<View
 									testID="settings-content"
 									role="region"

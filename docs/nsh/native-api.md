@@ -1,6 +1,6 @@
 # NSH 原生 API 与任务契约
 
-> 目标 API，尚未实现。下列 TypeScript 只表达调用语义；正式导出由 Rust 生成，不是当前 `vadu/native` 已有成员，也不是一份手写 SDK。
+> `Settings` 快捷键接口已实现；翻译、插件及其余 API 为目标设计。下列 TypeScript 草案只表达调用语义，不是当前 `vadu/native` 已有成员或手写 SDK；正式类型以 Rust 生成结果为准。
 
 ## 1. 边界与类型来源
 
@@ -26,6 +26,19 @@ UI 直接导入业务原生模块。Rust 负责输入校验、配置解析、授
 | Plugins | 查询状态、选择并安装用户插件、确认权限、启停与卸载 |
 
 窗口和快捷键优先使用已有 NSH 平台接口；只有需要核心状态或权限管理时才提供相应原生入口。不复刻旧 Electron 的整个 app 通道集合。
+
+### 已实现的 Settings
+
+以下签名已由 Rust 生成并用于快捷键页面；DTO 以 `.nsh/types/vadu/native.d.ts` 为准，不在 TSX 另定义：
+
+- `Settings.read(): Promise<SettingsReply>`：读取应用偏好；无配置使用默认值。
+- `Settings.setShortcut(id: string, keystroke: string): Promise<SettingsReply>`：读取最新配置、校验并更新单项。
+- `Settings.resetShortcut(id: string): Promise<SettingsReply>`：恢复单项默认值，也检查冲突。
+- `Settings.captureKeys(): Promise<string[]>`：录入期间临时绑定的组合表，排除 NSH 已知保留键及取消 / 移焦键。
+
+`SettingsReply` 的 `settings` 与 `error` 恰有一项非空；错误带安全的 `code` / `message`。这是已生成的具体 DTO，并非下节尚未落地的通用 `NativeResult<T>`。错误码包括 `INVALID_CONFIG`、`UNSUPPORTED_VERSION`、`SHORTCUT_CONFLICT`、`STORAGE_FULL`、`INTERNAL`。UI 仍需捕获意外 Promise 拒绝。
+
+Rust 方法最后的 `cx: &mut ModuleCx` 使调用进入可访问 Storage 与平台状态的 runtime，作为有序 op 返回 Promise；UI 不可按同步函数使用。存储格式、后台写盘限制与后续备份设计见[配置存储](./storage.md)。
 
 ## 3. 结构化业务错误
 

@@ -2,7 +2,7 @@
 
 ## NSH 重写中
 
-当前 `rewrite/nsh` 分支基于 NSH（TSX + Rust），已搭建设置主窗口的分类导航与独立翻译窗口壳。翻译工作台定位为仅通过快捷键唤起，快捷键尚未接线。翻译、插件和配置等业务功能尚未迁移；五个设置分类均由独立 Page 渲染；外观页提供原生主题切换，快捷键页保留设置项预览；通用、服务商、备份恢复页暂为空容器，不显示公共标题或占位说明。
+当前 `rewrite/nsh` 分支基于 NSH（TSX + Rust），已搭建设置主窗口的分类导航与独立翻译窗口壳。翻译工作台定位为仅通过快捷键唤起，实际快捷键注册尚未接线。五个设置分类均由独立 Page 渲染；外观页提供运行期原生主题切换；快捷键页支持录入、校验、持久化与单项重置；通用、服务商、备份恢复页暂为空容器。翻译、插件与其余配置业务尚未迁移。
 
 - 原 GitHub 仓库和提交历史继续保留，`main` 暂时保持 Electron 实现。
 - 重写前的 Electron 快照保存在 [`electron-final`](https://github.com/TaterDoge/vadu/tree/electron-final) Tag。
@@ -19,7 +19,8 @@ src/windows/settings/SettingsWindow.tsx   # 设置侧栏与内容路由
 src/components/ui/Item.tsx                # 可复用设置项容器
 src/theme.ts                             # 应用级外观偏好、字体与原生主题切换
 theme.json                               # shadcn 语义 token、深浅配色与强调色色板
-src/windows/settings/pages/              # 外观可切换，快捷键预览操作禁用
+src/windows/settings/pages/              # 外观可切换，快捷键可录入并保存
+src/settings.rs                         # Rust 配置校验与 NSH Storage 持久化
 src/windows/translate/TranslateWindow.tsx # 独立翻译窗口壳与唤起函数
 src/lib.rs                               # Rust 原生模块入口
 ```
@@ -49,7 +50,13 @@ import { Item } from "./src/components/ui/Item";
 - 新 UI 使用 `bg-background`、`text-foreground`、`border-border` 等语义类。可切换圆角与字号使用 `rounded-(--radius-md)`、`text-(length:--text-sm)`，不写死中性色和圆角。SVG 图标用原生 `tintColor` 跟随 token。
 - 原生滚动条宽 6pt，滑块使用前景色 20% / 悬停 35% 透明度。不设置 ring 样式；键盘焦点使用可见边框。窗口拖拽沿用原生 `desktop.windowDrag`，不迁入浏览器的 View Transition 或 `-webkit-*` 规则。
 
-当前目录也是 Rust crate（`Cargo.toml`、`src/lib.rs`；`nsh.json` 中 `"rust": "."`）。原生模块 `vadu/native` 暂时保留脚手架导出 `Badge`、`Format`、`Counter`，导航不依赖这些示例。
+## 快捷键与配置存储
+
+设置 → 快捷键：悬停键帽显示背景，点击后按组合键录入；Esc / Tab、失焦、切页或应用退后台取消。Rust 校验无效 / 重复 / NSH 已知系统保留组合，保存后重新打开可读取；全局项可恢复默认值。实际快捷键动作尚未注册，启用开关仍禁用。
+
+普通配置集中保存在 NSH Storage 的 `vadu.config`，使用带 `schemaVersion` 的 JSON；损坏或较新版本拒绝覆盖。NSH 后台写盘，保存返回不等于已 fsync。后续整包备份复用业务文档，不复制底层 Storage，不含密钥；当前尚无导入 / 导出功能。格式、路径、扩展方式与恢复确认流程见 [配置存储设计](./docs/nsh/storage.md)。
+
+当前目录也是 Rust crate（`Cargo.toml`、`src/lib.rs`；`nsh.json` 中 `"rust": "."`）。原生模块 `vadu/native` 已注册 `Settings`，同时保留脚手架导出 `Badge`、`Format`、`Counter`，导航不依赖这些示例。
 
 ```sh
 nsh run                      # this machine's backend; --target ios, android, web, macos, linux, windows or gpui

@@ -1,54 +1,94 @@
 # AGENTS.md — vadu
 
-## 当前工程
+## 当前工程与范围
 
-vadu 正在 `rewrite/nsh` 分支迁移到 NSH（TSX + Rust），当前依赖 NSH 0.5.0。已实现设置主窗口分类导航与独立翻译窗口壳，翻译、插件和配置业务尚未迁移。
+vadu 正在从 Electron 重写为 NSH 原生应用（TSX + Rust）。以当前工作树为准，不根据分支名推断实现；`README.md` 与部分文档中的 `rewrite/nsh` 是迁移背景。
 
-- `App.tsx`：NSH 启动入口，仅挂载设置主窗口；TSX 窗口实现放在 `src/windows/`。
-- `src/windows/settings/SettingsWindow.tsx`：左右布局，侧栏使用常驻 MenuItem，内容由 `nsh/base` 的 NavStack / NavPage 路由；五个一级分类通过 replace 切换，不累积返回历史。
-- `src/windows/translate/TranslateWindow.tsx`：翻译窗口壳与 `openTranslateWindow()`，通过 Window.open 创建、重用并聚焦独立窗口。
-- `App.test.tsx`：侧栏导航、键盘交互与尺寸变化测试；独立窗口唤起按钮仅在 `tests/fixtures/Windows.tsx` 中。
-- `src/lib.rs`：`vadu/native` 原生注册入口，目前只有 Badge / Format / Counter 示例。
-- `nsh.json`、`Cargo.toml`：应用与 Rust 依赖配置；CLI 与 `nsh-*` 版本保持一致。
-- 翻译工作台定位为仅快捷键唤起的独立窗口，不接入主窗口导航；窗口壳已实现，全局快捷键尚未接线。
+- 已实现：设置主窗口五分类导航、运行期主题切换、独立翻译窗口壳、快捷键录入 / 校验 / 持久化 / 单项重置。
+- 尚未实现：实际快捷键动作注册、翻译 / OCR / TTS 业务、插件运行时与安装、备份导入 / 导出。通用、服务商、备份恢复页仍为空容器。
+- 外观偏好仅保留本次运行，尚未接入 Rust Settings；快捷键保存成功不表示已启用系统快捷键，开关仍关闭且禁用。
+- 历史 Electron 实现见 `electron-final` Tag；不恢复旧目录、IPC、preload、React renderer 或 Bun 构建脚本，不默认兼容旧配置 / 插件 / 备份。
+
+## 代码地图
+
+| 位置 | 职责 |
+| --- | --- |
+| `App.tsx` | 启动入口，仅挂载 `SettingsWindow` |
+| `src/windows/settings/SettingsWindow.tsx` | 常驻 MenuItem 侧栏、NavStack / NavPage 路由、内容区域 |
+| `src/windows/settings/pages/<分类>/` | 五个设置分类的独立 Page；业务状态由对应页面拥有 |
+| `src/windows/translate/TranslateWindow.tsx` | 独立窗口壳与 `openTranslateWindow()` |
+| `src/components/ui/` | `Item` 设置项容器、`Kbd` / `KbdGroup` 键帽、图标悬停动画 |
+| `theme.json`、`src/theme.ts`、`assets/fonts/` | 语义颜色 token、运行期外观偏好、捆绑字体与许可证 |
+| `src/lib.rs` | `vadu/native` 注册入口：Settings 与脚手架示例 Badge / Format / Counter |
+| `src/settings.rs` | 配置文档、默认值、快捷键校验与 NSH Storage 读写；内含 Rust 单元测试 |
+| `App.test.tsx`、`tests/*.test.tsx` | NSH 交互测试；专用入口放在 `tests/fixtures/` |
+| `nsh.json`、`Cargo.toml`、`Cargo.lock` | 应用标识 / 窗口 / 主题配置与 Rust 依赖 |
+
+## 环境与命令
+
+在仓库根目录执行。需要支持 Rust edition 2024 的工具链与 NSH CLI；当前 `nsh-core` / `nsh-base` 锁定为 0.5.0。升级时同步核对 CLI 与 `nsh-*` 依赖，不在无关任务中自动升级。
+
+本工程没有 `package.json`，不需要 `npm install` / `bun install`。Rust 依赖由 Cargo 解析；首次 NSH 构建生成 `.nsh/tsconfig.json` 与 `.nsh/types/vadu/native.d.ts`，根 `tsconfig.json` 继承生成配置。
+
+```sh
+nsh --version                                     # 核对 CLI
+cargo --version                                   # 核对 Rust 工具链
+nsh run                                           # 本机开发宿主
+nsh check                                         # Rust 检查、生成绑定并检查 TS/TSX
+nsh test                                          # Rust 单元测试 + 全部 headless NSH 测试
+nsh test "tests/Shortcuts.test.tsx"                 # 单个交互测试文件
+nsh test --filter "default_and_document_roundtrip" # 按名称筛选，也作用于 Rust 测试
+nsh test "tests/Shortcuts.test.tsx" --target macos --foreground
+nsh package --target macos                        # macOS 发布包；其他目标见 CLI 帮助
+```
+
+- TSX 修改热更新；Rust 修改触发重编译与重启。
+- macOS 原生快捷键录入测试需要 `--foreground`，会占用前台焦点；默认后台运行会触发生命周期取消录入。
+- `.nsh/`、`target/` 是生成目录，不提交、不手改；默认打包输出在 `.nsh/out/`。应用 `Cargo.lock` 随依赖变更提交。
+- 当前没有仓库 CI workflow 或 npm 测试 / lint 脚本，不虚构对应命令；格式与 lint 规则以 `biome.jsonc` 为准，Rust 遵循 rustfmt。
+
+## 修改与验证
+
+- 改动保持小而完整，复用现有组件和职责边界；不预建通用 RPC、仓储、订阅或迁移框架。
+- 修改前核对调用方、测试、fixture、配置与文档；保留工作树中已有改动，不顺手修复无关问题。
+- 非平凡逻辑增加或更新小测试。TSX 测试使用 `nsh/test` 的 `test` / `expect` / `open`，定位沿用 `id:`、`label:` 等原生选择器，不引入 DOM 测试框架。
+- 质量门先 `nsh check`，再 `nsh test`。失败如实报告，不跳过断言伪装通过。
+- **已知既有失败**：`App.test.tsx` 的“矮窗口可滚动侧栏，调整尺寸保留分类”寻找不存在的 `id:settings-sidebar-scroll`；详见 `docs/nsh-migration.md`。涉及侧栏布局时一并核对实现与测试。
+- headless 的 `storage` 是隔离快照，不能证明真实磁盘恢复、OS 全局快捷键或跨平台原生事件。插件加载、流式网络、取消和权限还需发布构建实测。
+- 行为改变时同步更新对应文档，明确区分“已实现”“目标设计”“待验证”；不把草案签名当作现成 SDK。
+
+## UI 与原生绑定约定
+
+- 使用 NSH 的 `View` / `Text`、`nsh/base` 组件及 `signal` / `effect` / `cleanup`；不套用 React hooks 或浏览器 DOM / CSS 机制。复用 `Item`、`Kbd`，不让通用展示组件承载配置或快捷键业务。
+- JSX 元素条件渲染优先使用 NSH 内置 `<If when={...} else={...}>`；列表沿用 `<Each>`。文本、样式与普通属性计算不受此限制。
+- 设置一级分类通过 `nav.replace` 切换，不累积返回历史；选中态直接读取路由栈，不再复制一份 signal。NSH 的 Menu 是弹层，不作为常驻侧栏容器。
+- 翻译窗口仅定位为快捷键唤起的独立窗口，不增加设置导航入口；唤起按钮只用于测试 fixture。NSH 自有窗口共享应用 engine，不建立 Electron 式窗口广播。
+- `theme.json` 是颜色单一来源；使用 `bg-background`、`text-foreground`、`border-border` 等语义类，圆角 / 字号读取 `--radius-*` / `--text-*`。SVG 用 `tintColor` 跟随 token，不写死主题颜色。
+- 不设置 ring 样式；保留可见键盘焦点、可访问名称和原生窗口拖拽。注释用中文，只解释原因。
+- UI → 带类型的 `vadu/native` → Rust 核心；DTO 由 Rust 声明生成，禁止手改 `.nsh/types/` 或两端各维护一份接口。
+- `Settings` 的 `ModuleCx` 方法在 TSX 侧返回 Promise；同时处理结构化业务错误与意外 Promise 拒绝。同步原生导出不做阻塞网络 / 磁盘 I/O。
+
+## 配置与安全边界
+
+- Rust 是配置权威值。UI 只提交修改意图，由 `src/settings.rs` 读取最新文档、校验并更新单项；不从 TSX 直接调用 Storage 或回写旧整包快照。
+- 普通配置集中在 NSH Storage 的 `vadu.config`，带 `schemaVersion`。坏 JSON、不支持的版本、未知字段与非法组合拒绝覆盖；只有键不存在才使用默认值。
+- 新增配置字段时同步 schema、实际旧版本迁移与测试；先完整校验再覆盖源数据，不预写空迁移链。
+- NSH Storage 配额为总计 5 MiB，写入在后台执行；调用成功不等于已 fsync。不能据此承诺可靠落盘或直接复制底层 `storage.json` 作为备份。
+- `nsh.json` 当前 ID 为 `com.example.vadu`；更改 ID 会改变数据目录，不会自动迁移旧数据。不得在无关任务中改 ID 或清理用户数据。
+- Plugin / Profile / Preset / Settings / Secrets 分离。密钥只经系统安全存储持久化，不进普通配置、备份、日志或崩溃报告；安全存储不可用时拒绝持久化，不明文降级。
+- 已保存密钥不回读 UI；新输入值仅短期用于提交，随后清空。日志不包含完整 key、Authorization、原文 / 译文或上游响应正文。
+- 删除 Profile / 凭据、卸载伴随清理或恢复覆盖需要明确确认；不因重写自动删除数据或承诺旧格式兼容。
+- 厂商协议只放能力插件；UI 不直连厂商，Rust 核心不内联厂商 HTTP。核心使用明确选中的 Profile，不暗取首个配置或静默换厂商。
+- 第三方插件的独立 VM、受控网络 / 凭据桥仍待实现；禁止通过 UI 的 `eval` / `new Function` 加载插件。独立 VM 不等于 OS 沙箱，隔离验证前不开放安装入口；新增权限需宿主校验与用户确认。
+- 翻译任务需要 requestId、逐块输出、唯一终态与真正关闭上游的取消；卸载 / 关窗必须清理任务和回调，不能只停止 UI 更新。
 
 ## 按任务读文档
 
-| 任务 | 必读 |
-| --- | --- |
-| 确认当前范围与实现状态 | [docs/nsh-migration.md](docs/nsh-migration.md) |
-| 调整分层、窗口、存储或信任边界 | [docs/nsh/architecture.md](docs/nsh/architecture.md) |
-| 新增原生 API、任务、取消或错误 | [docs/nsh/native-api.md](docs/nsh/native-api.md) |
-| 插件、AI 服务商、schema 或权限 | [docs/nsh/plugin-spec.md](docs/nsh/plugin-spec.md) |
+- 当前范围与验证顺序：`docs/nsh-migration.md`。
+- 窗口、分层、运行时与信任边界：`docs/nsh/architecture.md`。
+- 原生调用、错误、任务与取消：`docs/nsh/native-api.md`。
+- 配置格式、存储限制、扩展与备份恢复：`docs/nsh/storage.md`。
+- 插件、AI 服务商、schema 与权限：`docs/nsh/plugin-spec.md`。
+- 总索引与运行说明：`docs/README.md`、`README.md`。
 
-文档是当前设计来源，但草案不等于已实现能力。修改行为时同步文档；先核实 NSH 绑定与发布模式，不能将设计签名写成已生成 API。Electron 历史只在 `main` / `electron-final` 查询，不恢复旧工程约定。
-
-## 检查与文件纪律
-
-- 运行、构建说明见 [README.md](README.md)。质量门：`nsh check`，然后 `nsh test`；不运行旧 Bun / Electron 脚本。
-- 新增非平凡逻辑带小测试；插件加载、流式网络、取消和权限还需发布构建验证，不只测开发模式。
-- `.nsh/` 与 `target/` 是生成文件，不提交；应用 `Cargo.lock` 随代码提交。
-- 不手改 `.nsh/types/`。UI ↔ Rust 的 DTO 由 Rust 声明生成，不两端各写一份接口。
-- 复用当前 NSH 组件与响应式模式，不迁入 React renderer、shadcn、preload 或 Electron 路由机制。
-- 生成或修改 TSX 时，JSX 元素的条件渲染优先使用 NSH 内置 `<If when={...} else={...}>...</If>`，尽量避免用三目表达式切换元素；文本、样式和普通属性值的计算不受此限制。
-- 注释用中文，只解释原因；不要设置 ring 样式，保留键盘焦点和可访问名称。
-
-## 架构硬约束
-
-- UI → 带类型的原生 API → Rust 核心 → 能力插件；不建立字符串 IPC 通道或通用 RPC。
-- 厂商协议只放插件；UI 不直连厂商，核心不内联厂商 HTTP。插件只做一次调用，不自行持久化配置或实现核心重试 / 缓存策略。
-- 保留用户安装第三方 JS 插件。独立插件 VM 与受控宿主桥是待实现目标，不是现成安全保证；禁止用 UI 的 `eval` / `new Function` 装插件。
-- NSH 自有窗口共享应用 engine，不套用 Electron 多 renderer 模型；任务仍需 requestId、回调归属与生命周期清理。
-- 翻译要逐块输出且可取消上游；OCR / TTS 一次性、可取消。不要只停止 UI 更新而留下后台任务。
-- Plugin / Profile / Preset / Settings / Secrets 分离。明确选择 Profile，不暗取首个 AI 配置，不静默换厂商。
-- 插件契约破坏性变更需同时更新文档与 apiVersion；兼容可选字段不机械升版。新增权限先定义语义再实现。
-
-## 安全红线
-
-- 已保存密钥不回读 UI、不写普通配置、日志或崩溃报告；只经系统安全存储持久化。不可用时拒绝持久化，禁止明文降级，不使用 Electron `safeStorage`。
-- 用户新输入密钥仅走短期输入与提交路径，提交后清空；不进入共享或持久化 UI 状态。
-- 日志不得包含完整 key、Authorization 头、原文 / 译文或上游响应正文；默认只记状态。确需识别 key 时最多前 4 后 4 位，短 key 全遮蔽。
-- 插件只取得本次 Profile 的受控网络与凭据上下文，不注入文件、进程、UI 或任意原生能力；NSH 应用 capabilities 不能替代插件权限检查。
-- 第三方插件启用前展示来源与权限；权限扩大重新确认。独立 VM 不是 OS 沙箱，隔离验证前不开放安装入口。
-- 删除 Profile / 凭据、卸载伴随数据清理或备份覆盖需明确确认；不得因重写自动清理用户数据、导出明文密钥或承诺旧格式兼容。
-- 新增外链、文件 / 进程或其他敏感系统能力前说明理由，先定义并测试宿主侧授权；禁止原样透传系统接口。
+文档各自维护契约，不在代码或其他文档复制整套接口。GitHub 查询和操作统一使用 `gh`；需要浏览器验证时使用 yab MCP。

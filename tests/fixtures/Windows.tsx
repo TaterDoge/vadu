@@ -1,4 +1,4 @@
-import { Text, View, mount } from "nsh";
+import { Text, View, host, mount } from "nsh";
 import { Button } from "nsh/base";
 import { Window } from "nsh/desktop";
 
@@ -6,6 +6,10 @@ import { SettingsWindow } from "../../src/windows/settings/SettingsWindow";
 import { openTranslateWindow } from "../../src/windows/translate/TranslateWindow";
 
 function Windows() {
+	host.on("open-settings", () => Window.get("main")?.focus());
+	host.on("minimize-settings", () => Window.get("main")?.minimize());
+	host.on("open-translate", openTranslateWindow);
+	host.on("hide-translate", () => Window.get("translate")?.hide());
 	return (
 		<View class="flex-1">
 			<SettingsWindow />

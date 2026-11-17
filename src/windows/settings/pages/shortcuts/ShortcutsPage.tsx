@@ -1,5 +1,6 @@
 import {
 	Image,
+	Overlay,
 	Text,
 	View,
 	type ViewRef,
@@ -7,90 +8,114 @@ import {
 	effect,
 	keymap,
 	lifecycle,
+	safeArea,
 	signal,
 	token,
 } from "nsh";
-import { Button, Switch } from "nsh/base";
-import { type AppSettings, Settings, type SettingsReply } from "vadu/native";
+import {
+	Button,
+	Switch,
+	Toast,
+	type ToastEntry,
+	ToastManager,
+	ToastStack,
+} from "nsh/base";
 
 import { Item } from "../../../../components/ui/Item";
 import { Kbd, KbdGroup } from "../../../../components/ui/Kbd";
-import generalIcon from "../../icons/general.svg";
-import shortcutsIcon from "../../icons/shortcuts.svg";
+import {
+	type AppSettings,
+	Settings,
+	SettingsError,
+	captureShortcutKeys,
+} from "../../../../settings";
+import {
+	shortcutRecording,
+	translateShortcutStatus,
+} from "../../../../shortcuts";
+import { shortcutGroups } from "./constants";
 import infoIcon from "./info.svg";
-import pinIcon from "./pin.svg";
 import resetIcon from "./reset.svg";
-
-const shortcutGroups = [
-	{
-		title: "全局快捷键",
-		items: [
-			{
-				id: "toggle-translate",
-				title: "唤起 / 隐藏翻译浮窗",
-				description: "按一次唤起并聚焦翻译窗口，再按一次隐藏到后台",
-				icon: shortcutsIcon,
-				resettable: true,
-			},
-		],
-	},
-	{
-		title: "局内快捷键",
-		items: [
-			{
-				id: "open-settings",
-				title: "浮窗内打开设置",
-				description: "在翻译浮窗内打开设置页面，仅浮窗聚焦时生效",
-				icon: generalIcon,
-				resettable: false,
-			},
-			{
-				id: "pin-translate",
-				title: "浮窗内切换固定窗口",
-				description: "在浮窗内切换图钉（固定窗口），仅浮窗聚焦时生效",
-				icon: pinIcon,
-				resettable: false,
-			},
-		],
-	},
-];
 
 export function ShortcutsPage() {
 	const settings = signal<AppSettings | null>(null);
 	const recording = signal<string | null>(null);
-	const message = signal("");
 	const pending = signal(false);
+	const toastManager = new ToastManager();
+	const toasts = signal<ToastEntry[]>([]);
+	let toastTimer: ReturnType<typeof setInterval> | undefined;
+	let toastExpanded = false;
+	let persistentToast = false;
 	let cancelledByBlur: string | null = null;
-	let captureKeys: string[] = [];
+	let recordingField: ViewRef | undefined;
+	const captureKeys = captureShortcutKeys();
 	let disposed = false;
 	cleanup(() => {
 		disposed = true;
+		shortcutRecording.set(false);
+		if (toastTimer !== undefined) clearInterval(toastTimer);
+		toastManager.dispose();
 	});
 
-	async function apply(action: () => Promise<SettingsReply>) {
+	function syncToast() {
+		toasts.set(toastManager.visible(1));
+	}
+
+	function startToastTimer() {
+		if (toastTimer !== undefined) return;
+		toastTimer = setInterval(() => {
+			if (toastManager.advance(toastExpanded).changed) syncToast();
+			if (
+				toastManager.isEmpty() ||
+				(persistentToast &&
+					toasts().every((toast) => toast.status === "present"))
+			) {
+				clearInterval(toastTimer);
+				toastTimer = undefined;
+			}
+		}, 50);
+	}
+
+	function showToast(text: string, persistent = false) {
+		persistentToast = persistent;
+		toastManager.push("shortcut", text, { timeout: persistent ? null : 3000 });
+		syncToast();
+		startToastTimer();
+	}
+
+	function dismissToast() {
+		if (!toastManager.dismiss("shortcut")) return;
+		persistentToast = false;
+		syncToast();
+		startToastTimer();
+	}
+
+	async function apply(
+		action: () => Promise<AppSettings>,
+		reportError: (text: string) => void = (text) => showToast(text, true),
+	) {
 		if (pending() || disposed) return false;
 		pending.set(true);
 		try {
-			const reply = await action();
+			const next = await action();
 			if (disposed) return false;
-			if (reply.error || !reply.settings) {
-				message.set(reply.error?.message ?? "未取得配置，未提交本次修改。");
-				return false;
-			}
-			settings.set(reply.settings);
+			settings.set(next);
 			return true;
-		} catch {
-			if (!disposed) message.set("无法访问配置，请稍后重试。");
+		} catch (error) {
+			if (!disposed) {
+				reportError(
+					error instanceof SettingsError
+						? error.message
+						: "无法访问配置，请稍后重试。",
+				);
+			}
 			return false;
 		} finally {
 			if (!disposed) pending.set(false);
 		}
 	}
 
-	void apply(async () => {
-		captureKeys = await Settings.captureKeys();
-		return Settings.read();
-	});
+	void apply(Settings.read);
 
 	function isRecording(id: string) {
 		return recording() === id;
@@ -112,7 +137,9 @@ export function ShortcutsPage() {
 	function cancel() {
 		clearBlurCancellation();
 		recording.set(null);
-		message.set("");
+		shortcutRecording.set(false);
+		recordingField = undefined;
+		if (persistentToast) dismissToast();
 	}
 
 	function toggleRecording(id: string, field: ViewRef | undefined) {
@@ -123,7 +150,9 @@ export function ShortcutsPage() {
 		const shouldCancel = isRecording(id) || cancelledByBlur === id;
 		cancel();
 		if (shouldCancel) return;
+		recordingField = field;
 		field?.focus();
+		shortcutRecording.set(true);
 		recording.set(id);
 	}
 
@@ -136,15 +165,20 @@ export function ShortcutsPage() {
 
 	async function save(id: string, keystroke: string) {
 		if (await apply(() => Settings.setShortcut(id, keystroke))) {
-			if (recording() === id) recording.set(null);
-			message.set("快捷键已更新。系统快捷键注册尚未接线。");
+			if (recording() === id) {
+				const field = recordingField;
+				// 先结束录入再失焦，避免 blur 取消逻辑吞掉下一次点击。
+				cancel();
+				field?.blur();
+			}
 		}
 	}
 
 	async function resetShortcut(id: string) {
-		if (await apply(() => Settings.resetShortcut(id))) {
-			recording.set(null);
-			message.set("快捷键已恢复默认。");
+		if (persistentToast) dismissToast();
+		if (await apply(() => Settings.resetShortcut(id), showToast)) {
+			cancel();
+			showToast("快捷键已恢复默认。");
 		}
 	}
 
@@ -184,19 +218,38 @@ export function ShortcutsPage() {
 
 	return (
 		<View testID="settings-shortcuts-page" class="gap-6">
-			<Text class="text-xs leading-5 text-muted-foreground">
-				点击键帽录入，再次点击、按 Esc / Tab
-				或移开焦点取消。配置自动保存，快捷键注册尚未接线。
-			</Text>
-			<If when={message()}>
-				<Text
-					testID="shortcut-message"
-					role="alert"
-					class="text-xs leading-5 text-muted-foreground"
+			<Overlay
+				class="inset-x-0 bottom-0 items-center p-4"
+				style={{ paddingBottom: safeArea().bottom + 16 }}
+			>
+				<ToastStack
+					closeOnEscape={false}
+					style={{ width: 340, maxWidth: "100%" }}
+					placement="bottomRight"
+					onExpandedChange={({ expanded }) => {
+						toastExpanded = expanded;
+					}}
 				>
-					{message()}
-				</Text>
-			</If>
+					<Each of={toasts()} key={(toast: ToastEntry) => toast.id}>
+						{(toast) => (
+							<Toast
+								testID="shortcut-toast"
+								transitionStatus={toast().status}
+								accessibilityLabel={String(toast().value)}
+								onDismissRequest={dismissToast}
+								class="rounded-lg border border-border bg-card px-4 py-3 transition-all duration-200 ease-out"
+								startingClass="opacity-0 translate-y-4"
+								endingClass="opacity-0 scale-95"
+								swipingClass="transition-none"
+							>
+								<Text class="text-sm text-card-foreground">
+									{String(toast().value)}
+								</Text>
+							</Toast>
+						)}
+					</Each>
+				</ToastStack>
+			</Overlay>
 			<Each of={shortcutGroups}>
 				{(group) => (
 					<View class="gap-4">
@@ -246,7 +299,7 @@ export function ShortcutsPage() {
 														accessibilityState={{
 															selected: isRecording(shortcut().id),
 														}}
-														class="group/kbd rounded-lg p-1 hover:bg-accent focus-visible:bg-accent disabled:opacity-40"
+														class="rounded-lg border border-transparent p-1 focus-visible:border-foreground disabled:opacity-40"
 														classList={{
 															"bg-accent": isRecording(shortcut().id),
 														}}
@@ -265,9 +318,7 @@ export function ShortcutsPage() {
 																</Each>
 															}
 														>
-															<Kbd class="group-hover/kbd:bg-muted">
-																请按快捷键…
-															</Kbd>
+															<Kbd>请按下快捷键…</Kbd>
 														</If>
 													</KbdGroup>
 													<If when={shortcut().resettable}>
@@ -288,17 +339,35 @@ export function ShortcutsPage() {
 															/>
 														</Button>
 													</If>
-													<Switch
-														testID={"shortcut-" + shortcut().id + "-enabled"}
-														checked={false}
-														disabled
-														accessibilityLabel={
-															"启用" + shortcut().title + "快捷键"
+													<If
+														when={shortcut().id !== "pin-translate"}
+														else={
+															<Switch
+																testID={
+																	"shortcut-" + shortcut().id + "-enabled"
+																}
+																checked={false}
+																disabled
+																accessibilityLabel={
+																	"启用" + shortcut().title + "快捷键"
+																}
+																class="shrink-0 disabled:opacity-50"
+																trackClass="w-9 rounded-full bg-input p-0.5"
+																thumbClass="h-4 w-4 rounded-full bg-background"
+															/>
 														}
-														class="shrink-0 disabled:opacity-50"
-														trackClass="w-9 rounded-full bg-input p-0.5"
-														thumbClass="h-4 w-4 rounded-full bg-background"
-													/>
+													>
+														<Text
+															testID={"shortcut-" + shortcut().id + "-status"}
+															class="max-w-48 text-xs leading-5 text-muted-foreground"
+														>
+															{shortcut().id === "toggle-translate"
+																? translateShortcutStatus()
+																: settings()
+																	? "已启用"
+																	: "未启用"}
+														</Text>
+													</If>
 												</>
 											}
 										/>

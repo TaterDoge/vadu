@@ -8,7 +8,7 @@ export function Kbd(props: ViewProps) {
 		<View
 			{...rest}
 			class={
-				"pointer-events-none h-7 w-fit min-w-7 shrink-0 select-none flex-row items-center justify-center rounded-md bg-muted p-1 group-hover/kbd:bg-background " +
+				"pointer-events-none h-7 w-fit min-w-7 shrink-0 select-none flex-row items-center justify-center rounded-md bg-muted p-1 " +
 				(own.class ?? "")
 			}
 		>

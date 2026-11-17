@@ -58,13 +58,14 @@ test("快捷键分类挂载独立页面，切换后不残留内容", async () =>
 	expect(app.shows("id:settings-shortcuts-page")).toBe(true);
 	expect(app.shows("text:全局快捷键")).toBe(true);
 	expect(app.shows("text:局内快捷键")).toBe(true);
-	expect(
-		app.shows("text:点击键帽录入，再次点击、按 Esc / Tab 或移开焦点取消。配置自动保存，快捷键注册尚未接线。"),
-	).toBe(true);
+	expect(app.shows("id:shortcut-toggle-translate-status")).toBe(true);
 	for (const id of ["toggle-translate", "open-settings", "pin-translate"]) {
 		expect(app.count(`id:shortcut-${id}`)).toBe(1);
-		expect(app.enabled(`id:shortcut-${id}-enabled`)).toBe(false);
 	}
+	expect(app.shows("id:shortcut-open-settings-status")).toBe(true);
+	expect(app.texts()).toContain("已启用");
+	expect(app.count("id:shortcut-open-settings-enabled")).toBe(0);
+	expect(app.enabled("id:shortcut-pin-translate-enabled")).toBe(false);
 	for (const [id, keys] of [
 		["toggle-translate", ["⇧", "⌘", "M"]],
 		["open-settings", ["⌘", ","]],

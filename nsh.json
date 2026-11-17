@@ -7,6 +7,7 @@
 	"theme": "./theme.json",
 	"appearance": "system",
 	"window": {
+		"closeOnPress": false,
 		"defaultSize": {
 			"width": 960,
 			"height": 620

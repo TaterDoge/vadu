@@ -1,8 +1,11 @@
 import { Image, Scroll, Text, View, token } from "nsh";
 import { MenuItem, NavPage, NavStack, createNavStack } from "nsh/base";
+import { currentWindow } from "nsh/desktop";
 
 import { Logo } from "../../components/Logo";
 import { iconHoverMotion } from "../../components/ui/motion";
+import { setupShortcuts } from "../../shortcuts";
+import { setupTray } from "../../tray";
 import appearanceIcon from "./icons/appearance.svg";
 import backupIcon from "./icons/backup.svg";
 import generalIcon from "./icons/general.svg";
@@ -50,6 +53,8 @@ const settingsPages = [
 type SettingsRoute = (typeof settingsPages)[number];
 
 export function SettingsWindow() {
+	setupTray(currentWindow());
+	setupShortcuts();
 	const nav = createNavStack<SettingsRoute>([settingsPages[0]]);
 	const activeNav = () => nav.routes()[nav.routes().length - 1];
 

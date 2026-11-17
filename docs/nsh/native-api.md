@@ -1,13 +1,13 @@
 # NSH 原生 API 与任务契约
 
-> `Settings` 快捷键接口已实现；翻译、插件及其余 API 为目标设计。下列 TypeScript 草案只表达调用语义，不是当前 `vadu/native` 已有成员或手写 SDK；正式类型以 Rust 生成结果为准。
+> 普通设置已在 `src/settings.ts` 实现，直接使用 NSH 的 TS API；翻译、插件及其余原生 API 为目标设计。下列原生 TypeScript 草案只表达调用语义，不是当前 `vadu/native` 已有成员或手写 SDK；原生绑定类型以 Rust 生成结果为准。
 
 ## 1. 边界与类型来源
 
-UI 直接导入业务原生模块。Rust 负责输入校验、配置解析、授权与任务管理；TS 类型检查不能替代运行时校验。
+普通配置直接导入 TS 设置模块，由它进行运行时校验与 Storage 读写；需要受控原生能力时才导入业务原生模块。Rust 负责对应输入的校验、授权与任务管理；TS 类型检查不能替代运行时校验。
 
 - 复用现有 `vadu/native` 注册入口，按业务职责导出模块，不增加字符串通道分发器。
-- 业务 DTO 在 Rust 定义，通过 NSH 绑定生成 TS；禁止两端各维护一份不相干的接口。
+- 原生业务 DTO 在 Rust 定义，通过 NSH 绑定生成 TS；普通配置类型只在 `src/settings.ts` 定义，禁止两端重复维护同一接口。
 - 先验证 DTO、带标签事件和业务结果能正确往返，再冻结具体 Rust 表达；不靠类型断言掩盖绑定缺失。
 - 同步方法不做阻塞 I/O；接受任务与完成任务是两件事。
 
@@ -21,7 +21,7 @@ UI 直接导入业务原生模块。Rust 负责输入校验、配置解析、授
 | Ocr | `recognize(input)` 返回一次文本结果；`cancel(requestId)` 取消 |
 | Tts | `synthesize(input)` 返回一次音频结果；`cancel(requestId)` 取消 |
 | Profiles | 查询 / 保存 / 启停配置；核心校验 schema 与已确认的网络授权 |
-| Settings | 查询 / 保存应用偏好；窗口共享同一权威值 |
+| Settings（TS，已实现） | 查询 / 保存应用偏好；统一经过 TS 设置模块 |
 | Secrets | 查询是否已设置、写入或明确清除；没有读取密钥 API |
 | Plugins | 查询状态、选择并安装用户插件、确认权限、启停与卸载 |
 
@@ -29,16 +29,17 @@ UI 直接导入业务原生模块。Rust 负责输入校验、配置解析、授
 
 ### 已实现的 Settings
 
-以下签名已由 Rust 生成并用于快捷键页面；DTO 以 `.nsh/types/vadu/native.d.ts` 为准，不在 TSX 另定义：
+以下是 `src/settings.ts` 的实际导出，不属于 `vadu/native`，也不再维护 Rust Settings DTO：
 
-- `Settings.read(): Promise<SettingsReply>`：读取应用偏好；无配置使用默认值。
-- `Settings.setShortcut(id: string, keystroke: string): Promise<SettingsReply>`：读取最新配置、校验并更新单项。
-- `Settings.resetShortcut(id: string): Promise<SettingsReply>`：恢复单项默认值，也检查冲突。
-- `Settings.captureKeys(): Promise<string[]>`：录入期间临时绑定的组合表，排除 NSH 已知保留键及取消 / 移焦键。
+- `Settings.read(): Promise<AppSettings>`：等候已排队的更新后读取；仅键不存在时使用默认值。
+- `Settings.setShortcut(id: string, keystroke: string): Promise<AppSettings>`：串行读取最新配置、校验并更新单项。
+- `Settings.resetShortcut(id: string): Promise<AppSettings>`：恢复单项默认值，也检查冲突。
+- `Settings.current(): AppSettings | null`：最近一次成功读取或保存的响应式快照，供全局注册观察；启动前为 `null`，不用于绕过校验写回整包配置。
+- `captureShortcutKeys(): string[]`：生成录入临时组合表，排除 NSH 已知保留键及取消 / 移焦键。
 
-`SettingsReply` 的 `settings` 与 `error` 恰有一项非空；错误带安全的 `code` / `message`。这是已生成的具体 DTO，并非下节尚未落地的通用 `NativeResult<T>`。错误码包括 `INVALID_CONFIG`、`UNSUPPORTED_VERSION`、`SHORTCUT_CONFLICT`、`STORAGE_FULL`、`INTERNAL`。UI 仍需捕获意外 Promise 拒绝。
+可预期错误以 `SettingsError` 拒绝，带安全的 `code` / `message`；错误码为 `INVALID_CONFIG`、`UNSUPPORTED_VERSION`、`SHORTCUT_CONFLICT`、`STORAGE_FULL`。页面仍捕获意外 Promise 拒绝，只显示通用安全提示。
 
-Rust 方法最后的 `cx: &mut ModuleCx` 使调用进入可访问 Storage 与平台状态的 runtime，作为有序 op 返回 Promise；UI 不可按同步函数使用。存储格式、后台写盘限制与后续备份设计见[配置存储](./storage.md)。
+`nsh.Storage` 提供持久化，`nsh.keymap` 提供语法解析、平台标签及窗口内临时录入。`nsh/desktop.GlobalShortcut.register(shortcut, onPress): Promise<boolean>` 用于真正的系统全局注册；它不是配置存储或录入 API。`src/shortcuts.ts` 已用它注册翻译浮窗全局动作；系统返回 `false` 或拒绝 Promise 时展示失败，不把保存成功当作注册成功。录入期间暂停，换绑与卸载通过 `unregister` 清理；翻译窗组件通过 `nsh.keymap.bind` 绑定打开设置局内动作，仅可见且聚焦时启用，失焦、隐藏与关闭时清理；组合来自已校验的 `Settings.current()`，不使用 GlobalShortcut 注册。固定窗口局内动作尚未实现。存储格式、队列边界、后台写盘限制与后续备份设计见[配置存储](./storage.md)。
 
 ## 3. 结构化业务错误
 

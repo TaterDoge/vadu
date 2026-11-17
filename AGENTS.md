@@ -4,9 +4,9 @@
 
 vadu 正在从 Electron 重写为 NSH 原生应用（TSX + Rust）。以当前工作树为准，不根据分支名推断实现；`README.md` 与部分文档中的 `rewrite/nsh` 是迁移背景。
 
-- 已实现：设置主窗口五分类导航、运行期主题切换、独立翻译窗口壳、快捷键录入 / 校验 / 持久化 / 单项重置。
-- 尚未实现：实际快捷键动作注册、翻译 / OCR / TTS 业务、插件运行时与安装、备份导入 / 导出。通用、服务商、备份恢复页仍为空容器。
-- 外观偏好仅保留本次运行，尚未接入 Rust Settings；快捷键保存成功不表示已启用系统快捷键，开关仍关闭且禁用。
+- 已实现：设置主窗口五分类导航、运行期主题切换、独立翻译窗口壳、快捷键录入 / 校验 / 持久化 / 单项重置，以及“唤起 / 隐藏翻译浮窗”全局快捷键、“浮窗内打开设置”局内快捷键。
+- 尚未实现：“浮窗内切换固定窗口”局内动作、翻译 / OCR / TTS 业务、插件运行时与安装、备份导入 / 导出。通用、服务商、备份恢复页仍为空容器。
+- 外观偏好仅保留本次运行，尚未接入 Settings 持久化；全局快捷键启动时自动注册，保存成功不代表注册成功，以页面状态为准；打开设置局内项自动启用，仅翻译窗聚焦时绑定；固定窗口项开关仍关闭且禁用。
 - 历史 Electron 实现见 `electron-final` Tag；不恢复旧目录、IPC、preload、React renderer 或 Bun 构建脚本，不默认兼容旧配置 / 插件 / 备份。
 
 ## 代码地图
@@ -16,11 +16,12 @@ vadu 正在从 Electron 重写为 NSH 原生应用（TSX + Rust）。以当前�
 | `App.tsx` | 启动入口，仅挂载 `SettingsWindow` |
 | `src/windows/settings/SettingsWindow.tsx` | 常驻 MenuItem 侧栏、NavStack / NavPage 路由、内容区域 |
 | `src/windows/settings/pages/<分类>/` | 五个设置分类的独立 Page；业务状态由对应页面拥有 |
-| `src/windows/translate/TranslateWindow.tsx` | 独立窗口壳与 `openTranslateWindow()` |
+| `src/windows/translate/TranslateWindow.tsx` | 独立窗口壳、`openTranslateWindow()` 与 `toggleTranslateWindow()`，不负责快捷键绑定 |
+| `src/shortcuts.ts` | 集中声明 action / 作用域 / 执行函数，统一管理全局与局内绑定、换绑、录入暂停、状态与卸载清理 |
 | `src/components/ui/` | `Item` 设置项容器、`Kbd` / `KbdGroup` 键帽、图标悬停动画 |
 | `theme.json`、`src/theme.ts`、`assets/fonts/` | 语义颜色 token、运行期外观偏好、捆绑字体与许可证 |
-| `src/lib.rs` | `vadu/native` 注册入口：Settings 与脚手架示例 Badge / Format / Counter |
-| `src/settings.rs` | 配置文档、默认值、快捷键校验与 NSH Storage 读写；内含 Rust 单元测试 |
+| `src/lib.rs` | `vadu/native` 注册入口：脚手架示例 Badge / Format / Counter |
+| `src/settings.ts` | 配置文档、默认值、快捷键校验、录入键表与 NSH Storage 串行读改写 |
 | `App.test.tsx`、`tests/*.test.tsx` | NSH 交互测试；专用入口放在 `tests/fixtures/` |
 | `nsh.json`、`Cargo.toml`、`Cargo.lock` | 应用标识 / 窗口 / 主题配置与 Rust 依赖 |
 
@@ -65,12 +66,12 @@ nsh package --target macos                        # macOS 发布包；其他目�
 - 翻译窗口仅定位为快捷键唤起的独立窗口，不增加设置导航入口；唤起按钮只用于测试 fixture。NSH 自有窗口共享应用 engine，不建立 Electron 式窗口广播。
 - `theme.json` 是颜色单一来源；使用 `bg-background`、`text-foreground`、`border-border` 等语义类，字号、行高、圆角与间距使用 `text-sm`、`leading-5`、`rounded-md`、`p-4` 等 NSH 内置类，不再定义主题尺寸 token。SVG 用 `tintColor` 跟随 token，不写死主题颜色。
 - 不设置 ring 样式；保留可见键盘焦点、可访问名称和原生窗口拖拽。注释用中文，只解释原因。
-- UI → 带类型的 `vadu/native` → Rust 核心；DTO 由 Rust 声明生成，禁止手改 `.nsh/types/` 或两端各维护一份接口。
-- `Settings` 的 `ModuleCx` 方法在 TSX 侧返回 Promise；同时处理结构化业务错误与意外 Promise 拒绝。同步原生导出不做阻塞网络 / 磁盘 I/O。
+- 普通配置通过 `src/settings.ts` 调用 NSH 的 TS API；需要原生业务时才使用带类型的 `vadu/native`，其 DTO 由 Rust 生成。禁止手改 `.nsh/types/` 或在两端重复维护绑定接口。
+- `Settings` 方法返回 Promise；页面同时处理 `SettingsError` 与意外 Promise 拒绝。同步原生导出不做阻塞网络 / 磁盘 I/O。
 
 ## 配置与安全边界
 
-- Rust 是配置权威值。UI 只提交修改意图，由 `src/settings.rs` 读取最新文档、校验并更新单项；不从 TSX 直接调用 Storage 或回写旧整包快照。
+- `src/settings.ts` 是普通配置唯一业务入口。UI 只提交修改意图，模块串行读取最新文档、运行时校验并更新单项；不在页面分散调用 Storage 或回写旧整包快照。队列只协调同一应用 engine 内的调用，不承诺跨进程事务。
 - 普通配置集中在 NSH Storage 的 `vadu.config`，带 `schemaVersion`。坏 JSON、不支持的版本、未知字段与非法组合拒绝覆盖；只有键不存在才使用默认值。
 - 新增配置字段时同步 schema、实际旧版本迁移与测试；先完整校验再覆盖源数据，不预写空迁移链。
 - NSH Storage 配额为总计 5 MiB，写入在后台执行；调用成功不等于已 fsync。不能据此承诺可靠落盘或直接复制底层 `storage.json` 作为备份。

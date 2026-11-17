@@ -4,21 +4,23 @@
 
 ## 1. 当前实现
 
-当前 `rewrite/nsh` 分支使用 NSH 0.5.0（TSX + Rust），已完成设置主窗口的分类导航、运行期主题切换、独立翻译窗口壳与快捷键录入持久化，不是旧版业务功能的等价实现。
+当前 `rewrite/nsh` 分支使用 NSH 0.5.0（TSX + Rust），已完成设置主窗口的分类导航、原生托盘与关闭隐藏、运行期主题切换、独立翻译窗口壳、快捷键录入持久化、翻译浮窗全局快捷键与浮窗内打开设置，不是旧版业务功能的等价实现。
 
 | 位置 | 已实现 | 尚未实现 |
 | --- | --- | --- |
-| `App.tsx` | 启动并挂载设置主窗口 | 全局快捷键接线 |
+| `App.tsx` | 启动并挂载设置主窗口 | — |
+| `src/tray.ts`、`assets/tray.svg`、`tests/Tray.test.tsx` | NSH 原生托盘「打开设置 / 退出 Vadu」、主窗口关闭隐藏与聚焦恢复、启动仍显示设置；测试覆盖重复隐藏恢复及分类保留 | 原生托盘图标、菜单点击与退出仍需平台实测；不含隐藏 Dock 或开机自启 |
 | `src/windows/settings/SettingsWindow.tsx` | 左右布局、品牌与图标、五分类 MenuItem 侧栏、图标悬停动画、独立 Page 的统一渲染、NavStack 路由与键盘激活 | 设置项编辑、业务调用 |
 | `src/windows/settings/pages/{general,providers,backup}/` | 三个分类的独立 Page 空容器，无公共标题或占位说明 | 页面内容与业务 |
-| `theme.json`、`src/theme.ts`、`src/windows/settings/pages/appearance/AppearancePage.tsx` | 原生语义 token、浅 / 深 / 跟随系统、六种强调色、Nova / Lyra、捆绑字体、原生细滚动条与即时预览，两窗口共用运行期主题 | Rust Settings 持久化；当前重启恢复默认 |
-| `src/windows/settings/pages/shortcuts/ShortcutsPage.tsx` | 全局 / 局内分组、键帽悬停与点击录入、平台标签、冲突校验、取消与清理、自动保存、全局项重置；启用开关仍禁用 | 实际全局 / 局内快捷键动作注册 |
+| `theme.json`、`src/theme.ts`、`src/windows/settings/pages/appearance/AppearancePage.tsx` | 原生语义 token、浅 / 深 / 跟随系统、六种强调色、Nova / Lyra、捆绑字体、原生细滚动条与即时预览，两窗口共用运行期主题 | Settings 持久化；当前重启恢复默认 |
+| `src/windows/settings/pages/shortcuts/ShortcutsPage.tsx` | 全局 / 局内分组、点击录入、平台标签、冲突校验、取消与清理、自动保存、全局项重置与注册状态、打开设置局内项启用状态 | 固定窗口局内动作，开关仍禁用 |
+| `src/shortcuts.ts`、`tests/GlobalShortcuts.test.tsx` | 集中声明 action、作用域与执行函数，统一管理全局 / 局内绑定、配置换绑、录入暂停、窗口焦点边界与卸载清理；headless 覆盖过期回调、延迟注册结果、局内暂停恢复及管理器卸载 / 重挂 | 跨应用真实按键触发与 Windows / Linux 原生验证 |
 | `src/components/ui/Item.tsx` | 可复用的设置项容器：内置字号标题（14pt）、可选说明（12pt）/ 媒体 / 操作插槽、窄宽度换行，保留 NSH 响应式 props 与原生属性透传 | 不承载设置值、持久化或快捷键业务 |
 | `src/components/ui/Kbd.tsx` | 可复用的 Kbd / KbdGroup：参照 shadcn 的键帽样式：默认高度 / 最小宽度 28pt、四边各 4pt 内边距、内置圆角与主题配色、4pt 键间距与独立符号字体，保留原生属性及响应式样式透传 | 不承载快捷键录入或注册 |
 | `src/components/ui/motion.ts` | 可复用的 `createIconHoverMotion()`，封装图标悬停动画与卸载清理 | 其他动画按需添加 |
-| `src/windows/translate/TranslateWindow.tsx` | 独立窗口壳、创建与重用、隐藏唤起、关闭重开 | 快捷键唤起、翻译流与取消 |
+| `src/windows/translate/TranslateWindow.tsx`、`tests/AppShortcuts.test.tsx` | 独立窗口壳、创建与重用、快捷键显示 / 隐藏、最小化恢复、关闭重开；聚焦期间按已保存组合打开设置，默认 `mod+,`；回归覆盖分类保留、换绑、重开、焦点边界与坏配置 | 翻译流与取消、局内按键的跨平台原生验证 |
 | `App.test.tsx`、`tests/Item.test.tsx`、`tests/Kbd.test.tsx`、`tests/Theme.test.tsx` | 五个分类的独立挂载与卸载、无公共标题与占位说明、快捷键与可访问名称、Item 可选插槽与响应式更新、Kbd 单键 / 组合键、响应式样式透传与方形尺寸回归、禁用状态和键盘交互、系统外观跟随与手动优先、强调色恢复、字体切换时保持内置字号与打开翻译窗口后的主题状态保留；矮窗口侧栏滚动测试仍依赖当前不存在的滚动容器，属于既有失败 | 翻译窗口生命周期与业务、插件与配置测试 |
-| `src/lib.rs`、`src/settings.rs`、`tests/Shortcuts.test.tsx` | `vadu/native` Settings、Rust 默认值与带版本配置文档、NSH Storage 持久化；Rust 配置测试与 TSX 录入 / 重置 / 冲突 / 清理 / 重开快照 / 配额 / Windows 语义测试；保留 Badge / Format / Counter 示例 | 其余业务核心、任务表、凭据服务、可靠落盘回执与真实磁盘恢复验证 |
+| `src/settings.ts`、`tests/Settings.test.tsx`、`tests/Shortcuts.test.tsx` | TS 默认值、严格校验、带版本配置文档、NSH Storage 串行读改写；配置 / 并发更新与 TSX 录入 / 重置 / 冲突 / 清理 / 重开快照 / 配额 / 跨平台语义测试；`src/lib.rs` 保留 Badge / Format / Counter 示例 | 其余业务核心、任务表、凭据服务、可靠落盘回执与真实磁盘恢复验证 |
 | 插件与备份恢复 | 配置文档及整包备份恢复设计见 [配置存储](./nsh/storage.md) | 独立 VM、第三方安装、受控 HTTP、安全凭据存储、备份导入 / 导出 API 与 UI |
 
 `.nsh/` 与 `target/` 为生成目录；不把生成类型或脚手架示例当业务已落地的证明。
@@ -38,11 +40,15 @@
 
 `App.tsx` 仅保留 NSH 启动代码，设置与翻译的 TSX 实现分别放在 `src/windows/settings/` 和 `src/windows/translate/`，不为每个窗口建立独立 engine 或 URL 入口。
 
+主窗口启动仍显示；菜单栏托盘的「打开设置」聚焦原窗口。关闭按钮只隐藏主窗口，托盘「退出 Vadu」才结束应用，窗口与分类状态不会因隐藏而重建。实现与使用说明见 [菜单栏托盘](../README.md#菜单栏托盘)。
+
 主窗口启动尺寸为 960 × 620 逻辑点（`nsh.json` 的 `window.defaultSize`），保留拖拽缩放。默认“通用”，尺寸变化不重置分类，重启不持久化该选择。窗口保持左右布局，侧栏使用常驻 MenuItem，选中项为主题侧栏强调背景与加粗文字，圆角使用 NSH 内置尺寸，不随 Nova / Lyra 切换；NSH 0.5 的 Menu 是弹层，不包裹常驻导航。内容由 `nsh/base` 的 `createNavStack` / `NavStack` / `NavPage` 承载；一级分类用 `replace` 切换，不压入返回历史。侧栏选中态直接读取路由栈，不另存一份 `signal`。鼠标进入任一菜单整行时，仅图标播放一次 300ms 的轻抬与轻摆动画，结束回原位；每项在组件体内创建一次 `src/components/ui/motion.ts` 的 `createIconHoverMotion()`，将 `style` 绑定到图标、悬停时调用 `play()`；底层通过 NSH 原生 `createMotion` 播放并遵循系统的减少动态效果设置，组件卸载时停止动画。悬停不切换分类。键盘通过 Tab 移动焦点、Enter / Space 激活，不再使用 Tabs 的方向键自动切页。
 
-翻译工作台不是主窗口里的可切换页面，也不提供主窗口导航入口。`openTranslateWindow()` 使用 `Window.open`，固定窗口 ID 为 `translate`；重复调用重用窗口并聚焦，隐藏后可重新显示，关闭后可重新创建。窗口不指定设置窗口为父窗口；快捷键尚未接线，唤起按钮仅在测试 fixture 中。服务类别、选中 Profile 与编辑草稿属于后续页面状态，不升级为全局导航。
+翻译工作台不是主窗口里的可切换页面，也不提供主窗口导航入口。`openTranslateWindow()` 使用 `Window.open`，固定窗口 ID 为 `translate`；重复调用重用窗口并聚焦，隐藏后可重新显示，关闭后可重新创建。翻译窗口使用 `kind: "panel"`、`activate: false` 的非激活面板，不指定设置窗口为父窗口；聚焦只面向翻译窗口，不主动激活整个应用或隐藏设置窗。创建时使用 NSH 公开 API 的最高层级 `aboveDock`；每次重用唤起时再次设置该层级并聚焦，避免已有窗口忽略打开参数后停留在较低层级。保留最小化 / 最大化能力。全局快捷键通过 `toggleTranslateWindow()` 切换显示 / 隐藏，唤起按钮仅在测试 fixture 中。创建、隐藏恢复、最小化恢复和关闭重开时的层级请求已有独立 headless 回归覆盖。当前工作树的窗口类型为 `normal`，与非激活面板约束及对应测试不一致；macOS 原生层级回归仍有等待窗口状态超时，尚不能确认真实跨应用唤起与层级遮挡效果。服务类别、选中 Profile 与编辑草稿属于后续页面状态，不升级为全局导航。
 
-五个分类通过独立 Page 渲染，窗口不再统一显示页面标题、分类说明或业务未迁移提示；通用、服务商、备份恢复页仅为空容器。外观页已提供显示模式、六种主题色、Nova / Lyra 字体切换与预览，字号、行高、圆角与间距使用 NSH 内置类，选择只保留本次运行；主题细节见 [README](../README.md#原生主题)。快捷键页已支持三项组合的录入、校验与持久化；录制时在对应 Item 下方显示独立的规则提示，键帽保留录制占位文案。再次点击当前录制键帽、Esc / Tab、失焦、切页或退后台取消录入，保留原绑定并停止捕获按键；全局项可恢复默认。开关仍为关闭且禁用，不假装已注册动作。配置通过 Rust Settings 保存，备份恢复只有设计、没有可用 UI 或 API。插件安装入口的具体 UI 留在插件管理切片中确定，不为此扩充本轮导航。
+五个分类通过独立 Page 渲染，窗口不再统一显示页面标题、分类说明或业务未迁移提示；通用、服务商、备份恢复页仅为空容器。外观页已提供显示模式、六种主题色、Nova / Lyra 字体切换与预览，字号、行高、圆角与间距使用 NSH 内置类，选择只保留本次运行；主题细节见 [README](../README.md#原生主题)。快捷键页已支持三项组合的录入、校验与持久化；录入保存成功立即退出录入和焦点，恢复独立灰底键帽，不额外显示成功提示，修正后清除旧错误；录制时在对应 Item 下方显示独立的规则提示，键帽保留录制占位文案与整组背景。悬停不改变键帽底色，键盘焦点使用边框提示。配置读取错误通过窗口底部居中的 Toast 持续提示；录入错误持续提示至取消或修正，用户也可滑动关闭；再次点击当前录制键帽、Esc / Tab、失焦、切页或退后台取消录入，保留原绑定并停止捕获按键；全局项可恢复默认，重置成功或失败均以短暂 Toast 提示。全局与局内动作统一在 `src/shortcuts.ts` 定义和绑定，窗口组件不承担快捷键配置与绑定逻辑。翻译浮窗全局项显示真实注册状态，录入任一项时暂停全局与局内动作，取消后恢复，保存或重置后自动换绑；“浮窗内打开设置”默认 `mod+,`，翻译窗可见且聚焦时使用 NSH keymap 绑定，失焦、隐藏或关闭时清理；显示并聚焦原设置窗口、恢复隐藏或最小化并保留当前分类，保存新组合后立即换绑。该项显示启用状态，不增加开关配置；固定窗口局内动作尚未实现，开关仍关闭且禁用。配置通过 TS Settings 使用 NSH Storage 保存，备份恢复只有设计、没有可用 UI 或 API。插件安装入口的具体 UI 留在插件管理切片中确定，不为此扩充本轮导航。
+
+“浮窗内打开设置”的 headless 回归已通过，覆盖隐藏 / 最小化恢复与保留分类、失焦清理与录入、保存换绑与重开读取、坏配置不覆盖，以及录入暂停 / 恢复、统一管理器卸载清理与重挂绑定已有翻译窗。macOS 前台原生测试仍未完成：新增用例与既有托盘对照用例均返回 `the host left`，尚不能确认真实按键与窗口聚焦行为。
 
 ## 3. 已确认的迁移方向
 

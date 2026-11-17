@@ -35,7 +35,7 @@ type ThemePreferences = {
 	style: (typeof themeStyles)[number]["value"];
 };
 
-// shortcut: 偏好仅保留本次运行，Rust Settings 服务接入后再持久化。
+// shortcut: 偏好仅保留本次运行，外观接入 src/settings.ts 后再持久化。
 const preferences = signal<ThemePreferences>({
 	appearance: "system",
 	accent: "neutral",

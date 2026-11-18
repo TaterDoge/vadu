@@ -33,6 +33,16 @@ test("翻译窗口 Command + 逗号恢复设置窗口并保留分类", async () 
 	expect(app.count("label:外观")).toBe(2);
 });
 
+test("翻译窗口重新唤起后恢复原文输入焦点", async () => {
+	const app = await openWindows();
+	await app.host.send("open-translate");
+	await app.type("id:translation-source-input", "a");
+	await app.host.send("hide-translate");
+	await app.host.send("open-translate");
+	await app.keyboard.press("b");
+	expect(app.value("id:translation-source-input")).toBe("ab");
+});
+
 test("设置窗口录入不触发翻译窗口动作，浮窗隐藏或关闭后解绑", async () => {
 	const app = await openWindows();
 	const main = app.window("main");

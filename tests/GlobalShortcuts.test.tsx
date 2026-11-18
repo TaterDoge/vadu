@@ -99,6 +99,7 @@ test("翻译浮窗使用非激活面板，唤起和隐藏不改变设置窗状�
 
 	await pressShortcut(app);
 	await app.waitUntil(() => app.window("translate").state()?.focused === true);
+	expect(app.shows("id:translation-workspace")).toBe(true);
 	const options = app.texts().find((text) => text.startsWith("窗口参数 "));
 	expect(JSON.parse(options?.slice("窗口参数 ".length) ?? "null")).toMatchObject({
 		id: "translate",

@@ -54,7 +54,7 @@ nsh package --target macos                        # macOS 发布包；其他目�
 - 修改前核对调用方、测试、fixture、配置与文档；保留工作树中已有改动，不顺手修复无关问题。
 - 非平凡逻辑增加或更新小测试。TSX 测试使用 `nsh/test` 的 `test` / `expect` / `open`，定位沿用 `id:`、`label:` 等原生选择器，不引入 DOM 测试框架。
 - 质量门先 `nsh check`，再 `nsh test`。失败如实报告，不跳过断言伪装通过。
-- **已知既有失败**：`App.test.tsx` 的“矮窗口可滚动侧栏，调整尺寸保留分类”寻找不存在的 `id:settings-sidebar-scroll`；详见 `docs/nsh-migration.md`。涉及侧栏布局时一并核对实现与测试。
+- 侧栏使用 `id:settings-sidebar-scroll` 的独立 Scroll 容器支持矮窗口滚动；涉及侧栏布局时一并运行 `App.test.tsx` 的滚动、尺寸变化与键盘导航回归。原生窗口的待验证项见 `docs/nsh-migration.md`。
 - headless 的 `storage` 是隔离快照，不能证明真实磁盘恢复、OS 全局快捷键或跨平台原生事件。插件加载、流式网络、取消和权限还需发布构建实测。
 - 行为改变时同步更新对应文档，明确区分“已实现”“目标设计”“待验证”；不把草案签名当作现成 SDK。
 

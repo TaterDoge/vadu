@@ -76,54 +76,56 @@ export function SettingsWindow() {
 				class="w-48 shrink-0 border-r border-sidebar-border bg-sidebar md:w-60"
 				desktop={{ windowDrag: true }}
 			>
-				<Logo />
+				<Scroll testID="settings-sidebar-scroll" class="min-h-0 flex-1">
+					<Logo />
 
-				<View
-					role="navigation"
-					accessibilityLabel="设置分类"
-					class="gap-1 px-2 pb-4"
-				>
-					<Each of={settingsPages}>
-						{(page) => {
-							const iconMotion = iconHoverMotion();
-							return (
-								<View onMouseEnter={() => void iconMotion.play()}>
-									<MenuItem
-										testID={`settings-${page().id}`}
-										role="link"
-										accessibilityLabel={page().label}
-										onSelect={() => {
-											if (activeNav().id !== page().id) nav.replace(page());
-										}}
-										class="h-11 flex-row items-center gap-3 rounded-xl border border-transparent px-3 hover:bg-sidebar-accent focus-visible:border-sidebar-foreground"
-										classList={{
-											"bg-sidebar-accent": activeNav().id === page().id,
-										}}
-									>
-										<Image
-											style={{
-												...iconMotion.style,
-												tintColor: token("sidebar-foreground"),
+					<View
+						role="navigation"
+						accessibilityLabel="设置分类"
+						class="gap-1 px-2 pb-4"
+					>
+						<Each of={settingsPages}>
+							{(page) => {
+								const iconMotion = iconHoverMotion();
+								return (
+									<View onMouseEnter={() => void iconMotion.play()}>
+										<MenuItem
+											testID={`settings-${page().id}`}
+											role="link"
+											accessibilityLabel={page().label}
+											onSelect={() => {
+												if (activeNav().id !== page().id) nav.replace(page());
 											}}
-											src={page().icon}
-											class="h-5 w-5 shrink-0"
-											accessibilityElementsHidden
-											importantForAccessibility="no-hide-descendants"
-										/>
-										<Text
-											class="text-sm text-sidebar-foreground"
+											class="h-11 flex-row items-center gap-3 rounded-xl border border-transparent px-3 hover:bg-sidebar-accent focus-visible:border-sidebar-foreground"
 											classList={{
-												"font-semibold": activeNav().id === page().id,
+												"bg-sidebar-accent": activeNav().id === page().id,
 											}}
 										>
-											{page().label}
-										</Text>
-									</MenuItem>
-								</View>
-							);
-						}}
-					</Each>
-				</View>
+											<Image
+												style={{
+													...iconMotion.style,
+													tintColor: token("sidebar-foreground"),
+												}}
+												src={page().icon}
+												class="h-5 w-5 shrink-0"
+												accessibilityElementsHidden
+												importantForAccessibility="no-hide-descendants"
+											/>
+											<Text
+												class="text-sm text-sidebar-foreground"
+												classList={{
+													"font-semibold": activeNav().id === page().id,
+												}}
+											>
+												{page().label}
+											</Text>
+										</MenuItem>
+									</View>
+								);
+							}}
+						</Each>
+					</View>
+				</Scroll>
 			</View>
 			<View class="min-w-0 flex-1 p-4">
 				<NavStack state={nav} testID="settings-router" class="min-w-0 flex-1">

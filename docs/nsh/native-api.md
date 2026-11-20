@@ -39,7 +39,7 @@
 
 可预期错误以 `SettingsError` 拒绝，带安全的 `code` / `message`；错误码为 `INVALID_CONFIG`、`UNSUPPORTED_VERSION`、`SHORTCUT_CONFLICT`、`STORAGE_FULL`。页面仍捕获意外 Promise 拒绝，只显示通用安全提示。
 
-`nsh.Storage` 提供持久化，`nsh.keymap` 提供语法解析、平台标签及窗口内临时录入。`nsh/desktop.GlobalShortcut.register(shortcut, onPress): Promise<boolean>` 用于真正的系统全局注册；它不是配置存储或录入 API。`src/shortcuts.ts` 已用它注册翻译浮窗全局动作；系统返回 `false` 或拒绝 Promise 时展示失败，不把保存成功当作注册成功。录入期间暂停，换绑与卸载通过 `unregister` 清理；`src/shortcuts.ts` 通过 `nsh.keymap.bind` 绑定打开设置局内动作，仅可见且聚焦时启用，失焦、隐藏与关闭时清理；组合来自已校验的 `Settings.current()`，不使用 GlobalShortcut 注册。固定窗口局内动作尚未实现。存储格式、队列边界、后台写盘限制与后续备份设计见[配置存储](./storage.md)。
+`nsh.Storage` 提供持久化，`nsh.keymap` 提供语法解析、平台标签及窗口内临时录入。`nsh/desktop.GlobalShortcut.register(shortcut, onPress): Promise<boolean>` 用于真正的系统全局注册；它不是配置存储或录入 API。`src/shortcuts.ts` 已用它注册翻译浮窗全局动作；系统返回 `false` 或拒绝 Promise 时展示失败，不把保存成功当作注册成功。录入期间暂停，换绑与卸载通过 `unregister` 清理；`src/shortcuts.ts` 通过 `nsh.keymap.bind` 绑定打开设置和固定窗口两个局内动作，仅可见且聚焦时启用，失焦、隐藏与关闭时清理；组合来自已校验的 `Settings.current()`，不使用 GlobalShortcut 注册。图钉和局内快捷键共用置顶动作，通过 `WindowRef.set({ level })` 切换窗口层级。存储格式、队列边界、后台写盘限制与后续备份设计见[配置存储](./storage.md)。
 
 ## 3. 结构化业务错误
 

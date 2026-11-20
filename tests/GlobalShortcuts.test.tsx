@@ -58,35 +58,32 @@ test("启动即注册，重复唤起、最小化恢复、关闭重开，主窗�
 	});
 });
 
-test("全局快捷键创建、隐藏恢复、最小化恢复和关闭重开时提升翻译窗至最高层级", async () => {
+test("⌘P 与图钉共用置顶状态，失焦保留，取消后失焦隐藏", async () => {
 	const app = await openFixture();
+	const translate = app.window("translate");
+	await pressShortcut(app);
+	await app.keyboard.press("cmd+p");
+	expect(app.shows('text:窗口更新 {"level":"aboveDock"}')).toBe(true);
+	expect(app.shows("label:取消固定窗口")).toBe(true);
+	await app.host.send("focus-settings");
+	expect(translate.state()).toMatchObject({ visible: true, focused: false });
+	await app.keyboard.press("cmd+p");
+	await pressShortcut(app);
+	await app.press("label:取消固定窗口");
+	expect(app.shows('text:窗口更新 {"level":"normal"}')).toBe(true);
+	await app.host.send("focus-settings");
+	expect(translate.state()).toMatchObject({ visible: false });
 
-	for (const action of ["创建", "隐藏恢复", "最小化恢复", "关闭重开"]) {
-		if (action !== "创建") await app.host.send("lower-translate");
-		if (action === "隐藏恢复") {
-			await app.host.send("focus-settings");
-			await app.waitUntil(() => app.window("translate").state()?.visible === false);
-		} else if (action === "最小化恢复") {
-			await app.host.send("minimize-translate");
-			await app.waitUntil(() => app.window("translate").state()?.minimized === true);
-		} else if (action === "关闭重开") {
-			await app.window("translate").pressClose();
-			await app.waitUntil(() => app.window("translate").state() === null);
-		}
-
-		await pressShortcut(app);
-		await app
-			.waitUntil(() => app.window("translate").state()?.focused === true)
-			.catch((error) => {
-				throw new Error(`${action}后等待翻译窗聚焦失败：${error}`);
-			});
-		const options = app.texts().find((text) => text.startsWith("窗口参数 "));
-		expect(JSON.parse(options?.slice("窗口参数 ".length) ?? "null")).toMatchObject({
-			id: "translate",
-			level: "aboveDock",
-		});
-		expect(app.shows('text:窗口更新 {"level":"aboveDock"}')).toBe(true);
-	}
+	await pressShortcut(app);
+	await app.press("label:固定窗口");
+	expect(app.shows('text:窗口更新 {"level":"aboveDock"}')).toBe(true);
+	await app.keyboard.press("cmd+p");
+	expect(app.shows('text:窗口更新 {"level":"normal"}')).toBe(true);
+	await app.press("label:固定窗口");
+	await app.host.send("close-translate");
+	await app.waitUntil(() => translate.state() === null);
+	await pressShortcut(app);
+	expect(app.shows("label:固定窗口")).toBe(true);
 });
 
 test("翻译浮窗使用非激活面板，唤起和隐藏不改变设置窗状态", async () => {
@@ -95,12 +92,13 @@ test("翻译浮窗使用非激活面板，唤起和隐藏不改变设置窗状�
 	await pressShortcut(app);
 	await app.waitUntil(() => app.window("translate").state()?.focused === true);
 	expect(app.shows("id:translation-workspace")).toBe(true);
-	const options = app.texts().find((text) => text.startsWith("窗口参数 "));
-	expect(JSON.parse(options?.slice("窗口参数 ".length) ?? "null")).toMatchObject({
+	const text = app.texts().find((text) => text.startsWith("窗口参数 "));
+	const options = JSON.parse(text?.slice("窗口参数 ".length) ?? "null");
+	expect(options?.level ?? "normal").toBe("normal");
+	expect(options).toMatchObject({
 		id: "translate",
 		kind: "panel",
 		activate: false,
-		level: "aboveDock",
 		workspaces: "all",
 		minimizable: true,
 		maximizable: true,

@@ -33,6 +33,18 @@ test("翻译窗口 Command + 逗号恢复设置窗口并保留分类", async () 
 	expect(app.count("label:外观")).toBe(2);
 });
 
+test("单击翻译窗设置按钮恢复设置窗口并保留分类", async () => {
+	const app = await openWindows();
+	const main = app.window("main");
+	await app.press("id:settings-appearance");
+	await main.pressClose();
+	await app.host.send("open-translate");
+	await app.press("id:translation-toolbar >> label:打开设置");
+	expect(main.state()).toMatchObject({ visible: true, focused: true });
+	expect(app.count("label:外观")).toBe(2);
+	expect(app.window("translate").state()).toMatchObject({ visible: false });
+});
+
 test("翻译窗口首次唤起即把键盘输入交给原文输入", async () => {
 	const app = await openWindows();
 	await app.host.send("open-translate");

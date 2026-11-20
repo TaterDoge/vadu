@@ -9,7 +9,7 @@ export const shortcutGroups = [
 			{
 				id: "toggle-translate",
 				title: "唤起翻译浮窗",
-				description: "唤起并聚焦翻译窗口，移开窗口焦点后自动隐藏",
+				description: "唤起并聚焦翻译窗口，未固定时失焦自动隐藏",
 				icon: shortcutsIcon,
 				resettable: true,
 			},
@@ -28,7 +28,7 @@ export const shortcutGroups = [
 			{
 				id: "pin-translate",
 				title: "浮窗内切换固定窗口",
-				description: "在浮窗内切换图钉（固定窗口），仅浮窗聚焦时生效",
+				description: "固定后保持置顶，再按一次恢复失焦自动隐藏",
 				icon: pinIcon,
 				resettable: false,
 			},

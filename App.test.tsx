@@ -65,7 +65,7 @@ test("快捷键分类挂载独立页面，切换后不残留内容", async () =>
 	expect(app.shows("id:shortcut-open-settings-status")).toBe(true);
 	expect(app.texts()).toContain("已启用");
 	expect(app.count("id:shortcut-open-settings-enabled")).toBe(0);
-	expect(app.enabled("id:shortcut-pin-translate-enabled")).toBe(false);
+	expect(app.shows("id:shortcut-pin-translate >> text:已启用")).toBe(true);
 	for (const [id, keys] of [
 		["toggle-translate", ["⇧", "⌘", "M"]],
 		["open-settings", ["⌘", ","]],

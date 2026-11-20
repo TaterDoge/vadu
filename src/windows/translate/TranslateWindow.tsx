@@ -1,42 +1,39 @@
-import { Image, type ImageAsset, type InputRef, Text, View, token } from "nsh";
-import { Button, Input } from "nsh/base";
+import {
+	Image,
+	type InputRef,
+	Text,
+	View,
+	cleanup,
+	effect,
+	signal,
+	token,
+} from "nsh";
+import { Button } from "nsh/base";
 import { Window, currentWindow } from "nsh/desktop";
 
+import { IconButton } from "../../components/IconButton";
 import "../../theme";
+import settingsIcon from "../settings/icons/general.svg";
 import pinIcon from "../settings/pages/shortcuts/pin.svg";
+import { TranslateInput } from "./components/TranslateInput";
 import chevronDownIcon from "./icons/chevron-down.svg";
-import copyIcon from "./icons/copy.svg";
-import eraserIcon from "./icons/eraser.svg";
-import layersIcon from "./icons/layers.svg";
-import volumeIcon from "./icons/volume.svg";
 
-function PlaceholderIconButton(props: { label: string; icon: ImageAsset }) {
-	return (
-		<Button
-			disabled
-			accessibilityLabel={props.label}
-			tooltip={props.label + "（暂未实现）"}
-			class="h-6 w-6 items-center justify-center rounded-md"
-		>
-			<Image
-				src={props.icon}
-				class="h-4 w-4"
-				style={{ tintColor: token("foreground") }}
-				accessibilityElementsHidden
-				importantForAccessibility="no-hide-descendants"
-			/>
-		</Button>
-	);
+const pinned = signal(false);
+
+export function toggleTranslatePin() {
+	pinned.set(!pinned());
 }
 
 export function TranslateWindow() {
 	let inputRef: InputRef | undefined;
 	const window = currentWindow();
+	effect(() => window.set({ level: pinned() ? "aboveDock" : "normal" }));
+	cleanup(() => pinned.set(false));
 
 	window.on("focusChange", ({ focused }) => {
 		if (focused) {
 			inputRef?.focus();
-		} else {
+		} else if (!pinned()) {
 			window.hide();
 		}
 	});
@@ -53,32 +50,24 @@ export function TranslateWindow() {
 				class="h-8 shrink-0 flex-row items-center justify-between px-3"
 				desktop={{ windowDrag: true }}
 			>
-				<PlaceholderIconButton label="固定窗口" icon={pinIcon} />
-				<PlaceholderIconButton label="服务配置" icon={layersIcon} />
+				<IconButton
+					label={pinned() ? "取消固定窗口" : "固定窗口"}
+					icon={pinIcon}
+					selected={pinned()}
+					onPress={toggleTranslatePin}
+				/>
+				<IconButton
+					label="打开设置"
+					icon={settingsIcon}
+					onPress={() => Window.get("main")?.focus()}
+				/>
 			</View>
 			<View class="min-h-0 flex-1 gap-2 px-2 pb-4">
-				<View
-					testID="translation-source-panel"
-					class="min-h-0 overflow-hidden rounded-xl bg-muted p-1"
-					style={{ flex: 3 }}
-				>
-					<Input
-						ref={inputRef}
-						testID="translation-source-input"
-						accessibilityLabel="原文"
-						multiline
-						placeholder="输入要翻译的文本…"
-						autoFocus
-						style={{ caretColor: "blue" }}
-						class="min-h-0 flex-1 bg-transparent px-1 py-2 text-sm leading-5 text-foreground placeholder:text-muted-foreground"
-					/>
-					<View class="h-6 shrink-0 flex-row items-center gap-1">
-						<PlaceholderIconButton label="朗读原文" icon={volumeIcon} />
-						<PlaceholderIconButton label="复制原文" icon={copyIcon} />
-						<View class="flex-1" />
-						<PlaceholderIconButton label="清空原文" icon={eraserIcon} />
-					</View>
-				</View>
+				<TranslateInput
+					inputRef={(node) => {
+						inputRef = node;
+					}}
+				/>
 				<View class="h-8 shrink-0 flex-row gap-2">
 					<Button
 						testID="translation-language"
@@ -126,7 +115,6 @@ export function openTranslateWindow() {
 	const window = Window.open(TranslateWindow, {
 		id: "translate",
 		// activate: true,
-		// level: "aboveDock",
 		// minimizable: true,
 		// maximizable: true,
 		frame: "none",

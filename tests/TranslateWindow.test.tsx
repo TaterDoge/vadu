@@ -2,7 +2,7 @@ import { expect, open, test } from "nsh/test";
 
 const viewport = { width: 480, height: 320, platform: "macos" } as const;
 
-test("翻译窗口保留截图分区，业务按钮禁用且原文编辑不触发业务", async () => {
+test("翻译窗口保留截图分区，原文编辑不触发翻译", async () => {
 	const app = await open("./fixtures/Translate.tsx", viewport);
 
 	expect(app.shows("label:翻译工作台")).toBe(true);
@@ -11,9 +11,9 @@ test("翻译窗口保留截图分区，业务按钮禁用且原文编辑不触�
 	expect(app.shows("id:translation-result >> text:翻译结果")).toBe(true);
 	expect(app.shows("text:zh")).toBe(true);
 	expect(app.shows("text:翻译功能尚未迁移。")).toBe(false);
+	expect(app.enabled("label:固定窗口")).toBe(true);
+	expect(app.enabled("label:打开设置")).toBe(true);
 	for (const label of [
-		"固定窗口",
-		"服务配置",
 		"朗读原文",
 		"复制原文",
 		"清空原文",
@@ -29,6 +29,68 @@ test("翻译窗口保留截图分区，业务按钮禁用且原文编辑不触�
 	expect(app.shows("id:translation-result >> text:翻译结果")).toBe(true);
 	expect(app.requests()).toEqual([]);
 	expect(app.storage()).toEqual({});
+});
+
+test("有原文时可完整复制并清空，空白时工具置灰禁用", async () => {
+	const app = await open("./fixtures/Translate.tsx", {
+		...viewport,
+		clipboard: "原剪贴板内容",
+	});
+	const input = "id:translation-source-input";
+	const copy = "label:复制原文";
+	const clear = "label:清空原文";
+	const read = "label:朗读原文";
+	const tools = [read, copy, clear];
+
+	await app.type(input, " ");
+	for (const tool of tools) {
+		expect(app.viewStyle(tool)?.opacity).toBeLessThan(1);
+		expect(app.enabled(tool)).toBe(false);
+	}
+	const original = " 第一行\n第二行 ";
+	await app.type(input, "第一行\n第二行 ");
+	for (const tool of tools) {
+		expect(app.viewStyle(tool)?.opacity).toBe(1);
+	}
+
+	expect(app.enabled(read)).toBe(false);
+	expect(app.enabled(copy)).toBe(true);
+	expect(app.enabled(clear)).toBe(true);
+	await app.press(copy);
+	await app.waitUntil(() => app.clipboard() === original);
+	expect(app.value(input)).toBe(original);
+
+	await app.press(clear);
+	expect(app.value(input)).toBe("");
+	expect(app.clipboard()).toBe(original);
+	for (const tool of tools) {
+		expect(app.viewStyle(tool)?.opacity).toBeLessThan(1);
+		expect(app.enabled(tool)).toBe(false);
+	}
+	await app.keyboard.press("a");
+	expect(app.value(input)).toBe("a");
+});
+
+test("原文工具在深浅主题中都有可见的悬停背景", async () => {
+	const app = await open("./fixtures/Translate.tsx", viewport);
+	const input = "id:translation-source-input";
+	const panel = "id:translation-source-panel";
+	await app.type(input, "原文");
+
+	for (const colorScheme of ["light", "dark"] as const) {
+		await app.setColorScheme(colorScheme);
+		const panelBackground = app.viewStyle(panel)?.backgroundColor;
+		for (const tool of ["label:复制原文", "label:清空原文"]) {
+			const idleBackground = app.viewStyle(tool)?.backgroundColor;
+			await app.hover(tool);
+			const hoverBackground = app.viewStyle(tool)?.backgroundColor;
+			expect(hoverBackground).toBeTruthy();
+			expect(hoverBackground).not.toBe(panelBackground);
+			expect(hoverBackground).not.toBe(idleBackground);
+			await app.hover(input);
+			expect(app.viewStyle(tool)?.backgroundColor).toBe(idleBackground);
+		}
+	}
 });
 
 test("翻译窗口使用语义配色，跟随系统切换深浅主题", async () => {

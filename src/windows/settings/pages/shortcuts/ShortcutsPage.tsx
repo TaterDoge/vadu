@@ -14,7 +14,6 @@ import {
 } from "nsh";
 import {
 	Button,
-	Switch,
 	Toast,
 	type ToastEntry,
 	ToastManager,
@@ -339,35 +338,16 @@ export function ShortcutsPage() {
 															/>
 														</Button>
 													</If>
-													<If
-														when={shortcut().id !== "pin-translate"}
-														else={
-															<Switch
-																testID={
-																	"shortcut-" + shortcut().id + "-enabled"
-																}
-																checked={false}
-																disabled
-																accessibilityLabel={
-																	"启用" + shortcut().title + "快捷键"
-																}
-																class="shrink-0 disabled:opacity-50"
-																trackClass="w-9 rounded-full bg-input p-0.5"
-																thumbClass="h-4 w-4 rounded-full bg-background"
-															/>
-														}
+													<Text
+														testID={"shortcut-" + shortcut().id + "-status"}
+														class="max-w-48 text-xs leading-5 text-muted-foreground"
 													>
-														<Text
-															testID={"shortcut-" + shortcut().id + "-status"}
-															class="max-w-48 text-xs leading-5 text-muted-foreground"
-														>
-															{shortcut().id === "toggle-translate"
-																? translateShortcutStatus()
-																: settings()
-																	? "已启用"
-																	: "未启用"}
-														</Text>
-													</If>
+														{shortcut().id === "toggle-translate"
+															? translateShortcutStatus()
+															: settings()
+																? "已启用"
+																: "未启用"}
+													</Text>
 												</>
 											}
 										/>

@@ -2,7 +2,10 @@ import { cleanup, computed, effect, keymap, platform, signal } from "nsh";
 import { GlobalShortcut, Window } from "nsh/desktop";
 
 import { Settings, SettingsError } from "./settings";
-import { openTranslateWindow } from "./windows/translate/TranslateWindow";
+import {
+	openTranslateWindow,
+	toggleTranslatePin,
+} from "./windows/translate/TranslateWindow";
 
 const shortcutActions = [
 	{
@@ -14,6 +17,11 @@ const shortcutActions = [
 		id: "open-settings",
 		scope: "translate",
 		run: () => Window.get("main")?.focus(),
+	},
+	{
+		id: "pin-translate",
+		scope: "translate",
+		run: toggleTranslatePin,
 	},
 	{
 		id: "hide-translate",

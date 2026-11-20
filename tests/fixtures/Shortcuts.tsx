@@ -80,10 +80,8 @@ function ShortcutsFixture() {
 	host.on<boolean>("set-recording", (recording) =>
 		shortcutRecording.set(recording),
 	);
+	host.on("close-translate", () => Window.get("translate")?.close());
 	host.on("minimize-translate", () => Window.get("translate")?.minimize());
-	host.on("lower-translate", () =>
-		Window.get("translate")?.set({ level: "normal" }),
-	);
 	host.on("focus-settings", () => Window.get("main")?.focus());
 	host.on("hide-settings", () => Window.get("main")?.hide());
 	host.on("update-local", () => {

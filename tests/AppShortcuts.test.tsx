@@ -40,11 +40,12 @@ test("翻译窗口首次唤起即把键盘输入交给原文输入", async () =>
 	expect(app.value("id:translation-source-input")).toBe("a");
 });
 
-test("翻译窗口重新唤起后恢复原文输入焦点", async () => {
+test("翻译窗口 Command + W 隐藏窗口，重新唤起后保留原文与输入焦点", async () => {
 	const app = await openWindows();
 	await app.host.send("open-translate");
 	await app.type("id:translation-source-input", "a");
-	await app.host.send("hide-translate");
+	await app.keyboard.press("cmd+w");
+	expect(app.window("translate").state()).toMatchObject({ visible: false });
 	await app.host.send("open-translate");
 	await app.keyboard.press("b");
 	expect(app.value("id:translation-source-input")).toBe("ab");
@@ -80,19 +81,19 @@ test("设置窗口录入不触发翻译窗口动作，浮窗隐藏或关闭后�
 	expect(main.state()).toMatchObject({ visible: true, focused: true });
 });
 
-test("局内组合保存后立即换绑，重开读取已保存组合", async () => {
+test("打开设置改绑为 Command + W 后优先于隐藏，重新启动仍生效", async () => {
 	const app = await openWindows();
 	await app.host.send("open-translate");
 	await app.host.send("open-settings");
 	await app.press("id:settings-shortcuts");
 	await app.press("id:shortcut-open-settings-input");
-	await app.keyboard.press("alt+j");
+	await app.keyboard.press("cmd+w");
 	const storage = app.storage();
 
 	await app.host.send("open-translate");
 	await app.keyboard.press("cmd+,");
 	expect(app.window("main").state()).toMatchObject({ focused: false });
-	await app.keyboard.press("alt+j");
+	await app.keyboard.press("cmd+w");
 	expect(app.window("main").state()).toMatchObject({ visible: true, focused: true });
 
 	const reopened = await openWindows({ storage });
@@ -101,7 +102,7 @@ test("局内组合保存后立即换绑，重开读取已保存组合", async ()
 	await reopened.host.send("open-translate");
 	await reopened.keyboard.press("cmd+,");
 	expect(reopened.window("main").state()).toMatchObject({ visible: false });
-	await reopened.keyboard.press("alt+j");
+	await reopened.keyboard.press("cmd+w");
 	expect(reopened.window("main").state()).toMatchObject({ visible: true, focused: true });
 });
 

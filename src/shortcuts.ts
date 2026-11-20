@@ -1,4 +1,4 @@
-import { cleanup, computed, effect, keymap, signal } from "nsh";
+import { cleanup, computed, effect, keymap, platform, signal } from "nsh";
 import { GlobalShortcut, Window } from "nsh/desktop";
 
 import { Settings, SettingsError } from "./settings";
@@ -14,6 +14,12 @@ const shortcutActions = [
 		id: "open-settings",
 		scope: "translate",
 		run: () => Window.get("main")?.focus(),
+	},
+	{
+		id: "hide-translate",
+		scope: "translate",
+		keystroke: "cmd+w",
+		run: () => Window.get("translate")?.hide(),
 	},
 ] as const;
 
@@ -36,11 +42,20 @@ export function setupShortcuts() {
 	});
 
 	for (const action of shortcutActions) {
-		const keystroke = computed(
-			() =>
-				Settings.current()?.shortcuts.find(({ id }) => id === action.id)
-					?.keystroke,
-		);
+		const keystroke = computed(() => {
+			const bindings = Settings.current()?.shortcuts;
+			if (!bindings) return;
+			if (action.id === "hide-translate") {
+				if (platform.os !== "macos") return;
+				// 用户已分配的组合优先，包括 mod+w 等别名。
+				const label = keymap.label(action.keystroke);
+				if (bindings.some(({ keystroke }) => keymap.label(keystroke) === label)) {
+					return;
+				}
+				return action.keystroke;
+			}
+			return bindings.find(({ id }) => id === action.id)?.keystroke;
+		});
 
 		effect(() => {
 			const shortcut = keystroke();

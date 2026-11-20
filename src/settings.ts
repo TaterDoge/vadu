@@ -44,7 +44,7 @@ function commandModifier() {
 	return keymap.label("mod+k") === keymap.label("cmd+k") ? "cmd" : "ctrl";
 }
 
-// shortcut: 保留键规则对齐 NSH 0.5.0，升级 SDK 时同步核对。
+// shortcut: 保留键规则对齐 NSH 0.6.0，升级 SDK 时同步核对。
 function isReserved(keystroke: string) {
 	switch (platform.os) {
 		case "macos":

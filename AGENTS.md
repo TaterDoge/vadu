@@ -4,7 +4,7 @@
 
 vadu 正在从 Electron 重写为 NSH 原生应用（TSX + Rust）。以当前工作树为准，不根据分支名推断实现；`README.md` 与部分文档中的 `rewrite/nsh` 是迁移背景。
 
-- 已实现：设置主窗口五分类导航、运行期主题切换、独立翻译窗口壳、快捷键录入 / 校验 / 持久化 / 单项重置，以及“唤起 / 隐藏翻译浮窗”全局快捷键、“浮窗内打开设置”局内快捷键。
+- 已实现：设置主窗口五分类导航、运行期主题切换、独立翻译窗口壳、快捷键录入 / 校验 / 持久化 / 单项重置，以及“唤起翻译浮窗”全局快捷键、“浮窗内打开设置”局内快捷键。
 - 尚未实现：“浮窗内切换固定窗口”局内动作、翻译 / OCR / TTS 业务、插件运行时与安装、备份导入 / 导出。通用、服务商、备份恢复页仍为空容器。
 - 外观偏好仅保留本次运行，尚未接入 Settings 持久化；全局快捷键启动时自动注册，保存成功不代表注册成功，以页面状态为准；打开设置局内项自动启用，仅翻译窗聚焦时绑定；固定窗口项开关仍关闭且禁用。
 - 历史 Electron 实现见 `electron-final` Tag；不恢复旧目录、IPC、preload、React renderer 或 Bun 构建脚本，不默认兼容旧配置 / 插件 / 备份。
@@ -16,7 +16,7 @@ vadu 正在从 Electron 重写为 NSH 原生应用（TSX + Rust）。以当前�
 | `App.tsx` | 启动入口，仅挂载 `SettingsWindow` |
 | `src/windows/settings/SettingsWindow.tsx` | 常驻 MenuItem 侧栏、NavStack / NavPage 路由、内容区域 |
 | `src/windows/settings/pages/<分类>/` | 五个设置分类的独立 Page；业务状态由对应页面拥有 |
-| `src/windows/translate/TranslateWindow.tsx` | 独立窗口壳、`openTranslateWindow()` 与 `toggleTranslateWindow()`，不负责快捷键绑定 |
+| `src/windows/translate/TranslateWindow.tsx` | 独立窗口壳、`openTranslateWindow()` 与失焦自动隐藏，不负责快捷键绑定 |
 | `src/shortcuts.ts` | 集中声明 action / 作用域 / 执行函数，统一管理全局与局内绑定、换绑、录入暂停、状态与卸载清理 |
 | `src/components/ui/` | `Item` 设置项容器、`Kbd` / `KbdGroup` 键帽、图标悬停动画 |
 | `theme.json`、`src/theme.ts`、`assets/fonts/` | 语义颜色 token、运行期外观偏好、捆绑字体与许可证 |
@@ -27,7 +27,7 @@ vadu 正在从 Electron 重写为 NSH 原生应用（TSX + Rust）。以当前�
 
 ## 环境与命令
 
-在仓库根目录执行。需要支持 Rust edition 2024 的工具链与 NSH CLI；当前 `nsh-core` / `nsh-base` 锁定为 0.5.0。升级时同步核对 CLI 与 `nsh-*` 依赖，不在无关任务中自动升级。
+在仓库根目录执行。需要支持 Rust edition 2024 的工具链与 NSH CLI；当前 `nsh-core` / `nsh-base` 锁定为 0.6.0。升级时同步核对 CLI 与 `nsh-*` 依赖，不在无关任务中自动升级。
 
 本工程没有 `package.json`，不需要 `npm install` / `bun install`。Rust 依赖由 Cargo 解析；首次 NSH 构建生成 `.nsh/tsconfig.json` 与 `.nsh/types/vadu/native.d.ts`，根 `tsconfig.json` 继承生成配置。
 

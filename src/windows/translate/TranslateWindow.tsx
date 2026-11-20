@@ -1,4 +1,4 @@
-import { Image, type ImageAsset, Text, View, type ViewRef, token } from "nsh";
+import { Image, type ImageAsset, Text, View, token } from "nsh";
 import { Button, Input } from "nsh/base";
 import { Window, currentWindow } from "nsh/desktop";
 
@@ -30,10 +30,10 @@ function PlaceholderIconButton(props: { label: string; icon: ImageAsset }) {
 }
 
 export function TranslateWindow() {
-	let sourceInput: ViewRef | undefined;
+	const window = currentWindow();
 
-	currentWindow().on("focusChange", ({ focused }) => {
-		if (focused) sourceInput?.focus();
+	window.on("focusChange", ({ focused }) => {
+		if (!focused && window.state()?.visible) window.hide();
 	});
 
 	return (
@@ -58,9 +58,6 @@ export function TranslateWindow() {
 					style={{ flex: 3 }}
 				>
 					<Input
-						ref={(node) => {
-							sourceInput = node;
-						}}
 						testID="translation-source-input"
 						accessibilityLabel="原文"
 						multiline
@@ -121,10 +118,10 @@ export function TranslateWindow() {
 export function openTranslateWindow() {
 	const window = Window.open(TranslateWindow, {
 		id: "translate",
-		activate: false,
+		// activate: true,
 		// level: "aboveDock",
-		minimizable: true,
-		maximizable: true,
+		// minimizable: true,
+		// maximizable: true,
 		frame: "none",
 		transparent: true,
 		backdrop: "none",
@@ -137,20 +134,4 @@ export function openTranslateWindow() {
 	});
 	window.focus();
 	return window;
-}
-
-export function toggleTranslateWindow() {
-	const window = Window.get("translate");
-
-	if (!window) {
-		openTranslateWindow();
-		return;
-	}
-
-	if (window.state()?.visible) {
-		window.hide();
-	} else {
-		window.show();
-		window.focus();
-	}
 }

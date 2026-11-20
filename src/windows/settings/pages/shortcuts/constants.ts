@@ -8,8 +8,8 @@ export const shortcutGroups = [
 		items: [
 			{
 				id: "toggle-translate",
-				title: "唤起 / 隐藏翻译浮窗",
-				description: "按一次唤起并聚焦翻译窗口，再按一次隐藏到后台",
+				title: "唤起翻译浮窗",
+				description: "唤起并聚焦翻译窗口，移开窗口焦点后自动隐藏",
 				icon: shortcutsIcon,
 				resettable: true,
 			},

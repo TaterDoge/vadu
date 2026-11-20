@@ -19,7 +19,7 @@ test("翻译窗口 Command + 逗号恢复设置窗口并保留分类", async () 
 	await app.keyboard.press("cmd+,");
 	expect(main.state()).toMatchObject({ visible: true, focused: true });
 	expect(app.count("label:外观")).toBe(2);
-	expect(app.window("translate").state()).toMatchObject({ visible: true });
+	expect(app.window("translate").state()).toMatchObject({ visible: false });
 
 	await app.host.send("minimize-settings");
 	await app.waitUntil(() => main.state()?.minimized === true);
@@ -31,6 +31,13 @@ test("翻译窗口 Command + 逗号恢复设置窗口并保留分类", async () 
 		minimized: false,
 	});
 	expect(app.count("label:外观")).toBe(2);
+});
+
+test("翻译窗口首次唤起即把键盘输入交给原文输入", async () => {
+	const app = await openWindows();
+	await app.host.send("open-translate");
+	await app.keyboard.press("a");
+	expect(app.value("id:translation-source-input")).toBe("a");
 });
 
 test("翻译窗口重新唤起后恢复原文输入焦点", async () => {

@@ -90,7 +90,7 @@ test("Nova 与 Lyra 切换字体但保持内置字号，导航卸载后保留并
 	expect(app.spanStyle("text:强调色预览").fontSize).toBe(14);
 	await app.press("id:settings-shortcuts");
 	expect(app.spanStyle("text:全局快捷键").fontSize).toBe(14);
-	expect(app.spanStyle("text:唤起 / 隐藏翻译浮窗").fontSize).toBe(14);
+	expect(app.spanStyle("text:唤起翻译浮窗").fontSize).toBe(14);
 	expect(app.spanStyle("id:shortcut-toggle-translate >> text:⌘").fontSize).toBe(
 		12,
 	);

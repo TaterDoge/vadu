@@ -76,7 +76,7 @@ test("快捷键分类挂载独立页面，切换后不残留内容", async () =>
 			expect(app.shows(`id:shortcut-${id} >> text:${key}`)).toBe(true);
 		}
 	}
-	expect(app.enabled("label:重置唤起 / 隐藏翻译浮窗快捷键")).toBe(true);
+	expect(app.enabled("label:重置唤起翻译浮窗快捷键")).toBe(true);
 	expect(app.count("label:重置浮窗内打开设置快捷键")).toBe(0);
 	expect(app.count("label:重置浮窗内切换固定窗口快捷键")).toBe(0);
 	expect(app.count("id:settings-content")).toBe(1);

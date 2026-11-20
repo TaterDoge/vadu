@@ -2,13 +2,13 @@ import { cleanup, computed, effect, keymap, signal } from "nsh";
 import { GlobalShortcut, Window } from "nsh/desktop";
 
 import { Settings, SettingsError } from "./settings";
-import { toggleTranslateWindow } from "./windows/translate/TranslateWindow";
+import { openTranslateWindow } from "./windows/translate/TranslateWindow";
 
 const shortcutActions = [
 	{
 		id: "toggle-translate",
 		scope: "global",
-		run: toggleTranslateWindow,
+		run: openTranslateWindow,
 	},
 	{
 		id: "open-settings",

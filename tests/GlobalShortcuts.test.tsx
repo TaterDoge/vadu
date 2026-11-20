@@ -1,7 +1,7 @@
 import { type App, type OpenOptions, expect, open, test } from "nsh/test";
 
 const input = "id:shortcut-toggle-translate-input";
-const reset = "label:重置唤起 / 隐藏翻译浮窗快捷键";
+const reset = "label:重置唤起翻译浮窗快捷键";
 const defaultStroke = "mod+shift+m";
 
 function openFixture(options: OpenOptions = {}) {
@@ -24,7 +24,7 @@ async function pressShortcut(app: App, keystroke = defaultStroke) {
 	await app.host.send("press-shortcut", keystroke);
 }
 
-test("启动即注册，切换显示隐藏、最小化恢复、关闭重开，主窗口隐藏后仍生效", async () => {
+test("启动即注册，重复唤起、最小化恢复、关闭重开，主窗口隐藏后仍生效", async () => {
 	const app = await openFixture();
 	expect(events(app)).toEqual([`register:${defaultStroke}`]);
 	expect(app.shows("text:快捷键状态 已启用")).toBe(true);
@@ -39,12 +39,7 @@ test("启动即注册，切换显示隐藏、最小化恢复、关闭重开，�
 		focused: true,
 	});
 	await pressShortcut(app);
-	expect(app.window("translate").state()).toMatchObject({ visible: false });
-	await pressShortcut(app);
-	expect(app.window("translate").state()).toMatchObject({
-		visible: true,
-		focused: true,
-	});
+	expect(app.window("translate").state()).toMatchObject({ visible: true, focused: true });
 
 	await app.host.send("minimize-translate");
 	expect(app.window("translate").state()).toMatchObject({ minimized: true });
@@ -69,7 +64,7 @@ test("全局快捷键创建、隐藏恢复、最小化恢复和关闭重开时�
 	for (const action of ["创建", "隐藏恢复", "最小化恢复", "关闭重开"]) {
 		if (action !== "创建") await app.host.send("lower-translate");
 		if (action === "隐藏恢复") {
-			await pressShortcut(app);
+			await app.host.send("focus-settings");
 			await app.waitUntil(() => app.window("translate").state()?.visible === false);
 		} else if (action === "最小化恢复") {
 			await app.host.send("minimize-translate");
@@ -106,6 +101,7 @@ test("翻译浮窗使用非激活面板，唤起和隐藏不改变设置窗状�
 		kind: "panel",
 		activate: false,
 		level: "aboveDock",
+		workspaces: "all",
 		minimizable: true,
 		maximizable: true,
 	});
@@ -118,25 +114,29 @@ test("翻译浮窗使用非激活面板，唤起和隐藏不改变设置窗状�
 		focused: false,
 	});
 
-	await pressShortcut(app);
+	await app.host.send("focus-settings");
 	expect(app.window("translate").state()).toMatchObject({ visible: false });
 	expect(app.window("main").state()).toMatchObject({ visible: true });
 	await app.host.send("hide-settings");
 
-	for (let i = 0; i < 2; i++) {
-		await pressShortcut(app);
-		expect(app.window("translate").state()).toMatchObject({
-			visible: true,
-			focused: true,
-		});
-		expect(app.window("main").state()).toMatchObject({
-			visible: false,
-			focused: false,
-		});
-		await pressShortcut(app);
-		expect(app.window("translate").state()).toMatchObject({ visible: false });
-		expect(app.window("main").state()).toMatchObject({ visible: false });
-	}
+	await pressShortcut(app);
+	expect(app.window("translate").state()).toMatchObject({ visible: true, focused: true });
+	expect(app.window("main").state()).toMatchObject({ visible: false, focused: false });
+});
+
+test("翻译浮窗失焦时自动隐藏，快捷键恢复草稿，重复唤起保持显示", async () => {
+	const app = await openFixture();
+	const translate = app.window("translate");
+	await pressShortcut(app);
+	await app.type("id:translation-source-input", "草稿");
+	await app.host.send("focus-settings");
+	expect(translate.state()).toMatchObject({ visible: false, focused: false });
+
+	await pressShortcut(app);
+	expect(translate.state()).toMatchObject({ visible: true, focused: true });
+	expect(app.value("id:translation-source-input")).toBe("草稿");
+	await pressShortcut(app);
+	expect(translate.state()).toMatchObject({ visible: true, focused: true });
 });
 
 test("录入暂停注册，保存与重置立即重绑，旧组合不再触发", async () => {
@@ -169,9 +169,9 @@ test("录入暂停注册，保存与重置立即重绑，旧组合不再触发",
 		"register:shift+mod+m",
 	]);
 	await pressShortcut(app, "shift+mod+k");
-	expect(app.window("translate").state()).toMatchObject({ visible: true });
+	expect(app.window("translate").state()).toMatchObject({ visible: false, focused: false });
 	await pressShortcut(app, "shift+mod+m");
-	expect(app.window("translate").state()).toMatchObject({ visible: false });
+	expect(app.window("translate").state()).toMatchObject({ visible: true, focused: true });
 });
 
 test("启动读取已保存组合，不等待打开快捷键页，更新其他配置不重复注册", async () => {

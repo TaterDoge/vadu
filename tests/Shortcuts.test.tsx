@@ -2,7 +2,7 @@ import { expect, open, test, type OpenOptions } from "nsh/test";
 
 const toggle = "id:shortcut-toggle-translate-input";
 const recordingTip = "text:需要包含 ⌘ / Ctrl / Alt 等修饰键，主键可用字母、数字、方向键或标点键等；F1–F24 也可单独使用。";
-const reset = "label:重置唤起 / 隐藏翻译浮窗快捷键";
+const reset = "label:重置唤起翻译浮窗快捷键";
 
 async function openShortcuts(options: OpenOptions = {}) {
 	const app = await open("../App.tsx", {

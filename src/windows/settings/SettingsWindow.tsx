@@ -1,16 +1,20 @@
-import { Image, Scroll, Text, token, View } from 'nsh';
+import { Scroll, Text, token, View } from 'nsh';
 import { createNavStack, MenuItem, NavPage, NavStack } from 'nsh/base';
 import { currentWindow } from 'nsh/desktop';
 
 import { Logo } from '../../components/Logo';
+import { buttonFrameClass } from '../../components/ui/buttonStyles';
+import { Icon } from '../../components/ui/Icon';
 import { iconHoverMotion } from '../../components/ui/motion';
+import {
+  lucideHistory,
+  lucideKeyboard,
+  lucidePalette,
+  lucideServer,
+  lucideSettings,
+} from '../../icons';
 import { setupShortcuts } from '../../shortcuts';
 import { setupTray } from '../../tray';
-import appearanceIcon from './icons/appearance.svg';
-import backupIcon from './icons/backup.svg';
-import generalIcon from './icons/general.svg';
-import providersIcon from './icons/providers.svg';
-import shortcutsIcon from './icons/shortcuts.svg';
 import { AppearancePage } from './pages/appearance/AppearancePage';
 import { BackupPage } from './pages/backup/BackupPage';
 import { GeneralPage } from './pages/general/GeneralPage';
@@ -21,31 +25,31 @@ const settingsPages = [
   {
     id: 'general',
     label: '通用',
-    icon: generalIcon,
+    icon: lucideSettings,
     render: () => <GeneralPage />,
   },
   {
     id: 'providers',
     label: '服务商',
-    icon: providersIcon,
+    icon: lucideServer,
     render: () => <ProvidersPage />,
   },
   {
     id: 'appearance',
     label: '外观',
-    icon: appearanceIcon,
+    icon: lucidePalette,
     render: () => <AppearancePage />,
   },
   {
     id: 'shortcuts',
     label: '快捷键',
-    icon: shortcutsIcon,
+    icon: lucideKeyboard,
     render: () => <ShortcutsPage />,
   },
   {
     id: 'backup',
     label: '备份恢复',
-    icon: backupIcon,
+    icon: lucideHistory,
     render: () => <BackupPage />,
   },
 ] as const;
@@ -96,20 +100,16 @@ export function SettingsWindow() {
                       onSelect={() => {
                         if (activeNav().id !== page().id) nav.replace(page());
                       }}
-                      class="h-11 flex-row items-center gap-3 rounded-xl border border-transparent px-3 hover:bg-sidebar-accent focus-visible:border-sidebar-foreground"
+                      class={`${buttonFrameClass} h-11 flex-row items-center gap-3 rounded-xl border-transparent px-3 hover:bg-sidebar-accent`}
                       classList={{
                         'bg-sidebar-accent': activeNav().id === page().id,
                       }}
                     >
-                      <Image
-                        style={{
-                          ...iconMotion.style,
-                          tintColor: token('sidebar-foreground'),
-                        }}
-                        src={page().icon}
-                        class="h-5 w-5 shrink-0"
-                        accessibilityElementsHidden
-                        importantForAccessibility="no-hide-descendants"
+                      <Icon
+                        icon={page().icon}
+                        size={20}
+                        color={token('sidebar-foreground')}
+                        style={iconMotion.style}
                       />
                       <Text
                         class="text-sm text-sidebar-foreground"

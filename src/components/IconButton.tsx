@@ -1,9 +1,12 @@
-import { Image, type ImageAsset, token } from 'nsh';
 import { Button } from 'nsh/base';
+import type { IconData } from 'supernsh-icons';
+
+import { buttonFrameClass } from './ui/buttonStyles';
+import { Icon } from './ui/Icon';
 
 export function IconButton(props: {
   label: string;
-  icon: ImageAsset;
+  icon: IconData;
   onPress?: () => void;
   disabled?: boolean;
   selected?: boolean;
@@ -16,18 +19,9 @@ export function IconButton(props: {
       onPress={props.onPress}
       accessibilityLabel={props.label}
       tooltip={props.onPress ? props.label : props.label + '（暂未实现）'}
-      class={
-        'selected:bg-accent h-6 w-6 items-center justify-center rounded-md hover:bg-muted focus-visible:border focus-visible:border-foreground ' +
-        (props.class ?? '')
-      }
+      class={`${buttonFrameClass} selected:bg-accent h-6 w-6 items-center justify-center rounded-md border-transparent hover:bg-muted ${props.class ?? ''}`}
     >
-      <Image
-        src={props.icon}
-        class="h-4 w-4"
-        style={{ tintColor: token('foreground') }}
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-      />
+      <Icon icon={props.icon} />
     </Button>
   );
 }

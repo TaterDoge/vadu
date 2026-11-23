@@ -2,9 +2,7 @@ import { Clipboard, type InputRef, signal, Text, View } from 'nsh';
 import { Input } from 'nsh/base';
 
 import { IconButton } from '../../../components/IconButton';
-import copyIcon from '../icons/copy.svg';
-import eraserIcon from '../icons/eraser.svg';
-import volumeIcon from '../icons/volume.svg';
+import { lucideCopy, lucideEraser, lucideVolume2 } from '../../../icons';
 
 export function TranslateInput(props: {
   inputRef: (node: InputRef) => void;
@@ -56,10 +54,10 @@ export function TranslateInput(props: {
         class="min-h-0 flex-1 bg-transparent px-1 py-2 text-sm leading-5 text-foreground placeholder:text-muted-foreground"
       />
       <View class="h-6 shrink-0 flex-row items-center gap-1">
-        <IconButton label="朗读原文" icon={volumeIcon} class={toolClass()} />
+        <IconButton label="朗读原文" icon={lucideVolume2} class={toolClass()} />
         <IconButton
           label="复制原文"
-          icon={copyIcon}
+          icon={lucideCopy}
           class={toolClass()}
           disabled={!hasText()}
           onPress={copySource}
@@ -73,7 +71,7 @@ export function TranslateInput(props: {
         </View>
         <IconButton
           label="清空原文"
-          icon={eraserIcon}
+          icon={lucideEraser}
           class={props.readonly ? 'opacity-40' : toolClass()}
           disabled={props.readonly || !hasText()}
           onPress={clearSource}

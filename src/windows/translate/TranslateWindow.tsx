@@ -4,7 +4,6 @@ import {
   cleanup,
   computed,
   effect,
-  Image,
   type InputRef,
   Scroll,
   signal,
@@ -18,16 +17,16 @@ import { currentWindow, Window } from 'nsh/desktop';
 import { Translation } from 'vadu/native';
 
 import { IconButton } from '../../components/IconButton';
+import { buttonFrameClass } from '../../components/ui/buttonStyles';
 import {
   providerConnectionsSupported,
   Settings,
   SettingsError,
 } from '../../settings';
 import '../../theme';
-import settingsIcon from '../settings/icons/general.svg';
-import pinIcon from '../settings/pages/shortcuts/pin.svg';
+import { Icon } from '../../components/ui/Icon';
+import { lucideChevronDown, lucidePin, lucideSettings } from '../../icons';
 import { TranslateInput } from './components/TranslateInput';
-import chevronDownIcon from './icons/chevron-down.svg';
 
 const pinned = signal(false);
 const languages = [
@@ -39,22 +38,23 @@ const languages = [
 ];
 const pickerPopup =
   'rounded-lg border border-border bg-popover p-1 text-popover-foreground';
-const pickerItem = 'min-h-8 rounded-md px-2 focus:bg-accent selected:bg-accent';
+const pickerItem = `${buttonFrameClass} min-h-8 rounded-md border-transparent px-2 focus:bg-accent selected:bg-accent`;
 
 function PickerLabel(props: { title: string; muted?: boolean }) {
   return (
-    <View class="h-8 min-w-0 flex-row items-center justify-between gap-1 rounded-lg border border-border bg-background px-2">
+    <View
+      class={`${buttonFrameClass} h-8 min-w-0 flex-row items-center justify-between gap-1 rounded-lg border-border bg-background px-2`}
+    >
       <Text
         class={`min-w-0 shrink text-sm leading-5 ${props.muted ? 'text-muted-foreground' : 'text-foreground'}`}
         style={{ numberOfLines: 1, textOverflow: 'ellipsis' }}
       >
         {props.title}
       </Text>
-      <Image
-        src={chevronDownIcon}
-        class="h-3 w-3 shrink-0"
-        style={{ tintColor: token('muted-foreground') }}
-        accessibilityElementsHidden
+      <Icon
+        icon={lucideChevronDown}
+        size={12}
+        color={token('muted-foreground')}
       />
     </View>
   );
@@ -185,13 +185,13 @@ export function TranslateWindow() {
       >
         <IconButton
           label={pinned() ? '取消固定窗口' : '固定窗口'}
-          icon={pinIcon}
+          icon={lucidePin}
           selected={pinned()}
           onPress={toggleTranslatePin}
         />
         <IconButton
           label="打开设置"
-          icon={settingsIcon}
+          icon={lucideSettings}
           onPress={() => Window.get('main')?.focus()}
         />
       </View>
@@ -263,7 +263,7 @@ export function TranslateWindow() {
               if (request()) cancel();
               else submit();
             }}
-            class="w-24 shrink-0 items-center justify-center rounded-lg bg-foreground disabled:opacity-50"
+            class={`${buttonFrameClass} w-24 shrink-0 items-center justify-center rounded-lg border-transparent bg-foreground disabled:opacity-50`}
           >
             <Text class="text-sm leading-5 font-semibold text-background">
               {request() ? '取消翻译' : '翻译'}

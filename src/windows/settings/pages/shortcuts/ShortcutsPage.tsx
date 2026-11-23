@@ -1,14 +1,12 @@
 import {
   cleanup,
   effect,
-  Image,
   keymap,
   lifecycle,
   Overlay,
   safeArea,
   signal,
   Text,
-  token,
   View,
   type ViewRef,
 } from 'nsh';
@@ -20,8 +18,11 @@ import {
   ToastStack,
 } from 'nsh/base';
 
+import { buttonFrameClass } from '../../../../components/ui/buttonStyles';
+import { Icon } from '../../../../components/ui/Icon';
 import { Item } from '../../../../components/ui/Item';
 import { Kbd, KbdGroup } from '../../../../components/ui/Kbd';
+import { lucideInfo, lucideRotateCcw } from '../../../../icons';
 import {
   type AppSettings,
   captureShortcutKeys,
@@ -33,8 +34,6 @@ import {
   translateShortcutStatus,
 } from '../../../../shortcuts';
 import { shortcutGroups } from './constants';
-import infoIcon from './info.svg';
-import resetIcon from './reset.svg';
 
 export function ShortcutsPage() {
   const settings = signal<AppSettings | null>(null);
@@ -269,15 +268,7 @@ export function ShortcutsPage() {
                       testID={'shortcut-' + shortcut().id}
                       title={shortcut().title}
                       description={shortcut().description}
-                      media={
-                        <Image
-                          src={shortcut().icon}
-                          style={{ tintColor: token('foreground') }}
-                          class="h-5 w-5"
-                          accessibilityElementsHidden
-                          importantForAccessibility="no-hide-descendants"
-                        />
-                      }
+                      media={<Icon icon={shortcut().icon} size={20} />}
                       actions={
                         <>
                           <KbdGroup
@@ -298,7 +289,7 @@ export function ShortcutsPage() {
                             accessibilityState={{
                               selected: isRecording(shortcut().id),
                             }}
-                            class="rounded-lg border border-transparent p-1 focus-visible:border-foreground disabled:opacity-40"
+                            class={`${buttonFrameClass} rounded-lg border-transparent p-1 disabled:opacity-40`}
                             classList={{
                               'bg-accent': isRecording(shortcut().id),
                             }}
@@ -327,15 +318,9 @@ export function ShortcutsPage() {
                               accessibilityLabel={
                                 '重置' + shortcut().title + '快捷键'
                               }
-                              class="h-8 w-8 items-center justify-center rounded-lg disabled:opacity-40"
+                              class={`${buttonFrameClass} h-8 w-8 items-center justify-center rounded-lg border-transparent disabled:opacity-40`}
                             >
-                              <Image
-                                src={resetIcon}
-                                style={{ tintColor: token('foreground') }}
-                                class="h-4 w-4"
-                                accessibilityElementsHidden
-                                importantForAccessibility="no-hide-descendants"
-                              />
+                              <Icon icon={lucideRotateCcw} />
                             </Button>
                           </If>
                           <Text
@@ -356,13 +341,7 @@ export function ShortcutsPage() {
                         testID={'shortcut-' + shortcut().id + '-tips'}
                         class="flex-row items-start gap-2 rounded-xl border border-border bg-card p-3"
                       >
-                        <Image
-                          src={infoIcon}
-                          style={{ tintColor: token('foreground') }}
-                          class="h-5 w-5 shrink-0"
-                          accessibilityElementsHidden
-                          importantForAccessibility="no-hide-descendants"
-                        />
+                        <Icon icon={lucideInfo} size={20} />
                         <Text class="min-w-0 flex-1 text-xs leading-5 text-muted-foreground">
                           需要包含 ⌘ / Ctrl / Alt
                           等修饰键，主键可用字母、数字、方向键或标点键等；F1–F24

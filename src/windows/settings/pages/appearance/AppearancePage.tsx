@@ -1,6 +1,7 @@
 import { Text, token, View } from 'nsh';
 import { Radio, RadioGroup } from 'nsh/base';
 
+import { buttonFrameClass } from '../../../../components/ui/buttonStyles';
 import { Kbd, KbdGroup } from '../../../../components/ui/Kbd';
 import {
   accents,
@@ -10,8 +11,7 @@ import {
   themeStyles,
 } from '../../../../theme';
 
-const choiceClass =
-  'group min-w-24 flex-1 gap-1 rounded-md border border-border px-3 py-2 checked:border-primary checked:bg-secondary hover:bg-accent focus-visible:border-foreground';
+const choiceClass = `${buttonFrameClass} group min-w-24 flex-1 gap-1 rounded-md border-border px-3 py-2 checked:border-primary checked:bg-secondary hover:bg-accent`;
 
 export function AppearancePage() {
   return (

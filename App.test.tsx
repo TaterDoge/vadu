@@ -33,9 +33,7 @@ test('侧栏显示品牌与五个分类，切换时不显示公共标题与说�
   ]) {
     await app.press(`id:settings-${id}`);
     expect(app.count(`label:${label}`)).toBe(2);
-    expect(app.texts().filter((text) => text === label).length).toBe(
-      id === 'providers' ? 2 : 1,
-    );
+    expect(app.texts().filter((text) => text === label).length).toBe(1);
     expect(app.count('text:设置项业务尚未迁移，暂不可编辑。')).toBe(0);
     expect(app.count('id:settings-shortcuts-page')).toBe(
       id === 'shortcuts' ? 1 : 0,

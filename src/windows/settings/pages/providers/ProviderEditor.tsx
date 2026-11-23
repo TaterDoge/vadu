@@ -1,23 +1,71 @@
-import { Image, Text, token, View } from 'nsh';
+import {
+  cleanup,
+  computed,
+  effect,
+  Overlay,
+  safeArea,
+  Scroll,
+  type Signal,
+  signal,
+  Text,
+  token,
+  View,
+} from 'nsh';
 import {
   Button,
   Command,
+  Dialog,
   Editor,
   Input,
   Popover,
   Select,
   Switch,
+  Toast,
+  type ToastEntry,
+  ToastManager,
+  ToastStack,
 } from 'nsh/base';
-import type { ProviderProfile } from 'vadu/native';
+import { currentWindow } from 'nsh/desktop';
+import { Profiles, type ProviderProfile, Secrets } from 'vadu/native';
 
 import { IconButton } from '../../../../components/IconButton';
-import chevronDownIcon from '../../../translate/icons/chevron-down.svg';
-import layersIcon from '../../../translate/icons/layers.svg';
-import refreshIcon from '../shortcuts/reset.svg';
-import eyeOffIcon from './eye-off.svg';
-import eyeIcon from './eye.svg';
+import { buttonFrameClass } from '../../../../components/ui/buttonStyles';
+import { Icon } from '../../../../components/ui/Icon';
+import { inputFrameClass } from '../../../../components/ui/inputStyles';
+import {
+  lucideChevronDown,
+  lucideChevronRight,
+  lucideEye,
+  lucideEyeOff,
+  lucideLayers,
+  lucideRefreshCw,
+} from '../../../../icons';
+import {
+  providerConnectionsSupported,
+  Settings,
+  SettingsError,
+} from '../../../../settings';
 
-export type ProviderFields = Omit<ProviderProfile, 'id'>;
+type ProviderFields = Omit<ProviderProfile, 'id'>;
+type Draft = ProviderFields & { id?: string };
+type Confirmation = {
+  title: string;
+  description: string;
+  button: string;
+  action: () => Promise<void>;
+};
+
+const defaultTemperature = '0.3';
+const emptyFields: ProviderFields = {
+  name: '',
+  protocol: 'chat-completions',
+  baseUrl: '',
+  model: '',
+  enabled: true,
+  temperature: defaultTemperature,
+  providerOptions: '',
+  headers: '',
+};
 
 const protocols = [
   { value: 'chat-completions', title: 'Chat Completions (/chat/completions)' },
@@ -26,83 +74,322 @@ const protocols = [
 ] satisfies Array<{ value: ProviderFields['protocol']; title: string }>;
 
 export const providerHeadingClass = 'text-sm font-semibold text-foreground';
-export const providerButtonClass =
-  'min-h-8 flex-row items-center justify-center rounded-lg border px-2.5 focus-visible:border-foreground';
-export const providerOptionsClass =
-  'min-h-8 justify-center rounded-md px-2.5 focus:bg-accent selected:bg-secondary';
-const inputClass =
-  'h-8 min-w-0 rounded-lg border border-border bg-background px-2.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-foreground';
+export const providerButtonClass = `${buttonFrameClass} min-h-8 flex-row items-center justify-center rounded-lg px-2.5`;
+export const providerOptionsClass = `${buttonFrameClass} min-h-8 justify-center rounded-md border-transparent px-2.5 focus:bg-accent selected:bg-secondary`;
+const inputClass = `${inputFrameClass} h-8 min-w-0 rounded-lg bg-background px-2.5 text-sm text-foreground placeholder:text-muted-foreground`;
 const hintClass = 'text-xs leading-4 text-muted-foreground';
-const editorClass =
-  'h-24 min-w-0 rounded-lg border border-border bg-background focus-within:border-foreground';
+const editorClass = `${inputFrameClass} h-24 min-w-0 rounded-lg bg-background`;
 
 export function ProviderEditor(props: {
-  title: string;
-  value: ProviderFields;
-  error: string;
-  busy: boolean;
-  connectionReady: boolean;
-  canFetchModels: boolean;
-  keyInputSupported: boolean;
-  apiKey: string;
-  revealedKey: string;
-  keyVisible: boolean;
-  keyStatus: string;
-  keyConfigured: boolean;
-  models: string[];
-  modelPickerOpen: boolean;
-  onModelPickerOpenChange: (open: boolean) => void;
-  onKeyChange: (value: string) => void;
-  onToggleKey: () => void;
-  onCheckModel: () => void;
-  onFetchModels: (choose: boolean) => void;
-  advancedOpen: boolean;
-  onToggleAdvanced: () => void;
-  onChange: (patch: Partial<ProviderFields>) => void;
-  onSave: () => void;
-  onDelete?: () => void;
+  profileId: string;
+  busy: Signal<boolean>;
+  onCreated: () => void;
+  onDeleted: () => void;
 }) {
-  const modelsDisabled = () => !props.canFetchModels || props.busy;
+  const busy = props.busy;
+  const saved = computed(() =>
+    Settings.current()?.profiles.find((p) => p.id === props.profileId),
+  );
+  const draft = signal<Draft>(saved() ?? emptyFields);
+  const error = signal('');
+  const draftKey = signal<string | null>(null);
+  const savedKey = signal('');
+  const apiKey = computed(() => draftKey() ?? savedKey());
+  const keyVisible = signal(false);
+  const keyStatus = signal('');
+  const models = signal<string[]>([]);
+  const modelPickerOpen = signal(false);
+  const advancedOpen = signal(false);
+  const confirmation = signal<Confirmation | null>(null);
+  const connection = computed(() => {
+    const profile = saved();
+    const value = draft();
+    return providerConnectionsSupported &&
+      profile &&
+      value.baseUrl.trim() === profile.baseUrl &&
+      value.protocol === profile.protocol
+      ? profile
+      : null;
+  });
+  // 未保存时也能用已确认的地址和本次输入的密钥获取模型。
+  const canFetchModels = computed(() => {
+    const value = draft();
+    if (
+      !providerConnectionsSupported ||
+      value.protocol !== 'chat-completions' ||
+      !value.baseUrl.trim()
+    )
+      return false;
+    return apiKey().trim() !== '' || connection() !== null;
+  });
+  const toastManager = new ToastManager();
+  const toasts = signal<ToastEntry[]>([]);
+  let toastTimer: ReturnType<typeof setInterval> | undefined;
+  let toastExpanded = false;
+  let mounted = true;
+  let keyStatusVersion = 0;
+  cleanup(() => {
+    mounted = false;
+    draftKey.set(null);
+    savedKey.set('');
+    if (toastTimer !== undefined) clearInterval(toastTimer);
+    toastManager.dispose();
+  });
+
+  function syncToasts() {
+    toasts.set(toastManager.visible(1));
+  }
+
+  function showToast(message: string) {
+    toastManager.push('provider', message, { timeout: 3000 });
+    syncToasts();
+    if (toastTimer !== undefined) return;
+    toastTimer = setInterval(() => {
+      if (toastManager.advance(toastExpanded).changed) syncToasts();
+      if (toastManager.isEmpty()) {
+        clearInterval(toastTimer);
+        toastTimer = undefined;
+      }
+    }, 50);
+  }
+
+  const window = currentWindow();
+  const windowActive = computed(() => {
+    const state = window.state();
+    return !state || (state.visible && state.focused);
+  });
+
+  effect(() => {
+    const profile = windowActive() ? connection() : null;
+    keyVisible.set(false);
+    savedKey.set('');
+    keyStatus.set(profile ? '正在读取本地存储…' : '');
+    if (!profile) return;
+    const version = ++keyStatusVersion;
+    void Secrets.reveal(profile.id)
+      .then(({ key, error }) => {
+        if (!mounted || version !== keyStatusVersion) return;
+        savedKey.set(key ?? '');
+        keyStatus.set(
+          error?.message ?? (key ? '已保存 API Key' : '未设置 API Key'),
+        );
+      })
+      .catch(() => {
+        if (mounted && version === keyStatusVersion)
+          keyStatus.set('无法读取本地存储。');
+      });
+    cleanup(() => {
+      keyStatusVersion++;
+    });
+  });
+
+  function errorMessage(cause: unknown) {
+    return cause instanceof SettingsError
+      ? cause.message
+      : '操作失败，请重试。';
+  }
+
+  async function run(
+    action: () => Promise<void>,
+    onError?: (message: string) => void,
+  ) {
+    if (busy()) return;
+    busy.set(true);
+    if (!onError) error.set('');
+    try {
+      await action();
+    } catch (cause) {
+      if (mounted) (onError ?? error.set)(errorMessage(cause));
+    } finally {
+      busy.set(false);
+    }
+  }
+
+  function patchDraft(patch: Partial<ProviderFields>) {
+    const value = draft();
+    if (busy()) return;
+    if (
+      (patch.baseUrl !== undefined && patch.baseUrl !== value.baseUrl) ||
+      (patch.protocol !== undefined && patch.protocol !== value.protocol)
+    ) {
+      // 切换连接时，清除在原地址上编辑的密钥。
+      if (connection()) draftKey.set(null);
+      modelPickerOpen.set(false);
+      models.set([]);
+    }
+    draft.set({ ...value, ...patch });
+    error.set('');
+  }
+
+  function requestSave() {
+    const value = draft();
+    if (busy()) return;
+    try {
+      const create = value.id === undefined;
+      const { profile, origin } = Settings.checkProfile({
+        id: props.profileId,
+        name: value.name.trim(),
+        protocol: value.protocol,
+        baseUrl: value.baseUrl.trim(),
+        model: value.model.trim(),
+        enabled: value.enabled,
+        temperature: value.temperature.trim() || defaultTemperature,
+        providerOptions: value.providerOptions.trim(),
+        headers: value.headers.trim(),
+      });
+      const action = async () => {
+        const key = draftKey()?.trim() ?? '';
+        keyVisible.set(false);
+        draftKey.set(null);
+        const { keyError } = await Settings.saveProfile(profile, create, key);
+        if (!mounted) return;
+        if (create) props.onCreated();
+        draft.set(profile);
+        if (keyError) {
+          error.set(`服务商配置已保存，API Key 保存失败。${keyError}`);
+          return;
+        }
+        if (key) {
+          keyStatusVersion++;
+          models.set([]);
+          if (windowActive()) savedKey.set(key);
+          keyStatus.set('已保存 API Key');
+        }
+        showToast('服务商已保存。');
+      };
+      if (profile.baseUrl !== saved()?.baseUrl) {
+        confirmation.set({
+          title: '允许连接服务商？',
+          description: `地址 ${profile.baseUrl}\n授权来源 ${origin}。模型请求和翻译会发送到该地址。${origin.startsWith('http:') ? 'HTTP 不加密，原文和 API Key 可能被网络中间方读取。' : ''}`,
+          button: '确认地址并保存',
+          action,
+        });
+      } else {
+        void run(action);
+      }
+    } catch (cause) {
+      error.set(errorMessage(cause));
+    }
+  }
+
+  function changeModelPicker(open: boolean) {
+    if (open && (busy() || !canFetchModels())) return;
+    modelPickerOpen.set(open);
+    if (open && models().length === 0) fetchModels();
+  }
+
+  function fetchModels() {
+    const value = draft();
+    if (value.protocol !== 'chat-completions' || busy()) return;
+    const profile = connection();
+    const key = draftKey()?.trim() ?? '';
+    if (!profile && !key) return;
+    const address = value.baseUrl.trim();
+    const action = async () => {
+      const { models: found, error } =
+        profile && !key
+          ? await Profiles.listModels(profile.id)
+          : await Profiles.listModelsDraft(address, key);
+      if (!found)
+        throw new SettingsError(
+          error?.code ?? 'NETWORK',
+          error?.message ?? '无法获取模型列表。',
+        );
+      if (!mounted) return;
+      models.set(found);
+      showToast(
+        found.length
+          ? `已获取 ${found.length} 个模型。`
+          : '模型列表为空，可以手动输入模型 ID。',
+      );
+    };
+    if (profile) {
+      void run(action, showToast);
+      return;
+    }
+    confirmation.set({
+      title: '允许连接服务商？',
+      description: `地址 ${address}\n模型请求和翻译会发送到该地址。${address.toLowerCase().startsWith('http:') ? 'HTTP 不加密，原文和 API Key 可能被网络中间方读取。' : ''}`,
+      button: '确认地址并获取模型',
+      action,
+    });
+  }
+
+  function checkModel() {
+    const profile = connection();
+    const model = draft().model.trim();
+    if (profile?.protocol !== 'chat-completions' || !model) return;
+    void run(async () => {
+      const error = await Profiles.checkModel(profile.id, model);
+      if (error) throw new SettingsError(error.code, error.message);
+      if (mounted) showToast(`模型 ${model} 可以正常对话。`);
+    }, showToast);
+  }
+
+  function requestDelete() {
+    const profile = saved();
+    if (!profile || busy()) return;
+    confirmation.set({
+      title: '删除服务商？',
+      description: `删除「${profile.name}」及其 API Key。`,
+      button: '确认删除',
+      action: async () => {
+        await Settings.removeProfile(profile.id);
+        if (mounted) props.onDeleted();
+      },
+    });
+  }
+
+  function confirm() {
+    const selected = confirmation();
+    if (!selected) return;
+    confirmation.set(null);
+    void run(selected.action);
+  }
+
+  function changeKey(value: string) {
+    if (busy()) return;
+    draftKey.set(value);
+    if (!value) keyVisible.set(false);
+  }
+
   const checkDisabled = () =>
-    !props.connectionReady ||
-    props.busy ||
-    props.value.protocol !== 'chat-completions' ||
-    !props.value.model.trim();
+    !connection() ||
+    busy() ||
+    draft().protocol !== 'chat-completions' ||
+    !draft().model.trim();
   const actionClass = `${providerButtonClass} gap-1.5 border-border bg-background hover:bg-accent disabled:opacity-50`;
 
   return (
     <View class="gap-2.5">
-      <Text role="header" class={providerHeadingClass}>
-        {props.title}
-      </Text>
-      <If when={props.error !== ''}>
+      <If when={error() !== ''}>
         <Text role="alert" class="text-xs text-destructive">
-          {props.error}
+          {error()}
         </Text>
       </If>
       <View class="gap-1.5">
-        <Text class={providerHeadingClass}>名称</Text>
-        <View class="flex-row items-center gap-2">
-          <Input
-            testID="provider-name"
-            accessibilityLabel="名称（必填）"
-            maxLength={100}
-            readonly={props.busy}
-            value={props.value.name}
-            onChange={({ value }) => props.onChange({ name: value })}
-            class={`${inputClass} flex-1`}
-          />
+        <View class="flex-row items-center justify-between gap-2">
+          <Text class={providerHeadingClass}>名称</Text>
           <Switch
             testID="provider-enabled"
             accessibilityLabel="启用服务商"
-            disabled={props.busy}
-            checked={props.value.enabled}
-            onChange={({ checked }) => props.onChange({ enabled: checked })}
-            class="h-8 shrink-0 justify-center rounded-lg border border-transparent px-1 focus-visible:border-foreground"
+            disabled={busy()}
+            checked={draft().enabled}
+            onChange={({ checked }) => patchDraft({ enabled: checked })}
+            class={`${buttonFrameClass} h-8 shrink-0 justify-center rounded-lg border-transparent px-1`}
             trackClass="h-5 w-8 justify-center rounded-full bg-muted-foreground px-0.5 checked:bg-foreground"
             thumbClass="h-4 w-4 rounded-full bg-background checked:translate-x-3"
           />
         </View>
+        <Input
+          testID="provider-name"
+          accessibilityLabel="名称（必填）"
+          maxLength={100}
+          readonly={busy()}
+          value={draft().name}
+          onChange={({ value }) => patchDraft({ name: value })}
+          class={inputClass}
+        />
       </View>
       <View class="gap-1.5">
         <Text class={providerHeadingClass}>API 协议</Text>
@@ -110,38 +397,37 @@ export function ProviderEditor(props: {
           testID="provider-protocol"
           accessibilityLabel="API 协议"
           items={protocols}
-          value={props.value.protocol}
+          value={draft().protocol}
           onChange={({ value }) => {
             const protocol = protocols.find((item) => item.value === value);
-            if (protocol) props.onChange({ protocol: protocol.value });
+            if (protocol) patchDraft({ protocol: protocol.value });
           }}
           cover={false}
-          disabled={props.busy}
+          disabled={busy()}
           popupClass="rounded-lg border border-border bg-popover p-1 text-popover-foreground"
           itemClass={providerOptionsClass}
           trigger={
             <View
-              class={`${inputClass} flex-row items-center justify-between gap-2`}
+              class={`${buttonFrameClass} h-8 min-w-0 flex-row items-center justify-between gap-2 rounded-lg border-input bg-background px-2.5`}
             >
               <Text
                 class="min-w-0 shrink text-sm text-foreground"
                 style={{ numberOfLines: 1 }}
               >
                 {
-                  protocols.find(({ value }) => value === props.value.protocol)
+                  protocols.find(({ value }) => value === draft().protocol)
                     ?.title
                 }
               </Text>
-              <Image
-                src={chevronDownIcon}
-                class="h-3 w-3 shrink-0"
-                style={{ tintColor: token('muted-foreground') }}
-                accessibilityElementsHidden
+              <Icon
+                icon={lucideChevronDown}
+                size={12}
+                color={token('muted-foreground')}
               />
             </View>
           }
         />
-        <If when={props.value.protocol !== 'chat-completions'}>
+        <If when={draft().protocol !== 'chat-completions'}>
           <Text class={hintClass}>该 API 协议尚未接入，可保存配置。</Text>
         </If>
       </View>
@@ -154,46 +440,41 @@ export function ProviderEditor(props: {
           accessibilityLabel="接口地址（Base URL，必填）"
           placeholder="https://api.openai.com/v1"
           maxLength={2000}
-          readonly={props.busy}
-          value={props.value.baseUrl}
-          onChange={({ value }) => props.onChange({ baseUrl: value })}
+          readonly={busy()}
+          value={draft().baseUrl}
+          onChange={({ value }) => patchDraft({ baseUrl: value })}
           class={inputClass}
         />
         <Text class={hintClass}>填写含版本路径的接口根地址。</Text>
       </View>
       <View class="gap-1.5">
         <Text class={providerHeadingClass}>API Key</Text>
-        <View class="h-8 min-w-0 flex-row items-center gap-1 rounded-lg border border-border bg-background pr-1 focus-within:border-foreground">
+        <View
+          class={`${inputFrameClass} h-8 min-w-0 flex-row items-center gap-1 rounded-lg bg-background pr-1`}
+        >
           <Input
             testID="provider-api-key"
             accessibilityLabel="API Key"
-            placeholder="输入新密钥，随配置保存"
-            masked={!props.keyVisible}
+            masked={!keyVisible()}
             autoCapitalize="none"
             autoCorrect={false}
             maxLength={2048}
-            value={props.revealedKey || props.apiKey}
-            readonly={props.revealedKey !== ''}
-            onChange={({ value }) => props.onKeyChange(value)}
-            disabled={!props.keyInputSupported || props.busy}
+            value={apiKey()}
+            onChange={({ value }) => changeKey(value)}
+            disabled={!providerConnectionsSupported || busy()}
             class="h-full min-w-0 flex-1 pl-2.5 text-sm text-foreground placeholder:text-muted-foreground"
           />
           <IconButton
-            label={props.keyVisible ? '隐藏密钥' : '显示密钥'}
-            icon={props.keyVisible ? eyeOffIcon : eyeIcon}
-            disabled={
-              !props.keyVisible &&
-              (!props.keyInputSupported ||
-                props.busy ||
-                (!props.apiKey && !props.keyConfigured))
-            }
-            onPress={props.onToggleKey}
+            label={keyVisible() ? '隐藏密钥' : '显示密钥'}
+            icon={keyVisible() ? lucideEyeOff : lucideEye}
+            disabled={!providerConnectionsSupported || busy() || !apiKey()}
+            onPress={() => keyVisible.set(!keyVisible())}
             class="shrink-0 disabled:opacity-50"
           />
         </View>
         <Text class={hintClass}>
-          {props.keyInputSupported
-            ? props.keyStatus || 'API Key 随服务商保存，留空保持已有 Key。'
+          {providerConnectionsSupported
+            ? keyStatus() || 'API Key 随服务商保存，留空保持已有 Key。'
             : '当前平台不支持服务商连接。'}
         </Text>
       </View>
@@ -204,14 +485,14 @@ export function ProviderEditor(props: {
             <Button
               accessibilityLabel="健康检测"
               disabled={checkDisabled()}
-              onPress={props.onCheckModel}
+              onPress={checkModel}
               class={actionClass}
             >
               <Text class={providerHeadingClass}>健康检测</Text>
             </Button>
             <Popover
-              open={props.modelPickerOpen}
-              onOpenChange={({ open }) => props.onModelPickerOpenChange(open)}
+              open={modelPickerOpen()}
+              onOpenChange={({ open }) => changeModelPicker(open)}
               placement="top"
               align="end"
               offset={4}
@@ -221,15 +502,10 @@ export function ProviderEditor(props: {
                 <Button
                   testID="provider-model-list"
                   accessibilityLabel="选择模型"
-                  disabled={modelsDisabled()}
+                  disabled={!canFetchModels() || busy()}
                   class={actionClass}
                 >
-                  <Image
-                    src={layersIcon}
-                    class="size-4"
-                    style={{ tintColor: token('foreground') }}
-                    accessibilityElementsHidden
-                  />
+                  <Icon icon={lucideLayers} />
                   <Text class={providerHeadingClass}>选择模型</Text>
                 </Button>
               }
@@ -240,47 +516,42 @@ export function ProviderEditor(props: {
                 searchAccessibilityLabel="搜索模型"
                 placeholder="搜索模型…"
                 autoFocus
-                loading={props.busy}
-                items={props.models.map((id) => ({
+                loading={busy()}
+                items={models().map((id) => ({
                   id,
                   label: id,
-                  checked: id === props.value.model,
-                  disabled: props.busy,
+                  checked: id === draft().model,
+                  disabled: busy(),
                 }))}
                 searchBarClass="shrink-0 flex-row items-center gap-1.5 border-b border-border p-2"
                 searchClass={inputClass + ' flex-1'}
                 listClass="max-h-72 p-1"
-                itemClass="min-h-9 justify-center rounded-md px-3 py-1.5 text-sm text-popover-foreground checked:bg-secondary focus:bg-accent"
+                itemClass={`${buttonFrameClass} min-h-9 justify-center rounded-md border-transparent px-3 py-1.5 text-sm text-popover-foreground checked:bg-secondary focus:bg-accent`}
                 searchSuffix={
                   <Button
                     accessibilityLabel="刷新模型列表"
-                    disabled={props.busy}
-                    onPress={() => props.onFetchModels(true)}
-                    class="size-8 shrink-0 items-center justify-center rounded-md border border-transparent hover:bg-accent focus-visible:border-foreground disabled:opacity-50"
+                    disabled={busy()}
+                    onPress={fetchModels}
+                    class={`${buttonFrameClass} size-8 shrink-0 items-center justify-center rounded-md border-transparent hover:bg-accent disabled:opacity-50`}
                   >
-                    <Image
-                      src={refreshIcon}
-                      class="size-4"
-                      style={{ tintColor: token('foreground') }}
-                      accessibilityElementsHidden
-                    />
+                    <Icon icon={lucideRefreshCw} />
                   </Button>
                 }
                 empty={
                   <Text class="px-3 py-2 text-sm text-muted-foreground">
-                    {props.models.length ? '没有匹配的模型' : '暂无模型'}
+                    {models().length ? '没有匹配的模型' : '暂无模型'}
                   </Text>
                 }
                 footer={
-                  <If when={props.busy && props.models.length === 0}>
+                  <If when={busy() && models().length === 0}>
                     <Text class="px-3 py-2 text-sm text-muted-foreground">
                       正在获取模型…
                     </Text>
                   </If>
                 }
                 onSelect={({ id }) => {
-                  props.onChange({ model: id });
-                  props.onModelPickerOpenChange(false);
+                  patchDraft({ model: id });
+                  changeModelPicker(false);
                 }}
               />
             </Popover>
@@ -290,9 +561,9 @@ export function ProviderEditor(props: {
           testID="provider-model"
           accessibilityLabel="模型 ID"
           maxLength={300}
-          readonly={props.busy}
-          value={props.value.model}
-          onChange={({ value }) => props.onChange({ model: value })}
+          readonly={busy()}
+          value={draft().model}
+          onChange={({ value }) => patchDraft({ model: value })}
           placeholder="输入模型 ID"
           class={inputClass}
         />
@@ -301,30 +572,27 @@ export function ProviderEditor(props: {
         role="button"
         focusable
         accessibilityLabel="高级选项"
-        accessibilityState={{ expanded: props.advancedOpen }}
-        onPress={props.onToggleAdvanced}
-        class="min-h-8 flex-row items-center gap-2 self-start rounded-lg border border-transparent px-1 hover:bg-accent focus-visible:border-foreground"
+        accessibilityState={{ expanded: advancedOpen() }}
+        onPress={() => advancedOpen.set(!advancedOpen())}
+        class={`${buttonFrameClass} min-h-8 flex-row items-center gap-2 self-start rounded-lg border-transparent px-1 hover:bg-accent`}
       >
-        <Image
-          src={chevronDownIcon}
-          class="h-3 w-3"
-          classList={{ '-rotate-90': !props.advancedOpen }}
-          style={{ tintColor: token('muted-foreground') }}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
+        <Icon
+          icon={advancedOpen() ? lucideChevronDown : lucideChevronRight}
+          size={12}
+          color={token('muted-foreground')}
         />
         <Text class="text-sm font-medium text-foreground">高级选项</Text>
       </View>
-      <If when={props.advancedOpen}>
+      <If when={advancedOpen()}>
         <View class="gap-2.5">
           <View class="gap-1.5">
             <Text class={providerHeadingClass}>温度</Text>
             <Input
               accessibilityLabel="温度"
               keyboardType="decimal-pad"
-              readonly={props.busy}
-              value={props.value.temperature}
-              onChange={({ value }) => props.onChange({ temperature: value })}
+              readonly={busy()}
+              value={draft().temperature}
+              onChange={({ value }) => patchDraft({ temperature: value })}
               class={`${inputClass} w-36`}
             />
             <Text class={hintClass}>输入 0 到 1，留空后保存可恢复默认值。</Text>
@@ -337,11 +605,9 @@ export function ProviderEditor(props: {
               softWrap
               scrollBeyondLastLine={false}
               placeholder={'{"enable_thinking": false}'}
-              readOnly={props.busy}
-              value={props.value.providerOptions}
-              onChange={({ value }) =>
-                props.onChange({ providerOptions: value })
-              }
+              readOnly={busy()}
+              value={draft().providerOptions}
+              onChange={({ value }) => patchDraft({ providerOptions: value })}
               class={editorClass}
             />
             <Text class={hintClass}>
@@ -356,9 +622,9 @@ export function ProviderEditor(props: {
               softWrap
               scrollBeyondLastLine={false}
               placeholder={'{"X-Client": "vadu"}'}
-              readOnly={props.busy}
-              value={props.value.headers}
-              onChange={({ value }) => props.onChange({ headers: value })}
+              readOnly={busy()}
+              value={draft().headers}
+              onChange={({ value }) => patchDraft({ headers: value })}
               class={editorClass}
             />
             <Text class={hintClass}>
@@ -370,20 +636,17 @@ export function ProviderEditor(props: {
       <View class="flex-row justify-between gap-2">
         <Button
           accessibilityLabel="保存"
-          disabled={props.busy}
-          onPress={props.onSave}
-          class={
-            providerButtonClass +
-            ' border-transparent bg-foreground hover:opacity-90 focus-visible:border-background'
-          }
+          disabled={busy()}
+          onPress={requestSave}
+          class={`${providerButtonClass} border-transparent bg-foreground hover:opacity-90`}
         >
           <Text class="text-sm font-semibold text-background">保存</Text>
         </Button>
-        <If when={props.onDelete !== undefined}>
+        <If when={draft().id !== undefined}>
           <Button
             accessibilityLabel="删除"
-            disabled={props.busy}
-            onPress={props.onDelete}
+            disabled={busy()}
+            onPress={requestDelete}
             class={
               providerButtonClass +
               ' border-transparent bg-destructive/10 hover:bg-destructive/20'
@@ -393,6 +656,82 @@ export function ProviderEditor(props: {
           </Button>
         </If>
       </View>
+      <Overlay
+        class="inset-x-0 bottom-0 items-center p-4"
+        style={{
+          paddingBottom: safeArea().bottom + 16,
+          pointerEvents: 'box-none',
+        }}
+      >
+        <ToastStack
+          closeOnEscape={false}
+          style={{ width: 340, maxWidth: '100%' }}
+          placement="bottomRight"
+          onExpandedChange={({ expanded }) => {
+            toastExpanded = expanded;
+          }}
+        >
+          <Each of={toasts()} key={(toast: ToastEntry) => toast.id}>
+            {(toast) => (
+              <Toast
+                testID="provider-toast"
+                transitionStatus={toast().status}
+                accessibilityLabel={String(toast().value)}
+                onDismissRequest={() => {
+                  if (toastManager.dismiss(toast().id)) syncToasts();
+                }}
+                class="rounded-lg border border-border bg-card px-4 py-3 transition-all duration-200 ease-out"
+                startingClass="opacity-0 translate-y-4"
+                endingClass="opacity-0 scale-95"
+                swipingClass="transition-none"
+              >
+                <Text class="text-sm text-card-foreground">
+                  {String(toast().value)}
+                </Text>
+              </Toast>
+            )}
+          </Each>
+        </ToastStack>
+      </Overlay>
+      <Dialog
+        testID="provider-confirm-dialog"
+        open={confirmation() !== null}
+        role="alertdialog"
+        accessibilityLabel={confirmation()?.title ?? '确认操作'}
+        accessibilityDescription={confirmation()?.description}
+        animation="fade"
+        closeOnBackdropPress={false}
+        onOpenChange={({ open }) => {
+          if (!open) confirmation.set(null);
+        }}
+        backdropClass="bg-background/75"
+        class="m-auto w-80 max-w-[90%] gap-3 rounded-xl border border-border bg-popover p-4 shadow-lg"
+      >
+        <Text class={providerHeadingClass}>{confirmation()?.title}</Text>
+        <Scroll class="max-h-40">
+          <Text class="text-sm leading-5 text-muted-foreground">
+            {confirmation()?.description}
+          </Text>
+        </Scroll>
+        <View class="flex-row flex-wrap justify-end gap-2">
+          <Button
+            accessibilityLabel="取消"
+            onPress={() => confirmation.set(null)}
+            class={`${providerButtonClass} border-border hover:bg-accent`}
+          >
+            <Text class={providerHeadingClass}>取消</Text>
+          </Button>
+          <Button
+            accessibilityLabel={confirmation()?.button ?? '确认'}
+            onPress={confirm}
+            class={`${providerButtonClass} border-transparent bg-foreground hover:opacity-90`}
+          >
+            <Text class="text-sm font-semibold text-background">
+              {confirmation()?.button}
+            </Text>
+          </Button>
+        </View>
+      </Dialog>
     </View>
   );
 }

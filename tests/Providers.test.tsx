@@ -26,7 +26,9 @@ async function openProviders(options: OpenOptions = {}) {
     height: 620,
     storage: seeded,
     modules: {
-      'vadu/native': { 'Secrets.has': () => ({ configured: false }) },
+      'vadu/native': {
+        'Secrets.reveal': () => ({ key: null }),
+      },
     },
     ...options,
   });
@@ -53,6 +55,32 @@ test('服务商可选择、搜索与切换分类，识别和语音标明尚未�
   expect(app.shows(`${list} >> label:aaa，已启用`)).toBe(true);
 });
 
+test('连续新增各自使用独立草稿，创建和删除后同步列表选中项', async () => {
+  const app = await openProviders({ height: 900 });
+  const add = 'label:新增翻译服务商';
+  await app.type('label:搜索服务商', 'aaa');
+  await app.press(add);
+  await app.type(name, '临时草稿');
+  await app.press(advanced);
+  await app.press(add);
+  expect(app.value(name)).toBe('');
+  expect(app.shows(temperature)).toBe(false);
+
+  await app.type(name, '新服务商');
+  await app.type(address, 'https://new.example/v1');
+  await app.press('label:保存');
+  await app.press('label:确认地址并保存');
+  expect(app.value('label:搜索服务商')).toBe('');
+  expect(app.value(name)).toBe('新服务商');
+  expect(app.shows(`${list} >> label:新服务商，已启用`)).toBe(true);
+  await app.press('label:删除');
+  await app.press('label:确认删除');
+  expect(app.value(name)).toBe('test');
+  expect(app.shows(`${list} >> label:新服务商，已启用`)).toBe(false);
+  await app.press('label:aaa，已启用');
+  expect(app.value(name)).toBe('aaa');
+});
+
 test('新输入的 API Key 可切换显示，切换服务商后恢复隐藏', async () => {
   const app = await openProviders();
   const showKey = 'label:显示密钥';
@@ -75,7 +103,7 @@ test('新输入的 API Key 可切换显示，切换服务商后恢复隐藏', as
   expect(app.enabled(showKey)).toBe(false);
 });
 
-test('已保存的 API Key 按需只读显示，切换服务商或隐藏窗口后收起', async () => {
+test('已保存的 API Key 以实际值切换遮罩，切换服务商或隐藏窗口后收起', async () => {
   const key = 'fake-saved-key';
   const revealed: string[] = [];
   const savedKeys: string[] = [];
@@ -87,10 +115,9 @@ test('已保存的 API Key 按需只读显示，切换服务商或隐藏窗口�
     host: {},
     modules: {
       'vadu/native': {
-        'Secrets.has': (id: string) => ({ configured: id === '1' }),
         'Secrets.reveal': (id: string) => {
           revealed.push(id);
-          return { key };
+          return { key: id === '1' ? key : null };
         },
         'Secrets.set': (_id: string, _address: string, value: string) => {
           savedKeys.push(value);
@@ -104,15 +131,14 @@ test('已保存的 API Key 按需只读显示，切换服务商或隐藏窗口�
   await app.press(category);
   await app.waitUntil(() => app.enabled(showKey));
   expect(app.shows('label:清除密钥')).toBe(false);
-  expect(app.value(keyInput)).toBe('');
-  expect(revealed).toEqual([]);
+  expect(app.value(keyInput)).toBe(key);
+  expect(revealed).toEqual(['1']);
 
   await app.press(showKey);
   expect(app.value(keyInput)).toBe(key);
-  expect(app.enabled(keyInput)).toBe(false);
   await app.press(hideKey);
-  expect(app.value(keyInput)).toBe('');
-  expect(app.enabled(keyInput)).toBe(true);
+  expect(app.value(keyInput)).toBe(key);
+  expect(revealed).toEqual(['1']);
 
   await app.press(showKey);
   await app.press('label:aaa，已启用');
@@ -123,13 +149,14 @@ test('已保存的 API Key 按需只读显示，切换服务商或隐藏窗口�
   await app.press(showKey);
   await app.window('main').pressClose();
   await app.host.send('open-settings');
-  expect(app.value(keyInput)).toBe('');
+  await app.waitUntil(() => app.enabled(showKey));
+  expect(app.value(keyInput)).toBe(key);
 
   await app.press(showKey);
   await app.press('label:保存');
   expect(app.shows('text:服务商已保存。')).toBe(true);
-  expect(app.value(keyInput)).toBe('');
-  expect(revealed).toEqual(['1', '1', '1', '1']);
+  expect(app.value(keyInput)).toBe(key);
+  expect(app.enabled(showKey)).toBe(true);
   expect(savedKeys).toEqual([]);
   expect(app.storage()['vadu.config']).not.toContain(key);
 });
@@ -141,7 +168,7 @@ test('首次保存允许空模型，地址需确认，启停与删除写入配�
   const key = 'fake-first-save-key';
   const modules = {
     'vadu/native': {
-      'Secrets.has': () => ({ configured: false }),
+      'Secrets.reveal': () => ({ key: null }),
       'Secrets.set': (...args: string[]) => {
         savedKeys.push(args);
         return null;
@@ -171,7 +198,7 @@ test('首次保存允许空模型，地址需确认，启停与删除写入配�
   expect(savedKeys).toEqual([]);
   await app.press('label:保存');
   await app.press('label:确认地址并保存');
-  expect(app.value(keyInput)).toBe('');
+  expect(app.value(keyInput)).toBe(key);
   expect(app.value(name)).toBe('新服务商');
   expect(app.value(model)).toBe('');
   expect(app.enabled(modelList)).toBe(true);
@@ -215,7 +242,7 @@ test('未保存的服务商可先用输入的地址和密钥获取模型', async
     storage: {},
     modules: {
       'vadu/native': {
-        'Secrets.has': () => ({ configured: false }),
+        'Secrets.reveal': () => ({ key: null }),
         'Secrets.set': (...args: string[]) => {
           savedKeys.push(args);
           return null;
@@ -293,7 +320,7 @@ test('健康检测当前模型，模型列表和密钥只使用已保存的 Prof
     height: 900,
     modules: {
       'vadu/native': {
-        'Secrets.has': () => ({ configured: false }),
+        'Secrets.reveal': () => ({ key: null }),
         'Secrets.set': (...args: string[]) => {
           keyCalls.push(args);
           return null;
@@ -326,7 +353,7 @@ test('健康检测当前模型，模型列表和密钥只使用已保存的 Prof
   await app.type(keyInput, key);
   await app.press('label:保存');
   expect(keyCalls).toEqual([['1', 'https://example.com/v1', key]]);
-  expect(app.value(keyInput)).toBe('');
+  expect(app.value(keyInput)).toBe(key);
   expect(JSON.stringify(app.storage())).not.toContain(key);
 
   await app.press('label:健康检测');
@@ -385,7 +412,7 @@ test('凭据写入失败时保存普通配置并提示重新输入密钥', async
     height: 900,
     modules: {
       'vadu/native': {
-        'Secrets.has': () => ({ configured: false }),
+        'Secrets.reveal': () => ({ key: null }),
         'Secrets.set': () => ({
           code: 'PERMISSION_DENIED',
           message: '无法写入本地存储。',
@@ -520,9 +547,9 @@ test('筛选后拖拽排序保留隐藏服务商的位置', async () => {
 
 test('服务商深浅配色可读，缩小窗口后列表滚动不影响搜索和新增', async () => {
   const app = await openProviders({ colorScheme: 'light' });
-  expect(app.spanStyle('text:编辑翻译服务商').color).toBe('#0a0a0aff');
+  expect(app.spanStyle('text:名称').color).toBe('#0a0a0aff');
   await app.setColorScheme('dark');
-  expect(app.spanStyle('text:编辑翻译服务商').color).toBe('#fafafaff');
+  expect(app.spanStyle('text:名称').color).toBe('#fafafaff');
 
   const search = 'label:搜索服务商';
   const add = 'label:新增翻译服务商';
@@ -561,9 +588,15 @@ test('API Key 写入 NSH Storage 独立键，不进入普通配置', async () =>
   const stored = app.storage();
   expect(JSON.parse(stored['vadu.secret.1']).key).toBe(key);
   expect(stored['vadu.config']).not.toContain(key);
-  expect(app.value(keyInput)).toBe('');
+  expect(app.value(keyInput)).toBe(key);
   await app.press('label:显示密钥');
   expect(app.value(keyInput)).toBe(key);
   await app.press('label:隐藏密钥');
+  expect(app.value(keyInput)).toBe(key);
+  await app.clear(keyInput);
+  await app.press('label:保存');
+  expect(app.value(keyInput)).toBe(key);
+  await app.clear(address);
   expect(app.value(keyInput)).toBe('');
+  expect(app.enabled('label:显示密钥')).toBe(false);
 });

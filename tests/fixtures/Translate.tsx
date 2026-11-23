@@ -1,5 +1,5 @@
-import { mount } from "nsh";
+import { mount } from 'nsh';
 
-import { TranslateWindow } from "../../src/windows/translate/TranslateWindow";
+import { TranslateWindow } from '../../src/windows/translate/TranslateWindow';
 
 mount(TranslateWindow);

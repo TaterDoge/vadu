@@ -1,5 +1,5 @@
-import { View } from "nsh";
+import { View } from 'nsh';
 
 export function BackupPage() {
-	return <View testID="settings-backup-page" />;
+  return <View testID="settings-backup-page" />;
 }

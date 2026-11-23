@@ -1,5 +1,5 @@
-import { View } from "nsh";
+import { View } from 'nsh';
 
 export function GeneralPage() {
-	return <View testID="settings-general-page" />;
+  return <View testID="settings-general-page" />;
 }

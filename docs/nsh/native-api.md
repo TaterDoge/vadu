@@ -1,6 +1,6 @@
 # NSH 原生 API 与任务契约
 
-> 普通设置已在 `src/settings.ts` 实现，直接使用 NSH 的 TS API；翻译、插件及其余原生 API 为目标设计。下列原生 TypeScript 草案只表达调用语义，不是当前 `vadu/native` 已有成员或手写 SDK；原生绑定类型以 Rust 生成结果为准。
+> 普通设置在 `src/settings.ts` 实现。`vadu/native` 已提供内置翻译、Profile 校验、模型列表与当前模型对话检测，以及 NSH Storage 中的 API Key 操作。OCR、TTS 和第三方插件 API 仍为设计。原生类型以 Rust 的生成结果为准。
 
 ## 1. 边界与类型来源
 
@@ -13,17 +13,14 @@
 
 ## 2. API 按职责分组
 
-下表是命名与职责草案，不要求一次实现所有设置 API。
-
-| 模块 | 调用语义 |
-| --- | --- |
-| Translation | `start(input, onEvent)` 受理并登记回调；`cancel(requestId)` 取消翻译 |
-| Ocr | `recognize(input)` 返回一次文本结果；`cancel(requestId)` 取消 |
-| Tts | `synthesize(input)` 返回一次音频结果；`cancel(requestId)` 取消 |
-| Profiles | 查询 / 保存 / 启停配置；核心校验 schema 与已确认的网络授权 |
-| Settings（TS，已实现） | 查询 / 保存应用偏好；统一经过 TS 设置模块 |
-| Secrets | 查询是否已设置、写入或明确清除；没有读取密钥 API |
-| Plugins | 查询状态、选择并安装用户插件、确认权限、启停与卸载 |
+| 模块           | 状态与调用语义                                                                                                                                                                                                                                      |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Translation    | 已实现。`start(input, onEvent)` 受理并登记回调，`cancel(requestId)` 取消翻译                                                                                                                                                                        |
+| Profiles       | 已实现。`check` 校验配置并规范化地址，`listModels(profileId)` 查询已保存地址的模型列表，`listModelsDraft(baseUrl, key)` 用本次输入、尚未保存的地址和密钥查询模型，`checkModel(profileId, model)` 使用已保存地址和凭据发起一次 Chat Completions 对话 |
+| Settings（TS） | 已实现。读取与保存快捷键、服务商配置，串行协调凭据的写入和清除                                                                                                                                                                                      |
+| Secrets        | 已实现。`has` 查询当前地址的 API Key 状态，`set` 写入，`clear` 清除；数据存于 NSH Storage 独立键                                                                                                                                                    |
+| Ocr / Tts      | 设计。返回一次文本或音频结果，支持取消                                                                                                                                                                                                              |
+| Plugins        | 设计。安装用户插件、确认权限、启停与卸载                                                                                                                                                                                                            |
 
 窗口和快捷键优先使用已有 NSH 平台接口；只有需要核心状态或权限管理时才提供相应原生入口。不复刻旧 Electron 的整个 app 通道集合。
 
@@ -34,7 +31,8 @@
 - `Settings.read(): Promise<AppSettings>`：等候已排队的更新后读取；仅键不存在时使用默认值。
 - `Settings.setShortcut(id: string, keystroke: string): Promise<AppSettings>`：串行读取最新配置、校验并更新单项。
 - `Settings.resetShortcut(id: string): Promise<AppSettings>`：恢复单项默认值，也检查冲突。
-- `Settings.current(): AppSettings | null`：最近一次成功读取或保存的响应式快照，供全局注册观察；启动前为 `null`，不用于绕过校验写回整包配置。
+- `Settings.current(): AppSettings | null`：最近一次成功读取或保存的响应式快照，供快捷键注册与翻译浮窗观察。启动前为 `null`。
+- `Settings.saveProfile` 串行保存服务商配置，再将本次输入的 API Key 写入 NSH Storage 独立键，返回 `keyError` 告知密钥写入结果。删除、排序和清除密钥共用同一队列。
 - `captureShortcutKeys(): string[]`：生成录入临时组合表，排除 NSH 已知保留键及取消 / 移焦键。
 
 可预期错误以 `SettingsError` 拒绝，带安全的 `code` / `message`；错误码为 `INVALID_CONFIG`、`UNSUPPORTED_VERSION`、`SHORTCUT_CONFLICT`、`STORAGE_FULL`。页面仍捕获意外 Promise 拒绝，只显示通用安全提示。
@@ -43,72 +41,34 @@
 
 ## 3. 结构化业务错误
 
-Rust 的普通 `Err` 只保证消息式抛出 / 拒绝，不能依赖 `error.code` 自动穿透。可预期失败使用明确 DTO：
+可预期失败通过 `ApiError` DTO 返回 `code`、`message` 和 `retryable`。翻译受理、健康检测和密钥写入返回错误或 `null`，模型列表和流事件在 `error` 字段中携带错误。UI 兜底处理意外 Promise 拒绝，展示安全提示。OCR 与 TTS 草案使用带 `ok` 标签的 `NativeResult<T>`。
 
-```ts
-type ApiError = {
-  code: ErrorCode;
-  message: string;
-  retryable: boolean;
-};
-
-type NativeResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: ApiError };
-```
-
-这是 Vadu 的业务结果，不是为了模拟 Electron IPC。参数拒绝、一次性结果和流事件共用错误语义；意外的运行时异常仍需在 UI 边界兜底，不能显示原始堆栈。
-
-| ErrorCode | 含义 |
-| --- | --- |
-| AUTH_FAILED | 凭据缺失或服务端拒绝认证 |
-| RATE_LIMITED | 服务限流 |
-| NETWORK | 网络不可达或连接失败 |
-| TIMEOUT | 宿主期限到达 |
-| INVALID_CONFIG | 输入、配置或 Profile 引用不合法 |
-| UNSUPPORTED_LANGUAGE | 能力不支持该语言 |
-| PERMISSION_DENIED | 插件、端点或系统能力未获授权 |
-| PLUGIN_LOAD_FAILED | 插件校验或初始化失败 |
-| PLUGIN_CRASH | 插件异常退出或资源超限 |
-| ABORTED | 一次性任务被取消或运行环境正在退出 |
-| INTERNAL | 其余宿主内部失败 |
+| ErrorCode            | 含义                               |
+| -------------------- | ---------------------------------- |
+| AUTH_FAILED          | 凭据缺失或服务端拒绝认证           |
+| RATE_LIMITED         | 服务限流                           |
+| NETWORK              | 网络不可达或连接失败               |
+| TIMEOUT              | 宿主期限到达                       |
+| INVALID_CONFIG       | 输入、配置或 Profile 引用不合法    |
+| UNSUPPORTED_LANGUAGE | 能力不支持该语言                   |
+| UNSUPPORTED_PROTOCOL | Profile 的 API 协议尚未接入        |
+| PERMISSION_DENIED    | 插件、端点或系统能力未获授权       |
+| PLUGIN_LOAD_FAILED   | 插件校验或初始化失败               |
+| PLUGIN_CRASH         | 插件异常退出或资源超限             |
+| ABORTED              | 一次性任务被取消或运行环境正在退出 |
+| INTERNAL             | 其余宿主内部失败                   |
 
 `message` 只能包含安全、可行动的信息，不回传原始上游正文、请求头或密钥。`retryable` 由核心决定，只提示用户可重试，不代表自动重试。插件错误码也以本表为准。
 
 ## 4. 翻译：受理、增量、终态
 
-```ts
-type TranslateInput = {
-  requestId: string;
-  profileId: string;
-  text: string;
-  source: string;
-  target: string;
-};
-
-type TranslateEvent =
-  | { requestId: string; type: "delta"; text: string }
-  | { requestId: string; type: "done"; text: string }
-  | { requestId: string; type: "error"; error: ApiError }
-  | { requestId: string; type: "cancelled" };
-
-// 语义草案，不是已存在的导出。
-declare const Translation: {
-  start(
-    input: TranslateInput,
-    onEvent: (event: TranslateEvent) => void,
-  ): Promise<NativeResult<{ requestId: string }>>;
-  cancel(requestId: string): Promise<void>;
-};
-```
+`start` 接收 `requestId`、`profileId`、`text` 和目标语言 `target`。内置适配直接翻译原文，目标语言支持简体中文、繁体中文、英语、日语、韩语。回调按 `requestId` 接收增量及终态。
 
 ### 开始
 
 1. UI 先生成新的 `requestId`，建立该请求的视图状态，再调用 `start`。
-2. 核心校验输入、Profile 启用状态、插件 kind 与可用性，取本次配置快照。
-3. 任务登记与回调绑定必须先于插件执行；禁止先启动网络、后单独订阅，避免丢首帧。
-4. `start` 只等待受理，不等待翻译结束；校验失败返回 `ok: false`，不产生流事件。
-5. 受理后的结果全部走该请求回调。事件可能早于受理 Promise 被 UI 观察到，UI 不能等 await 返回后才建立状态。
+2. 核心校验输入，读取已启用且已填写模型的 Profile，取本次配置快照。
+3. 任务登记与回调绑定先于 HTTP 请求。`start` 返回受理 Promise，成功值为 `null`。校验失败返回 `ApiError`，请求结束前的增量和终态由回调发送。
 
 活动请求 ID 不得重复；重复请求返回 `INVALID_CONFIG`，不覆盖原任务。UI 不复用历史 ID。核心不得在调用期间重新选择 Profile 或让其他页面草稿替换本次配置。
 
@@ -126,19 +86,18 @@ declare const Translation: {
 
 - UI 取消时立即停止接受该请求的后续内容，保留已显示文本；核心终止上游 HTTP、流 reader 与插件调用。
 - `cancel` 幂等；不存在或已结束的 ID 不报错、不复活任务。
-- 如果取消发生在受理 Promise 返回前，UI 记住取消意图；受理成功后立即再调用 `cancel`，不能因竞态留下后台任务。即便受理过程中已有回调，也不再显示旧内容。
+- `start` 和 `cancel` 都按 NSH 原生调用顺序入队。受理 Promise 返回前亦可取消，UI 立即停用该请求 ID。
 - 取消与完成竞速时，只允许先提交的终态生效；UI 已取消的视图不被迟到 `done` 覆盖。
-- 新请求、组件卸载或工作台关闭时，调用方取消旧任务并清理回调；核心也要在插件失效、应用退出等生命周期边界兜底清理。共享 engine 不代表自动获得窗口级任务释放。
-- 插件不响应 signal 时，宿主仍需中断 / 隔离执行并清理任务；不能只改 UI 上的 loading。
+- 工作台隐藏、关闭或组件卸载会取消活动请求。应用退出时释放 engine 和剩余任务。
 
 ## 5. OCR 与 TTS：一次性、可取消
 
 两类能力都带 `requestId` 和 `profileId`，遵守与翻译相同的配置快照、授权、宿主期限、取消传播和旧结果过滤规则，但不强套文本增量事件：
 
-| 能力 | 业务输入 | 业务结果 |
-| --- | --- | --- |
-| OCR | 图片字节与媒体类型 | `NativeResult<{ text: string }>` |
-| TTS | 文本；声音等服务配置来自 Profile | `NativeResult<{ audio: Uint8Array; mimeType: string }>` |
+| 能力 | 业务输入                         | 业务结果                                                |
+| ---- | -------------------------------- | ------------------------------------------------------- |
+| OCR  | 图片字节与媒体类型               | `NativeResult<{ text: string }>`                        |
+| TTS  | 文本；声音等服务配置来自 Profile | `NativeResult<{ audio: Uint8Array; mimeType: string }>` |
 
 取消后一次性调用以 `ABORTED` 结束；不再发送翻译的 `cancelled` 事件。一次性入口必须先登记任务，再交给异步工作，确保调用返回 Promise 后 `cancel` 已能找到任务。若 NSH 绑定无法保证该顺序，先调整为显式受理 API 并同步本文；不能等完整结果返回后才补发取消。
 
@@ -149,10 +108,11 @@ declare const Translation: {
 - 翻译 / OCR / TTS 的 UI 调用只选择 `profileId`，不接受任意插件路径、临时 config 或已保存密钥覆写。核心从 Profile 得到插件与权限。
 - 核心验证对象形状、字段类型、非空文本、语言与当前 kind；文本上限 50,000、Profile 名称上限 100、URL 上限 2,000 个 Unicode 码点。这些是业务限制，不是 NSH 框架限制。
 - 插件输出和外部网络响应同样是不可信输入，需要体积限制、类型检查与安全错误归一。
-- `allowedOrigins` 只由宿主根据用户明确确认的端点授权生成，不直接信任 UI 或插件提交的白名单。
+- 新增或更换 Base URL 时，由设置页展示完整地址并请求确认。内置适配只请求已保存或设置页已确认的 HTTP(S) 地址，拒绝重定向。HTTP 确认提示说明原文与凭据的明文传输风险。第三方插件的独立来源授权见[插件规范](./plugin-spec.md)。
 - 插件安装与备份文件选择由宿主控制；UI 不可传任意路径覆盖应用文件。安装包内容与路径仍需校验。
-- 已保存密钥只提供 `has` 状态；新输入值仅用于明确的写入操作。保留、替换、清除必须区分，编辑表单留空不等于删除。
-- 当前不复刻带草稿密钥和临时 config 的模型检测接口。若需要未保存配置检测，先单独定义短期凭据、授权和取消规则。
+- 设置页用 `Secrets.has` 查询 API Key 状态。用户点击眼睛按钮后，`Secrets.reveal(profileId)` 仅读取与已保存接口地址匹配的密钥。回显值只读，不参与保存。留空保留已有 Key，输入新值可替换，确认删除服务商时清除其密钥。API Key 以明文存在 NSH Storage，与普通配置同一 `storage.json`，但使用独立键。
+- 未保存的地址可用 `listModelsDraft(baseUrl, key)` 查询模型：设置页先展示完整地址并确认，才把本次输入的密钥传给原生。已保存地址若输入了新密钥，也用该接口先验证新密钥；地址已确认，不再重复确认。该密钥只用于本次调用，不写入普通配置、NSH Storage 或日志；空密钥被拒绝。此接口只支持 Chat Completions，仍拒绝重定向并受 25 秒期限限制。修改地址或切换服务商后清空模型列表；一次性请求没有单独取消入口，页面卸载后不展示迟到结果。
+- `checkModel(profileId, model)` 只使用已保存 Profile 的地址和 NSH Storage 中的 API Key，model 可以来自当前编辑中的草稿。
 
 ## 7. 验证清单
 

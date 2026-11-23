@@ -5,12 +5,23 @@
 use nsh_base::theme;
 use nsh_core::prelude::*;
 
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+mod plugins;
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+mod provider_http;
+mod providers;
+mod secrets;
+mod translation;
+
 /// The crate's UI set (`nsh.json` `"rust"`).
 #[native_module("vadu/native")]
 fn native(registry: &mut Registry) {
     registry
         .register::<Badge>()
         .module::<Format>()
+        .module::<providers::Profiles>()
+        .module::<secrets::Secrets>()
+        .module::<translation::Translation>()
         .class::<Counter>();
 }
 

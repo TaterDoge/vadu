@@ -6,7 +6,7 @@
 
 一个插件只提供一种能力：`translator`、`ocr` 或 `tts`。同一插件可以供多个 Profile 使用；每次调用独立，不自行处理配置持久化、自动重试、缓存、语言检测或窗口 UI。
 
-内置与第三方插件使用同一能力契约。AI 厂商 HTTP 与协议解析只能出现在插件中，不能因为应用改用 Rust 就移入应用核心。
+当前内置 OpenAI 兼容翻译适配位于 `src/plugins/openai.rs`，由 Rust 核心调用。它实现模型列表、当前模型的 Chat Completions 对话检测与 Chat Completions SSE。后续第三方 JS 插件通过独立 VM 和本规范的能力契约接入。厂商请求和协议解析留在能力适配内。
 
 ## 2. 分发与版本
 
@@ -49,28 +49,28 @@ plugin/
 
 bundle 导出 `createPlugin()`，返回与 manifest kind 一致的实现。工厂不绑定某个 Profile 的凭据；调用时由宿主逐次传入上下文。
 
-| kind | 方法语义 | 请求内容 | 结果 |
-| --- | --- | --- | --- |
-| translator | `translate(request, runtime)` | 原文、源语言、目标语言 | `AsyncIterable<string>`，每段是新增译文 |
-| ocr | `recognize(request, runtime)` | 图片字节、媒体类型 | `Promise<{ text: string }>` |
-| tts | `synthesize(request, runtime)` | 文本；声音等来自本次配置 | `Promise<{ audio: Uint8Array; mimeType: string }>` |
+| kind       | 方法语义                       | 请求内容                 | 结果                                               |
+| ---------- | ------------------------------ | ------------------------ | -------------------------------------------------- |
+| translator | `translate(request, runtime)`  | 原文、源语言、目标语言   | `AsyncIterable<string>`，每段是新增译文            |
+| ocr        | `recognize(request, runtime)`  | 图片字节、媒体类型       | `Promise<{ text: string }>`                        |
+| tts        | `synthesize(request, runtime)` | 文本；声音等来自本次配置 | `Promise<{ audio: Uint8Array; mimeType: string }>` |
 
 翻译插件只产出文本片段，不发送 UI 的 done/error 事件；核心负责聚合最终文本、错误归一与唯一终态。OCR / TTS 返回一次结果，不要求伪造文本流。
 
-翻译插件可选提供 `listModels(runtime): Promise<ModelInfo[]>`，其中 `ModelInfo` 为 `{ id: string; label?: string }`。没有该方法时允许用户手填模型，不为获取列表阻塞翻译。列表请求同样受授权、取消、期限与输出数量限制；不默认复刻旧版草稿检测通道或健康检测功能。
+翻译插件可选提供 `listModels(runtime): Promise<ModelInfo[]>`，其中 `ModelInfo` 为 `{ id: string; label?: string }`。没有该方法时允许用户手填模型，不为获取列表阻塞翻译。列表请求同样受授权、取消、期限与输出数量限制。健康检测由宿主通过独立对话请求完成，不要求第三方插件提供同名方法。
 
 方法与二进制类型是目标语义，具体 JS SDK 类型需随桥接验证冻结；不能直接复用浏览器对象或旧 Node 类型作为实现保证。
 
 ### 每次调用的 runtime
 
-| 成员 | 约束 |
-| --- | --- |
-| `requestId` | 宿主提供的当前调用 ID |
-| `signal` | 本次调用的取消信号；超时、禁用、卸载和关窗都能终止上游 |
-| `config` | 核心校验后的非密钥配置快照；插件不得反向修改 Profile |
-| `fetch` | 宿主提供的受控 HTTP 桥，必须支持翻译流与取消 |
-| `secrets.get(name)` / `secrets.has(name)` | 只绑定当前 Profile、schema 已声明的凭据；不得枚举或访问其他凭据桶 |
-| `log` | 带插件 ID 和 requestId 的受控日志，宿主脱敏，不提供任意系统日志接口 |
+| 成员                                      | 约束                                                                |
+| ----------------------------------------- | ------------------------------------------------------------------- |
+| `requestId`                               | 宿主提供的当前调用 ID                                               |
+| `signal`                                  | 本次调用的取消信号；超时、禁用、卸载和关窗都能终止上游              |
+| `config`                                  | 核心校验后的非密钥配置快照；插件不得反向修改 Profile                |
+| `fetch`                                   | 宿主提供的受控 HTTP 桥，必须支持翻译流与取消                        |
+| `secrets.get(name)` / `secrets.has(name)` | 只绑定当前 Profile、schema 已声明的凭据；不得枚举或访问其他凭据桶   |
+| `log`                                     | 带插件 ID 和 requestId 的受控日志，宿主脱敏，不提供任意系统日志接口 |
 
 插件不得将 runtime、密钥或可变配置存入模块全局后供其他调用复用；并发调用不能串 Profile、文本、signal 或连接。上下文必须逐次绑定，不能通过更换全局“当前 Profile”实现。
 
@@ -78,7 +78,7 @@ bundle 导出 `createPlugin()`，返回与 manifest kind 一致的实现。工�
 
 ## 4. 独立 VM 与宿主桥
 
-插件不能访问 UI VM、`nsh` / `vadu/native` 注册表、文件系统、进程启动、环境变量、系统凭据库、任意 native FFI 或 Node `require`。静态依赖应已打进 bundle，不能从宿主环境捡到额外权限。
+插件不能访问 UI VM、`nsh` / `vadu/native` 注册表、文件系统、进程启动、环境变量、宿主 NSH Storage 中的 API Key、任意 native FFI 或 Node `require`。静态依赖应已打进 bundle，不能从宿主环境捡到额外权限。
 
 插件所需 Promise、异步迭代、Uint8Array、定时 / 取消和 HTTP 流对象，要由独立 VM 与宿主桥明确提供。不能因为 NSH UI 有某个全局对象，就宣称插件 VM 已兼容。
 
@@ -94,10 +94,10 @@ bundle 导出 `createPlugin()`，返回与 manifest kind 一致的实现。工�
 
 插件声明与 Profile 端点授权取交集，不能只检查其中一层。
 
-| 声明 | 语义 |
-| --- | --- |
-| `net:https://api.example.com` | 精确 origin，默认 HTTPS 端口；不包含任意子域名或其他端口 |
-| `net:*` | 支持用户自定义端点；仍只能访问当前 Profile 已确认的有限 origin，不是任意网络权限 |
+| 声明                          | 语义                                                                             |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `net:https://api.example.com` | 精确 origin，默认 HTTPS 端口；不包含任意子域名或其他端口                         |
+| `net:*`                       | 支持用户自定义端点；仍只能访问当前 Profile 已确认的有限 origin，不是任意网络权限 |
 
 - 使用 URL 解析器规范化协议、主机和端口，按 origin 比较，禁止字符串前缀匹配。
 - 只接受 HTTP / HTTPS；拒绝 URL 用户信息、非法地址及其他协议。明文 HTTP 的风险必须在授权时说明，不能由 HTTPS 静默降级。
@@ -115,7 +115,7 @@ NSH 应用 capabilities 不能替代这里的每插件检查。Rust 原生代码
 - 字段至少区分普通值和 `secret`；宿主校验必填、类型与声明的取值限制，拒绝不支持的 schema。
 - 普通配置剔除 secret 与未声明字段，插件只能得到通过校验的快照。
 - secret 单独写入按 Profile 隔离的安全存储，不进入 manifest、Preset、Profile.config、错误或日志。
-- 已保存密钥不回填表单；编辑留空表示保持不变，清除凭据必须明确操作。
+- 宿主设置页可按需只读显示已保存密钥。编辑留空保留原凭据，删除 Profile 时由宿主确认后清除。
 - Preset 只描述创建 Profile 的默认配置，不含密钥、不代表运行实例；更新不覆盖用户已有配置。
 - 普通配置与凭据的保存、失败恢复和删除确认由宿主完成，插件不得自行持久化。
 

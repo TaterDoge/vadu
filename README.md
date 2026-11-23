@@ -2,7 +2,7 @@
 
 ## NSH 重写中
 
-当前 `rewrite/nsh` 分支基于 NSH（TSX + Rust），已搭建设置主窗口的分类导航与独立翻译窗口壳。翻译工作台通过全局快捷键唤起，未固定时失焦自动隐藏。五个设置分类均由独立 Page 渲染；外观页提供运行期原生主题切换；快捷键页支持录入、校验、持久化与单项重置；通用、服务商、备份恢复页暂为空容器。翻译、插件与其余配置业务尚未迁移。
+当前 `rewrite/nsh` 分支基于 NSH（TSX + Rust），提供设置主窗口和全局快捷键唤起的独立翻译浮窗。桌面版已接入 OpenAI 兼容 Chat Completions，支持保存服务商、从接口获取模型、流式翻译和取消。外观提供运行期主题切换，快捷键支持录入、校验、持久化与单项重置。OCR、TTS、第三方插件与备份恢复仍在迁移中。
 
 - 原 GitHub 仓库和提交历史继续保留，`main` 暂时保持 Electron 实现。
 - 重写前的 Electron 快照保存在 [`electron-final`](https://github.com/TaterDoge/vadu/tree/electron-final) Tag。
@@ -19,11 +19,12 @@ src/windows/settings/SettingsWindow.tsx   # 设置侧栏与内容路由
 src/components/ui/Item.tsx                # 可复用设置项容器
 src/theme.ts                             # 应用级外观偏好、字体与原生主题切换
 theme.json                               # shadcn 语义 token、深浅配色与强调色色板
-src/windows/settings/pages/              # 外观可切换，快捷键可录入并保存
+src/windows/settings/pages/              # 分类页、服务商配置、外观与快捷键
 src/settings.ts                          # TS 配置校验与 NSH Storage 持久化
 src/shortcuts.ts                         # 集中定义快捷键动作，统一管理全局 / 局内绑定与清理
 src/tray.ts                              # 原生托盘与主窗口关闭隐藏
-src/windows/translate/TranslateWindow.tsx # 独立翻译窗口壳与唤起函数
+src/windows/translate/TranslateWindow.tsx # 翻译浮窗与唤起函数
+src/plugins/openai.rs                     # 内置 Chat Completions 协议适配
 src/lib.rs                               # Rust 原生模块入口
 ```
 
@@ -32,14 +33,20 @@ src/lib.rs                               # Rust 原生模块入口
 `Item` 用 NSH 的 `View` / `Text` 构建，`title` 必填，`description`、`media`、`actions` 可选；原生属性（如 `testID`、`style`、`class`、事件与可访问属性）继续透传到根容器。内容与操作区按可用宽度换行，业务状态由调用方拥有，不引入 React / shadcn 运行时。
 
 ```tsx
-import { Item } from "./src/components/ui/Item";
+import { Item } from './src/components/ui/Item';
 
 <Item
   title="设置项标题"
   description="设置项说明"
   media={<Image src={icon} class="h-5 w-5" />}
-  actions={<Switch checked={enabled()} onChange={({ checked }) => enabled.set(checked)} accessibilityLabel="启用设置项" />}
-/>
+  actions={
+    <Switch
+      checked={enabled()}
+      onChange={({ checked }) => enabled.set(checked)}
+      accessibilityLabel="启用设置项"
+    />
+  }
+/>;
 ```
 
 ## 菜单栏托盘
@@ -57,6 +64,13 @@ import { Item } from "./src/components/ui/Item";
 - Nova 使用 Geist Mono；Lyra 使用 JetBrains Mono，仅切换字体，不再改变字号与圆角。两种字体随应用打包，来源与 OFL 许可证见 `assets/fonts/`；快捷键符号使用 Lucida Grande，缺字由平台回退。
 - 新 UI 的颜色使用 `bg-background`、`text-foreground`、`border-border` 等语义类，不写死主题颜色；字号、行高、圆角与间距使用 `text-sm`、`leading-5`、`rounded-md`、`p-4` 等 NSH 内置类，不再定义主题尺寸 token。SVG 图标用原生 `tintColor` 跟随颜色 token。
 - 原生滚动条宽 6pt，滑块使用前景色 20% / 悬停 35% 透明度。不设置 ring 样式；键盘焦点使用可见边框。窗口拖拽沿用原生 `desktop.windowDrag`，不迁入浏览器的 View Transition 或 `-webkit-*` 规则。
+
+## 配置并开始翻译
+
+1. 在**设置 → 服务商 → 翻译**中新增服务商。选择 **Chat Completions**，填写名称和含版本路径的 Base URL（如 `https://api.openai.com/v1`）。**Responses** 和 **Anthropic Messages** 可选择和保存，接入状态显示在协议下方。
+2. 服务需要认证时填入 API Key。点击输入框右侧的眼睛可查看已保存的密钥或切换新输入值的显示。隐藏已保存的密钥后可输入替换值，留空保存会保留已存凭据。点击**保存**并确认新地址，应用将 API Key 写入 NSH Storage 的独立键（`vadu.secret.<profileId>`），绑定该服务商的接口地址。密钥以明文保存在本地 `storage.json` 中。
+3. 点击「模型」标签右侧的**选择模型**，在弹层中搜索和选择模型。填写地址后，新输入的 API Key 可直接用于获取模型，无需先保存；首次请求该地址前需确认。展开时自动加载模型列表，右上角可刷新。也可直接输入模型 ID。保存模型并启用服务商。同一行的**健康检测**使用当前模型发起一次 Chat Completions 对话，确认模型能够正常回复，结果通过浮层通知显示。
+4. 按 `mod+shift+m` 打开浮窗，选择服务商与目标语言，输入原文后点击**翻译**。点击**取消翻译**或隐藏、关闭浮窗会中止请求。
 
 ## 快捷键与配置存储
 

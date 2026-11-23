@@ -1,5 +1,11 @@
 {
   "private": true,
+  "scripts": {
+    "icons:add": "bun node_modules/supernsh-icons/cli/nsh-icons.ts add"
+  },
+  "dependencies": {
+    "supernsh-icons": "file:vendor/nsh-icons"
+  },
   "devDependencies": {
     "tailwindcss": "^4.3.5"
   }

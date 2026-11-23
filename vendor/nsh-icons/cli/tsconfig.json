@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "es2024",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": false,
+    "skipLibCheck": true,
+    "types": ["node", "bun"]
+  },
+  "include": ["*.ts", "tests/*.ts", "../src/iconify.ts", "../src/markup.ts"]
+}

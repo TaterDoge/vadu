@@ -1,0 +1,39 @@
+{
+  "name": "supernsh-icons",
+  "version": "0.1.0",
+  "description": "Every Iconify icon set for Native Shell TSX apps: an Icon component, and a CLI that writes only the icons you use, as SVG data or an icon font",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./markup": "./src/markup.ts",
+    "./iconify": "./src/iconify.ts"
+  },
+  "bin": {
+    "supernsh-icons": "./cli/nsh-icons.ts"
+  },
+  "files": [
+    "src",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "svg2ttf": "6.1.0",
+    "svgicons2svgfont": "16.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.4",
+    "@types/node": "26.6.6",
+    "@types/svg2ttf": "5.0.3",
+    "typescript": "7.0.2"
+  },
+  "repository": "https://github.com/SuperNSH/icons",
+  "scripts": {
+    "test:cli": "bun test cli",
+    "typecheck:cli": "tsc -p cli"
+  }
+}

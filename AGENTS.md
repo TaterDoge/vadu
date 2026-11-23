@@ -4,10 +4,10 @@ vadu 是用 NSH TSX 和 Rust 实现的桌面翻译应用。判断功能是否可
 
 ## 开发与验证
 
-在仓库根目录执行。Rust 工具链需支持 edition 2024，`nsh --version` 可查 CLI 版本。升级 NSH 时同时核对 `Cargo.toml` 与 `Cargo.lock` 中的 `nsh-*` 依赖。Bun 用于格式化，应用由 NSH 构建。
+在仓库根目录执行。Rust 工具链需支持 edition 2024，`nsh --version` 可查 CLI 版本。升级 NSH 时同时核对 `Cargo.toml` 与 `Cargo.lock` 中的 `nsh-*` 依赖。Bun 安装 TSX 依赖并负责格式化，应用由 NSH 构建。
 
 ```sh
-bun install                   # 首次格式化前安装 Tailwind class 排序依赖
+bun install                   # 首次构建前安装图标库和格式化依赖
 bun fmt --check               # 检查格式，写回用 bun fmt
 cargo fmt --check             # 检查 Rust 格式
 nsh run                       # 启动本机开发宿主
@@ -25,7 +25,7 @@ nsh package --target macos    # 默认输出到 .nsh/out/
 
 - **设置与托盘**　`App.tsx` 挂载 `src/windows/settings/SettingsWindow.tsx`。设置页放在 `src/windows/settings/pages/`。一级分类用 `nav.replace`，选中态取自路由栈。保留侧栏独立滚动。`src/tray.ts` 配合 `nsh.json` 实现主窗口关闭时隐藏、从托盘聚焦原窗口。
 - **快捷键与翻译浮窗**　动作、作用域、注册和清理集中在 `src/shortcuts.ts`。录入期间暂停绑定，局内动作仅在浮窗聚焦时生效，全局动作显示实际注册结果。快捷键唤起或聚焦 `src/windows/translate/TranslateWindow.tsx` 的独立窗口；设置导航不添加翻译入口。
-- **界面与主题**　使用 NSH 的 `signal`、`effect`、`cleanup` 和 `nsh/base`。元素条件渲染优先 `<If>`，列表用 `<Each>`。复用 `src/components/ui/` 的 `Item`、`Kbd`，业务状态归页面。颜色取 `theme.json` 语义 token，SVG 用 `tintColor`，尺寸用内置类。保留可访问名称、可见键盘焦点和原生拖拽，不设 ring。注释用中文说明原因。
+- **界面与主题**　使用 NSH 的 `signal`、`effect`、`cleanup` 和 `nsh/base`。元素条件渲染优先 `<If>`，列表用 `<Each>`。复用 `src/components/ui/` 的 `Item`、`Kbd`，业务状态归页面。颜色取 `theme.json` 语义 token。界面图标通过 `src/components/ui/Icon.tsx` 渲染 `src/icons.ts` 中的 Lucide 数据，尺寸以点指定。保留可访问名称、可见键盘焦点和原生拖拽，不设 ring。注释用中文说明原因。
 - **服务商与翻译**　服务商编辑在 `src/windows/settings/pages/providers/`。`src/lib.rs` 注册 `vadu/native`，Profile 校验看 `src/providers.rs`，任务生命周期看 `src/translation.rs`。桌面 Chat Completions 适配在 `src/plugins/openai.rs`，连接策略在 `src/provider_http.rs`。UI 使用 Rust 生成的绑定，同步原生导出不做阻塞 I/O。
 
 ## 配置、凭据与任务边界

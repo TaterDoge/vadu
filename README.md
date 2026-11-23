@@ -88,7 +88,10 @@ import { Item } from './src/components/ui/Item';
 
 当前目录也是 Rust crate（`Cargo.toml`、`src/lib.rs`；`nsh.json` 中 `"rust": "."`）。普通配置由 `src/settings.ts` 直接使用 NSH 的 TS API；`vadu/native` 保留脚手架导出 `Badge`、`Format`、`Counter`，导航不依赖这些示例。
 
+界面和托盘共用 `src/icons.ts` 内按需生成的 Lucide 图标。`bun install` 从 `vendor/nsh-icons` 安装[上游 TSX 包](https://github.com/SuperNSH/icons/tree/95c1f04bef7e853309081f04039a5db2471b9107/packages/nsh-icons)。新增图标可运行 `bun run icons:add lucide:heart`，再运行 `bun fmt src/icons.ts`。图标许可见 [Lucide LICENSE](./assets/licenses/Lucide-LICENSE.txt)。
+
 ```sh
+bun install --frozen-lockfile # install the icon library and formatter dependencies
 nsh run                      # this machine's backend; --target ios, android, web, macos, linux, windows or gpui
 nsh check                    # cargo check of the crate, then type checks App.tsx against the declarations generated from it
 nsh test                     # cargo test, then App.test.tsx, headless; --target to run it on a platform

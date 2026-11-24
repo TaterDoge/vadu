@@ -1,47 +1,43 @@
-# NSH 原生 API 与任务契约
+# NSH 平台 API 与任务契约
 
-> 普通设置在 `src/settings.ts` 实现。`vadu/native` 已提供内置翻译、Profile 校验、模型列表与当前模型对话检测，以及 NSH Storage 中的 API Key 操作。OCR、TTS 和第三方插件 API 仍为设计。原生类型以 Rust 的生成结果为准。
+> 设置、内置服务商请求和翻译任务在 TypeScript 中实现。OCR、TTS 和第三方插件 API 属于目标设计。
 
 ## 1. 边界与类型来源
 
-普通配置直接导入 TS 设置模块，由它进行运行时校验与 Storage 读写；需要受控原生能力时才导入业务原生模块。Rust 负责对应输入的校验、授权与任务管理；TS 类型检查不能替代运行时校验。
-
-- 复用现有 `vadu/native` 注册入口，按业务职责导出模块，不增加字符串通道分发器。
-- 原生业务 DTO 在 Rust 定义，通过 NSH 绑定生成 TS；普通配置类型只在 `src/settings.ts` 定义，禁止两端重复维护同一接口。
-- 先验证 DTO、带标签事件和业务结果能正确往返，再冻结具体 Rust 表达；不靠类型断言掩盖绑定缺失。
-- 同步方法不做阻塞 I/O；接受任务与完成任务是两件事。
+`src/feature/settings/index.ts` 组合各设置模块的命令。`src/feature/settings/store.ts` 统一读写普通配置，`providers/` 管理 Profile 校验及独立的 API Key。`src/api/` 通过 NSH `fetch` 请求服务商并校验上游响应。
 
 ## 2. API 按职责分组
 
-| 模块           | 状态与调用语义                                                                                                                                                                                                                                      |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Translation    | 已实现。`start(input, onEvent)` 受理并登记回调，`cancel(requestId)` 取消翻译                                                                                                                                                                        |
-| Profiles       | 已实现。`check` 校验配置并规范化地址，`listModels(profileId)` 查询已保存地址的模型列表，`listModelsDraft(baseUrl, key)` 用本次输入、尚未保存的地址和密钥查询模型，`checkModel(profileId, model)` 使用已保存地址和凭据发起一次 Chat Completions 对话 |
-| Settings（TS） | 已实现。读取与保存快捷键、服务商配置，串行协调凭据的写入和清除                                                                                                                                                                                      |
-| Secrets        | 已实现。`has` 查询当前地址的 API Key 状态，`set` 写入，`clear` 清除；数据存于 NSH Storage 独立键                                                                                                                                                    |
-| Ocr / Tts      | 设计。返回一次文本或音频结果，支持取消                                                                                                                                                                                                              |
-| Plugins        | 设计。安装用户插件、确认权限、启停与卸载                                                                                                                                                                                                            |
+| 模块              | 状态与调用语义                                                                                                                     |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Translation（TS） | 已实现。`start(input, onEvent)` 受理并登记回调，`cancel(requestId)` 取消翻译                                                       |
+| 服务商请求（TS）  | 已实现。`listModels` 查询已保存服务商，`listModelsDraft` 查询已确认的草稿地址，`checkModel` 对当前模型发起对话。均使用 NSH `fetch` |
+| Settings（TS）    | 已实现。校验和保存外观、快捷键与服务商 Profile，通过同一队列读取、保存与清除地址绑定的 API Key                                     |
+| Ocr / Tts         | 设计。返回一次文本或音频结果，支持取消                                                                                             |
+| Plugins           | 设计。安装用户插件、确认权限、启停与卸载                                                                                           |
 
-窗口和快捷键优先使用已有 NSH 平台接口；只有需要核心状态或权限管理时才提供相应原生入口。不复刻旧 Electron 的整个 app 通道集合。
+窗口和快捷键调用 NSH 提供的平台接口。
 
 ### 已实现的 Settings
 
-以下是 `src/settings.ts` 的实际导出，不属于 `vadu/native`，也不再维护 Rust Settings DTO：
-
-- `Settings.read(): Promise<AppSettings>`：等候已排队的更新后读取；仅键不存在时使用默认值。
-- `Settings.setShortcut(id: string, keystroke: string): Promise<AppSettings>`：串行读取最新配置、校验并更新单项。
-- `Settings.resetShortcut(id: string): Promise<AppSettings>`：恢复单项默认值，也检查冲突。
-- `Settings.current(): AppSettings | null`：最近一次成功读取或保存的响应式快照，供快捷键注册与翻译浮窗观察。启动前为 `null`。
+- `Settings.read(): Promise<AppSettings>`：等候已排队的更新后读取。缺键时先保存各模块的默认配置，再发布快照。已有配置直接校验读取。
+- `Settings.setAppearance(patch: Partial<AppearanceSettings>): Promise<AppSettings>` 合并本次修改的显示模式、强调色或风格，校验后串行提交。
+- `Settings.setShortcut(id: string, keystroke: string | null)` 校验并保存全局项的键位，`null` 表示未绑定。
+- `Settings.resetShortcut(id)` 清空全局键位，保留开关状态。
+- `Settings.setShortcutEnabled(id, enabled)` 保存全局项的开关，开启前检查冲突。这三个命令均返回 `Promise<AppSettings>`，修改局内项会以 `INVALID_CONFIG` 拒绝。
+- `Settings.readProfile(id: string)` 等候已排队的写入并从最新配置读取指定 Profile。
+- `Settings.readProfileKey(id, baseUrl)` 在同一队列中核对已保存的 Profile 地址并读取匹配的密钥。缺少匹配密钥时返回 `null`。
+- `Settings.current(): AppSettings | null`：最近一次成功读取或保存的响应式快照，供外观主题、快捷键注册与翻译浮窗观察。启动前为 `null`。
 - `Settings.saveProfile` 串行保存服务商配置，再将本次输入的 API Key 写入 NSH Storage 独立键，返回 `keyError` 告知密钥写入结果。删除、排序和清除密钥共用同一队列。
 - `captureShortcutKeys(): string[]`：生成录入临时组合表，排除 NSH 已知保留键及取消 / 移焦键。
 
-可预期错误以 `SettingsError` 拒绝，带安全的 `code` / `message`；错误码为 `INVALID_CONFIG`、`UNSUPPORTED_VERSION`、`SHORTCUT_CONFLICT`、`STORAGE_FULL`。页面仍捕获意外 Promise 拒绝，只显示通用安全提示。
+可预期错误以 `SettingsError` 拒绝，带安全的 `code` / `message`；错误码包括 `INVALID_CONFIG`、`SHORTCUT_CONFLICT`、`STORAGE_FULL` 和 `PERMISSION_DENIED`。页面仍捕获意外 Promise 拒绝，只显示通用安全提示。
 
-`nsh.Storage` 提供持久化，`nsh.keymap` 提供语法解析、平台标签及窗口内临时录入。`nsh/desktop.GlobalShortcut.register(shortcut, onPress): Promise<boolean>` 用于真正的系统全局注册；它不是配置存储或录入 API。`src/shortcuts.ts` 已用它注册翻译浮窗全局动作；系统返回 `false` 或拒绝 Promise 时展示失败，不把保存成功当作注册成功。录入期间暂停，换绑与卸载通过 `unregister` 清理；`src/shortcuts.ts` 通过 `nsh.keymap.bind` 绑定打开设置和固定窗口两个局内动作，仅可见且聚焦时启用，失焦、隐藏与关闭时清理；组合来自已校验的 `Settings.current()`，不使用 GlobalShortcut 注册。图钉和局内快捷键共用置顶动作，通过 `WindowRef.set({ level })` 切换窗口层级。存储格式、队列边界、后台写盘限制与后续备份设计见[配置存储](./storage.md)。
+`nsh.Storage` 提供持久化，`nsh.keymap` 提供语法解析、平台标签及窗口内临时录入。`nsh/desktop.GlobalShortcut.register(shortcut, onPress): Promise<boolean>` 用于真正的系统全局注册；它不是配置存储或录入 API。`src/feature/settings/shortcuts/runtime.ts` 仅在全局项开启且有键位时注册翻译浮窗动作。系统返回 `false` 或拒绝 Promise 时展示失败，不把保存成功当作注册成功。录入期间暂停，关闭开关、换绑、清空键位和卸载时通过 `unregister` 清理。同一模块通过 `nsh.keymap.bind` 绑定打开设置和固定窗口两个局内动作，仅可见且聚焦时启用，失焦、隐藏与关闭时清理；组合来自已校验的 `Settings.current()`，不使用 GlobalShortcut 注册。图钉和局内快捷键共用置顶动作，通过 `WindowRef.set({ level })` 切换窗口层级。存储格式、队列边界、后台写盘限制与后续备份设计见[配置存储](./storage.md)。
 
 ## 3. 结构化业务错误
 
-可预期失败通过 `ApiError` DTO 返回 `code`、`message` 和 `retryable`。翻译受理、健康检测和密钥写入返回错误或 `null`，模型列表和流事件在 `error` 字段中携带错误。UI 兜底处理意外 Promise 拒绝，展示安全提示。OCR 与 TTS 草案使用带 `ok` 标签的 `NativeResult<T>`。
+业务错误包含 `code`、`message` 和 `retryable`。翻译受理返回 `ApiError` 或 `null`。请求失败以 `SettingsError` 或 `ProviderRequestError` 拒绝。异步翻译在终态事件的 `error` 字段返回安全错误。UI 捕获意外 Promise 拒绝并展示通用提示。OCR 与 TTS 草案使用带 `ok` 标签的 `NativeResult<T>`。
 
 | ErrorCode            | 含义                               |
 | -------------------- | ---------------------------------- |
@@ -67,8 +63,8 @@
 ### 开始
 
 1. UI 先生成新的 `requestId`，建立该请求的视图状态，再调用 `start`。
-2. 核心校验输入，读取已启用且已填写模型的 Profile，取本次配置快照。
-3. 任务登记与回调绑定先于 HTTP 请求。`start` 返回受理 Promise，成功值为 `null`。校验失败返回 `ApiError`，请求结束前的增量和终态由回调发送。
+2. `start` 同步校验输入并登记任务。拒绝受理时返回 `ApiError`，受理成功返回 `null`。
+3. 任务异步读取已启用且已填写模型的 Profile，并核对凭据和请求地址。增量和终态由该请求的回调发送。
 
 活动请求 ID 不得重复；重复请求返回 `INVALID_CONFIG`，不覆盖原任务。UI 不复用历史 ID。核心不得在调用期间重新选择 Profile 或让其他页面草稿替换本次配置。
 
@@ -84,9 +80,8 @@
 
 ### 取消与生命周期
 
-- UI 取消时立即停止接受该请求的后续内容，保留已显示文本；核心终止上游 HTTP、流 reader 与插件调用。
-- `cancel` 幂等；不存在或已结束的 ID 不报错、不复活任务。
-- `start` 和 `cancel` 都按 NSH 原生调用顺序入队。受理 Promise 返回前亦可取消，UI 立即停用该请求 ID。
+- UI 取消时立即停止更新并保留已显示文本。`cancel` 通过该请求的 `AbortController` 中止 `fetch` 并释放 reader。
+- `cancel` 可重复调用，已结束的请求不会再次触发事件。任务登记后即可取消，包括 `fetch` 发出前。
 - 取消与完成竞速时，只允许先提交的终态生效；UI 已取消的视图不被迟到 `done` 覆盖。
 - 工作台隐藏、关闭或组件卸载会取消活动请求。应用退出时释放 engine 和剩余任务。
 
@@ -110,19 +105,24 @@
 - 插件输出和外部网络响应同样是不可信输入，需要体积限制、类型检查与安全错误归一。
 - 新增或更换 Base URL 时，由设置页展示完整地址并请求确认。内置适配只请求已保存或设置页已确认的 HTTP(S) 地址，拒绝重定向。HTTP 确认提示说明原文与凭据的明文传输风险。第三方插件的独立来源授权见[插件规范](./plugin-spec.md)。
 - 插件安装与备份文件选择由宿主控制；UI 不可传任意路径覆盖应用文件。安装包内容与路径仍需校验。
-- 设置页聚焦时通过 `Secrets.reveal(profileId)` 读取与当前接口地址匹配的 API Key，作为密码输入框的实际值。默认按字符掩码显示，眼睛按钮只切换掩码。仅提交用户编辑的密钥。留空保留已有 Key，输入新值可替换，确认删除服务商时清除其密钥。API Key 以明文存在 NSH Storage，与普通配置同一 `storage.json`，但使用独立键。
-- 未保存的地址可用 `listModelsDraft(baseUrl, key)` 查询模型：设置页先展示完整地址并确认，才把本次输入的密钥传给原生。已保存地址若输入了新密钥，也用该接口先验证新密钥；地址已确认，不再重复确认。该密钥只用于本次调用，不写入普通配置、NSH Storage 或日志；空密钥被拒绝。此接口只支持 Chat Completions，仍拒绝重定向并受 25 秒期限限制。修改地址或切换服务商后清空模型列表；一次性请求没有单独取消入口，页面卸载后不展示迟到结果。
-- `checkModel(profileId, model)` 只使用已保存 Profile 的地址和 NSH Storage 中的 API Key，model 可以来自当前编辑中的草稿。
+- 设置页聚焦时通过 `Settings.readProfileKey(profileId, baseUrl)` 读取与当前接口地址匹配的 API Key，作为密码输入框的实际值。默认按字符掩码显示，眼睛按钮只切换掩码。仅提交用户编辑的密钥。留空保留已有 Key，输入新值可替换，确认删除服务商时清除其密钥。API Key 以明文存在 NSH Storage，与普通配置同一 `storage.json`，但使用独立键。
+- `listModelsDraft(baseUrl, key)` 仅使用本次输入的非空密钥查询模型。新地址需要先在设置页确认完整地址。已保存地址输入新密钥后可直接查询。为某个地址输入的草稿密钥会在改址时清空。新建时也可先填密钥，再在地址确认框中指定首次使用的地址。查询过程不写配置、密钥或日志。
+- `checkModel(profileId, model)` 使用已保存 Profile 的地址和绑定凭据，模型 ID 可以来自当前草稿。设置窗口隐藏、关闭或编辑器卸载时中止模型请求。
+
+### NSH 网络行为
+
+- 所有服务商请求使用 `redirect: "manual"`，拒绝 3xx。模型列表与健康检测的总期限为 25 秒，响应上限 1 MiB。翻译总期限 120 秒，等待响应头或下一块最多 25 秒，响应上限 2 MiB。连接建立由 NSH 后端管理，计入对应请求期限。
+- NSH 0.6.1 的 macOS 后端使用系统代理。发送请求时设置 `credentials: "omit"`，本地探针仍观察到 NSURLSession 复用同源 Cookie。Windows / Linux 后端读取环境代理，阻塞读取期间可能延后断连。取消后应用立即丢弃迟到数据。
 
 ## 7. 验证清单
 
 先用可控假插件 / 假 HTTP 服务验证，测试不依赖真实厂商或真实密钥：
 
-- 正常增量、无增量直接结束、首帧早于受理返回、`done.text` 校正与至多一个终态。
+- 正常增量、无增量直接结束、`done.text` 校正与唯一终态。
 - 参数拒绝、重复 ID、禁用 / 不存在的 Profile、kind 不匹配、并发请求互不串结果。
 - 受理前取消、流中取消、取消与完成竞速、插件忽略取消、关窗与卸载清理。
 - 受理后超时 / 崩溃一定结束；任务表、回调与上游连接无泄漏。
-- Rust 错误 DTO 的码与安全消息正确到达 UI，未知异常不会泄漏密钥。
+- 结构化错误码和安全提示正确到达 UI，未知异常显示通用提示。
 - OCR / TTS 的取消、二进制边界和资源释放，不仅验证 happy path。
 
 应用检查使用 `nsh check` 与 `nsh test`；涉及插件加载、网络或动态执行的能力，还必须验证发布构建，不能仅凭开发模式通过。

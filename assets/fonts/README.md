@@ -7,4 +7,4 @@
 | `geist-mono/GeistMono.ttf`         | https://github.com/google/fonts/tree/main/ofl/geistmono     | `173867dce0580ea751e4b9c558740d34f20ce549` |
 | `jetbrains-mono/JetBrainsMono.ttf` | https://github.com/google/fonts/tree/main/ofl/jetbrainsmono | `aa310be8b717fe3774f9444dd89d5f4101cc6d10` |
 
-`src/theme.ts` 使用导入值注册字体并读取真实 family name。中文等缺失字形由平台回退；快捷键符号单独使用系统 Lucida Grande。
+`src/feature/settings/appearance/theme.ts` 使用导入值注册字体并读取真实 family name。中文等缺失字形由平台回退；快捷键符号单独使用系统 Lucida Grande。

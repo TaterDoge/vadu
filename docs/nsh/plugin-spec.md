@@ -6,7 +6,7 @@
 
 一个插件只提供一种能力：`translator`、`ocr` 或 `tts`。同一插件可以供多个 Profile 使用；每次调用独立，不自行处理配置持久化、自动重试、缓存、语言检测或窗口 UI。
 
-当前内置 OpenAI 兼容翻译适配位于 `src/plugins/openai.rs`，由 Rust 核心调用。它实现模型列表、当前模型的 Chat Completions 对话检测与 Chat Completions SSE。后续第三方 JS 插件通过独立 VM 和本规范的能力契约接入。厂商请求和协议解析留在能力适配内。
+当前内置 OpenAI 兼容适配位于 `src/api/`，`models.ts` 负责模型列表与对话检测，`translation.ts` 负责 Chat Completions SSE 翻译。后续第三方 JS 插件通过独立 VM 和本规范的能力契约接入。厂商请求和协议解析留在能力适配内。
 
 ## 2. 分发与版本
 
@@ -78,13 +78,13 @@ bundle 导出 `createPlugin()`，返回与 manifest kind 一致的实现。工�
 
 ## 4. 独立 VM 与宿主桥
 
-插件不能访问 UI VM、`nsh` / `vadu/native` 注册表、文件系统、进程启动、环境变量、宿主 NSH Storage 中的 API Key、任意 native FFI 或 Node `require`。静态依赖应已打进 bundle，不能从宿主环境捡到额外权限。
+插件不能访问 UI VM、`nsh` 模块注册表、文件系统、进程启动、环境变量、宿主 NSH Storage 中的 API Key、任意 native FFI 或 Node `require`。静态依赖应已打进 bundle，不能从宿主环境捡到额外权限。
 
 插件所需 Promise、异步迭代、Uint8Array、定时 / 取消和 HTTP 流对象，要由独立 VM 与宿主桥明确提供。不能因为 NSH UI 有某个全局对象，就宣称插件 VM 已兼容。
 
 - 默认不提供不受控的全局网络 API；若为 SDK 兼容提供 `globalThis.fetch`，必须走与 `runtime.fetch` 相同的授权、期限和取消检查。
 - 不注入文件 / 系统模块来“让 npm SDK 先跑起来”。兼容失败时调整依赖或协议实现，不能放开宿主权限。
-- 不在 UI 里使用 `eval` / `new Function` 加载 bundle；独立 VM 由 Rust 的受控模块加载器执行。
+- 不在 UI 里使用 `eval` / `new Function` 加载 bundle；独立 VM 通过宿主的受控模块加载器执行。
 - VM 设置可测试的内存、执行时间和中断限制；具体配额由最小验证确定，不能把 NSH UI 的默认值当插件配额。
 - 宿主必须限制响应、输出与回调队列体积，处理快速产出、死循环、崩溃和取消后继续输出。
 
@@ -106,7 +106,7 @@ bundle 导出 `createPlugin()`，返回与 manifest kind 一致的实现。工�
 - 本地服务也要绑定用户明确选择的 origin；`localhost`、私网或不同端口不自动获得通行。
 - 实际请求必须绑定本次 signal；取消、超时和 VM 销毁都要关闭连接与流 reader。
 
-NSH 应用 capabilities 不能替代这里的每插件检查。Rust 原生代码拥有进程权限，受控桥必须自己守住边界。
+NSH 应用 capabilities 不能替代这里的每插件检查。受控桥负责执行宿主授权检查。
 
 ## 6. 配置、模板与凭据
 
@@ -148,7 +148,7 @@ Profile 选择协议、baseURL、model；Preset 提供创建默认值
 
 用户安装入口由宿主选择文件 / 目录，展示来源与权限再确认启用。同 ID 更新需用户明确确认，不静默覆盖；权限扩大需重新授权。禁用 / 卸载先终止相关任务并释放 VM，不能静默删除 Profile 和密钥。
 
-错误码统一引用[原生 API 错误表](./native-api.md#3-结构化业务错误)。插件可报告业务错误，宿主校验并重新脱敏、决定 retryable；未知异常归一，不将原始上游正文回传。取消与唯一终态由核心保证。
+错误码统一引用[平台 API 错误表](./native-api.md#3-结构化业务错误)。插件可报告业务错误，宿主校验并重新脱敏、决定 retryable；未知异常归一，不将原始上游正文回传。取消与唯一终态由核心保证。
 
 开放第三方插件前至少验证：
 

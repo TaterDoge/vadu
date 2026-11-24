@@ -3,47 +3,38 @@ import {
   effect,
   keymap,
   lifecycle,
-  Overlay,
-  safeArea,
   signal,
   Text,
   View,
   type ViewRef,
 } from 'nsh';
-import {
-  Button,
-  Toast,
-  type ToastEntry,
-  ToastManager,
-  ToastStack,
-} from 'nsh/base';
+import { Button, Switch } from 'nsh/base';
 
 import { buttonFrameClass } from '../../../../components/ui/buttonStyles';
 import { Icon } from '../../../../components/ui/Icon';
 import { Item } from '../../../../components/ui/Item';
 import { Kbd, KbdGroup } from '../../../../components/ui/Kbd';
-import { lucideInfo, lucideRotateCcw } from '../../../../icons';
+import { createPageToast } from '../../../../components/ui/PageToast';
 import {
   type AppSettings,
   captureShortcutKeys,
+  GLOBAL_SHORTCUT_ID,
   Settings,
   SettingsError,
-} from '../../../../settings';
+} from '../../../../feature/settings';
 import {
   shortcutRecording,
   translateShortcutStatus,
-} from '../../../../shortcuts';
+} from '../../../../feature/settings/shortcuts/runtime';
+import { lucideInfo, lucideRotateCcw } from '../../../../icons';
 import { shortcutGroups } from './constants';
 
 export function ShortcutsPage() {
   const settings = signal<AppSettings | null>(null);
   const recording = signal<string | null>(null);
   const pending = signal(false);
-  const toastManager = new ToastManager();
-  const toasts = signal<ToastEntry[]>([]);
-  let toastTimer: ReturnType<typeof setInterval> | undefined;
-  let toastExpanded = false;
-  let persistentToast = false;
+  const { showToast, dismissPersistent, ToastOutlet } =
+    createPageToast('shortcut');
   let cancelledByBlur: string | null = null;
   let recordingField: ViewRef | undefined;
   const captureKeys = captureShortcutKeys();
@@ -51,42 +42,7 @@ export function ShortcutsPage() {
   cleanup(() => {
     disposed = true;
     shortcutRecording.set(false);
-    if (toastTimer !== undefined) clearInterval(toastTimer);
-    toastManager.dispose();
   });
-
-  function syncToast() {
-    toasts.set(toastManager.visible(1));
-  }
-
-  function startToastTimer() {
-    if (toastTimer !== undefined) return;
-    toastTimer = setInterval(() => {
-      if (toastManager.advance(toastExpanded).changed) syncToast();
-      if (
-        toastManager.isEmpty() ||
-        (persistentToast &&
-          toasts().every((toast) => toast.status === 'present'))
-      ) {
-        clearInterval(toastTimer);
-        toastTimer = undefined;
-      }
-    }, 50);
-  }
-
-  function showToast(text: string, persistent = false) {
-    persistentToast = persistent;
-    toastManager.push('shortcut', text, { timeout: persistent ? null : 3000 });
-    syncToast();
-    startToastTimer();
-  }
-
-  function dismissToast() {
-    if (!toastManager.dismiss('shortcut')) return;
-    persistentToast = false;
-    syncToast();
-    startToastTimer();
-  }
 
   async function apply(
     action: () => Promise<AppSettings>,
@@ -119,9 +75,17 @@ export function ShortcutsPage() {
     return recording() === id;
   }
 
+  function bindingFor(id: string) {
+    return settings()?.shortcuts.find((item) => item.id === id);
+  }
+
   function shortcutLabel(id: string) {
-    const binding = settings()?.shortcuts.find((item) => item.id === id);
-    return binding ? keymap.label(binding.keystroke) : '不可用';
+    if (isRecording(id)) return '请按下快捷键…';
+    const binding = bindingFor(id);
+    if (!binding) return '不可用';
+    return binding.keystroke === null
+      ? '点击录入'
+      : keymap.label(binding.keystroke);
   }
 
   function shortcutKeys(id: string) {
@@ -137,7 +101,7 @@ export function ShortcutsPage() {
     recording.set(null);
     shortcutRecording.set(false);
     recordingField = undefined;
-    if (persistentToast) dismissToast();
+    dismissPersistent();
   }
 
   function toggleRecording(id: string, field: ViewRef | undefined) {
@@ -173,7 +137,7 @@ export function ShortcutsPage() {
   }
 
   async function resetShortcut(id: string) {
-    if (persistentToast) dismissToast();
+    dismissPersistent();
     if (await apply(() => Settings.resetShortcut(id), showToast)) {
       cancel();
       showToast('快捷键已恢复默认。');
@@ -216,38 +180,7 @@ export function ShortcutsPage() {
 
   return (
     <View testID="settings-shortcuts-page" class="gap-6">
-      <Overlay
-        class="inset-x-0 bottom-0 items-center p-4"
-        style={{ paddingBottom: safeArea().bottom + 16 }}
-      >
-        <ToastStack
-          closeOnEscape={false}
-          style={{ width: 340, maxWidth: '100%' }}
-          placement="bottomRight"
-          onExpandedChange={({ expanded }) => {
-            toastExpanded = expanded;
-          }}
-        >
-          <Each of={toasts()} key={(toast: ToastEntry) => toast.id}>
-            {(toast) => (
-              <Toast
-                testID="shortcut-toast"
-                transitionStatus={toast().status}
-                accessibilityLabel={String(toast().value)}
-                onDismissRequest={dismissToast}
-                class="rounded-lg border border-border bg-card px-4 py-3 transition-all duration-200 ease-out"
-                startingClass="opacity-0 translate-y-4"
-                endingClass="opacity-0 scale-95"
-                swipingClass="transition-none"
-              >
-                <Text class="text-sm text-card-foreground">
-                  {String(toast().value)}
-                </Text>
-              </Toast>
-            )}
-          </Each>
-        </ToastStack>
-      </Overlay>
+      <ToastOutlet />
       <Each of={shortcutGroups}>
         {(group) => (
           <View class="gap-4">
@@ -261,6 +194,12 @@ export function ShortcutsPage() {
             <Each of={group().items}>
               {(shortcut) => {
                 let field: ViewRef | undefined;
+                const isGlobal = () => shortcut().id === GLOBAL_SHORTCUT_ID;
+                const showPrompt = () =>
+                  isRecording(shortcut().id) ||
+                  bindingFor(shortcut().id)?.keystroke === null;
+                const enabled = () =>
+                  bindingFor(shortcut().id)?.enabled ?? false;
 
                 return (
                   <>
@@ -278,7 +217,7 @@ export function ShortcutsPage() {
                             testID={'shortcut-' + shortcut().id + '-input'}
                             accessible
                             role="button"
-                            disabled={!settings()}
+                            disabled={!isGlobal() || !settings()}
                             accessibilityLabel={
                               shortcut().title +
                               '快捷键 ' +
@@ -290,9 +229,7 @@ export function ShortcutsPage() {
                               selected: isRecording(shortcut().id),
                             }}
                             class={`${buttonFrameClass} rounded-lg border-transparent p-1 disabled:opacity-40`}
-                            classList={{
-                              'bg-accent': isRecording(shortcut().id),
-                            }}
+                            classList={{ 'bg-accent': showPrompt() }}
                             onMouseEnter={clearBlurCancellation}
                             onFocus={clearBlurCancellation}
                             onPress={() =>
@@ -301,17 +238,19 @@ export function ShortcutsPage() {
                             onBlur={() => handleRecordingBlur(shortcut().id)}
                           >
                             <If
-                              when={isRecording(shortcut().id)}
+                              when={showPrompt()}
                               else={
                                 <Each of={shortcutKeys(shortcut().id)}>
                                   {(key) => <Kbd>{key()}</Kbd>}
                                 </Each>
                               }
                             >
-                              <Kbd>请按下快捷键…</Kbd>
+                              <Kbd class="min-w-24">
+                                {shortcutLabel(shortcut().id)}
+                              </Kbd>
                             </If>
                           </KbdGroup>
-                          <If when={shortcut().resettable}>
+                          <If when={isGlobal()}>
                             <Button
                               disabled={!settings() || pending()}
                               onPress={() => resetShortcut(shortcut().id)}
@@ -327,12 +266,34 @@ export function ShortcutsPage() {
                             testID={'shortcut-' + shortcut().id + '-status'}
                             class="max-w-48 text-xs leading-5 text-muted-foreground"
                           >
-                            {shortcut().id === 'toggle-translate'
+                            {isGlobal()
                               ? translateShortcutStatus()
-                              : settings()
+                              : enabled()
                                 ? '已启用'
                                 : '未启用'}
                           </Text>
+                          <Switch
+                            testID={'shortcut-' + shortcut().id + '-enabled'}
+                            accessibilityLabel={
+                              '启用' + shortcut().title + '快捷键'
+                            }
+                            checked={enabled()}
+                            disabled={!isGlobal() || !settings() || pending()}
+                            onChange={({ checked }) => {
+                              cancel();
+                              void apply(
+                                () =>
+                                  Settings.setShortcutEnabled(
+                                    shortcut().id,
+                                    checked,
+                                  ),
+                                showToast,
+                              );
+                            }}
+                            class={`${buttonFrameClass} h-8 shrink-0 justify-center rounded-lg border-transparent px-1 disabled:opacity-40`}
+                            trackClass="h-5 w-8 justify-center rounded-full bg-muted-foreground px-0.5 checked:bg-foreground"
+                            thumbClass="h-4 w-4 rounded-full bg-background checked:translate-x-3"
+                          />
                         </>
                       }
                     />

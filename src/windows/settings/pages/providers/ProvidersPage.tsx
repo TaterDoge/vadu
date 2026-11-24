@@ -2,23 +2,23 @@ import { randomUUID } from 'crypto';
 
 import { cleanup, computed, Scroll, signal, Text, token, View } from 'nsh';
 import { Button, Input, Select, Tab, Tabs } from 'nsh/base';
-import type { ProviderProfile } from 'vadu/native';
 
 import { buttonFrameClass } from '../../../../components/ui/buttonStyles';
 import { Icon } from '../../../../components/ui/Icon';
 import { inputFrameClass } from '../../../../components/ui/inputStyles';
+import { Settings, SettingsError } from '../../../../feature/settings';
+import type { ProviderProfile } from '../../../../feature/settings/providers/config';
 import {
   lucideFunnel,
   lucideGripVertical,
   lucideServer,
 } from '../../../../icons';
-import { Settings, SettingsError } from '../../../../settings';
+import { ProviderEditor } from './ProviderEditor';
 import {
   providerButtonClass,
-  ProviderEditor,
   providerHeadingClass,
   providerOptionsClass,
-} from './ProviderEditor';
+} from './providerStyles';
 
 const capabilities = ['翻译', '识别', '语音'] as const;
 type Capability = (typeof capabilities)[number];
@@ -327,7 +327,7 @@ export function ProvidersPage() {
                           'h-2 w-2 shrink-0 rounded-full ' +
                           (item().enabled
                             ? 'bg-accent-emerald'
-                            : 'border border-muted-foreground')
+                            : 'bg-destructive')
                         }
                       />
                     </View>

@@ -1,5 +1,3 @@
-import { randomUUID } from 'crypto';
-
 import {
   cleanup,
   computed,
@@ -14,7 +12,6 @@ import {
 } from 'nsh';
 import { Button, Select } from 'nsh/base';
 import { currentWindow, Window } from 'nsh/desktop';
-import { Translation } from 'vadu/native';
 
 import { IconButton } from '../../components/IconButton';
 import { buttonFrameClass } from '../../components/ui/buttonStyles';
@@ -22,20 +19,15 @@ import {
   providerConnectionsSupported,
   Settings,
   SettingsError,
-} from '../../settings';
-import '../../theme';
+} from '../../feature/settings';
+import '../../feature/settings/appearance/theme';
 import { Icon } from '../../components/ui/Icon';
 import { lucideChevronDown, lucidePin, lucideSettings } from '../../icons';
+import { translationLanguages } from '../../translation-languages';
 import { TranslateInput } from './components/TranslateInput';
+import { createTranslationSession } from './translation-session';
 
 const pinned = signal(false);
-const languages = [
-  { value: 'zh-Hans', title: '简体中文' },
-  { value: 'zh-Hant', title: '繁體中文' },
-  { value: 'en', title: '英语' },
-  { value: 'ja', title: '日语' },
-  { value: 'ko', title: '韩语' },
-];
 const pickerPopup =
   'rounded-lg border border-border bg-popover p-1 text-popover-foreground';
 const pickerItem = `${buttonFrameClass} min-h-8 rounded-md border-transparent px-2 focus:bg-accent selected:bg-accent`;
@@ -68,12 +60,10 @@ export function TranslateWindow() {
   let inputRef: InputRef | undefined;
   const window = currentWindow();
   const source = signal('');
-  const result = signal('');
-  const target = signal(languages[0].value);
+  const target = signal(translationLanguages[0].value);
   const profileId = signal<string | null>(null);
-  const request = signal<string | null>(null);
-  const error = signal('');
-  const cancelled = signal(false);
+  const { result, error, cancelled, pending, submit, cancel } =
+    createTranslationSession();
   const configError = signal('');
   const profiles = computed(
     () =>
@@ -101,67 +91,11 @@ export function TranslateWindow() {
   effect(() => {
     if (window.state()?.visible === false) untracked(cancel);
   });
+  window.on('close', cancel);
   cleanup(() => {
     mounted = false;
-    cancel();
     pinned.set(false);
   });
-
-  function cancel() {
-    const id = request();
-    if (!id) return;
-    if (mounted) {
-      request.set(null);
-      cancelled.set(true);
-    }
-    try {
-      Translation.cancel(id);
-    } catch {
-      if (mounted) {
-        cancelled.set(false);
-        error.set('无法取消翻译。');
-      }
-    }
-  }
-
-  async function submit() {
-    const profile = chosen();
-    const text = source();
-    if (request() || !profile || !text.trim() || !providerConnectionsSupported)
-      return;
-
-    const id = randomUUID();
-    result.set('');
-    error.set('');
-    cancelled.set(false);
-    request.set(id);
-    try {
-      const failure = await Translation.start(
-        { requestId: id, profileId: profile.id, target: target(), text },
-        (event) => {
-          if (!mounted || request() !== id || event.requestId !== id) return;
-          if (event.type === 'delta') {
-            result.set(result() + (event.text ?? ''));
-            return;
-          }
-          request.set(null);
-          if (event.type === 'done') result.set(event.text ?? '');
-          if (event.type === 'error')
-            error.set(event.error?.message ?? '翻译失败，请重试。');
-          if (event.type === 'cancelled') cancelled.set(true);
-        },
-      );
-      if (failure && mounted && request() === id) {
-        request.set(null);
-        error.set(failure.message);
-      }
-    } catch {
-      if (mounted && request() === id) {
-        request.set(null);
-        error.set('无法启动翻译，请重试。');
-      }
-    }
-  }
 
   window.on('focusChange', ({ focused }) => {
     if (focused) {
@@ -201,7 +135,7 @@ export function TranslateWindow() {
             inputRef = node;
           }}
           value={source()}
-          readonly={request() !== null}
+          readonly={pending()}
           onChange={source.set}
         />
         <View class="h-8 shrink-0 flex-row gap-2">
@@ -209,11 +143,11 @@ export function TranslateWindow() {
             testID="translation-language"
             accessibilityLabel="目标语言"
             value={target()}
-            items={languages}
+            items={translationLanguages}
             onChange={({ value }) => {
               if (value !== null) target.set(value);
             }}
-            disabled={request() !== null}
+            disabled={pending()}
             cover={false}
             class="w-24 shrink-0"
             popupClass={pickerPopup}
@@ -221,8 +155,8 @@ export function TranslateWindow() {
             trigger={
               <PickerLabel
                 title={
-                  languages.find(({ value }) => value === target())?.title ??
-                  '目标语言'
+                  translationLanguages.find(({ value }) => value === target())
+                    ?.title ?? '目标语言'
                 }
               />
             }
@@ -239,7 +173,7 @@ export function TranslateWindow() {
             disabled={
               !providerConnectionsSupported ||
               profiles().length === 0 ||
-              request() !== null
+              pending()
             }
             cover={false}
             class="min-w-0 flex-1"
@@ -255,18 +189,19 @@ export function TranslateWindow() {
           <Button
             testID="translation-submit"
             disabled={
-              !request() &&
+              !pending() &&
               (!providerConnectionsSupported || !chosen() || !source().trim())
             }
-            accessibilityLabel={request() ? '取消翻译' : '翻译'}
+            accessibilityLabel={pending() ? '取消翻译' : '翻译'}
             onPress={() => {
-              if (request()) cancel();
-              else submit();
+              const profile = chosen();
+              if (pending()) cancel();
+              else if (profile) submit(profile.id, target(), source());
             }}
             class={`${buttonFrameClass} w-24 shrink-0 items-center justify-center rounded-lg border-transparent bg-foreground disabled:opacity-50`}
           >
             <Text class="text-sm leading-5 font-semibold text-background">
-              {request() ? '取消翻译' : '翻译'}
+              {pending() ? '取消翻译' : '翻译'}
             </Text>
           </Button>
         </View>
@@ -290,7 +225,7 @@ export function TranslateWindow() {
               <Text
                 class={`text-sm leading-5 ${result() ? 'text-foreground' : 'text-muted-foreground'}`}
               >
-                {result() || (request() ? '正在翻译…' : '翻译结果')}
+                {result() || (pending() ? '正在翻译…' : '翻译结果')}
               </Text>
             </View>
           </Scroll>
@@ -315,9 +250,6 @@ export function TranslateWindow() {
 export function openTranslateWindow() {
   const window = Window.open(TranslateWindow, {
     id: 'translate',
-    // activate: true,
-    // minimizable: true,
-    // maximizable: true,
     frame: 'none',
     transparent: true,
     backdrop: 'none',

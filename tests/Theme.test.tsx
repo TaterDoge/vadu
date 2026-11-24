@@ -1,5 +1,7 @@
 import { type App, expect, open, test } from 'nsh/test';
 
+import { settingsDocument } from './fixtures/settings-config';
+
 function status(app: App) {
   const text = app.texts().find((text) => text.startsWith('主题状态 '));
   expect(text).toBeDefined();
@@ -8,6 +10,72 @@ function status(app: App) {
 
 const viewport = { width: 960, height: 900, platform: 'macos' } as const;
 
+test('外观保存后重开，在进入外观页前应用已保存的主题', async () => {
+  const app = await open('./fixtures/Theme.tsx', viewport);
+  await app.press('id:settings-appearance');
+  await app.press('id:appearance-dark');
+  await app.press('id:accent-blue');
+  await app.press('id:style-lyra');
+  const storage = app.storage();
+  const appearance = { mode: 'dark', accent: 'blue', style: 'lyra' };
+  expect(JSON.parse(storage['vadu.config']).settings.appearance).toEqual(
+    appearance,
+  );
+
+  const reopened = await open('./fixtures/Theme.tsx', {
+    ...viewport,
+    storage,
+    colorScheme: 'light',
+  });
+  expect(status(reopened)).toMatchObject({
+    ...appearance,
+    scheme: 'dark',
+    font: 'JetBrains Mono',
+  });
+  expect(status(reopened).primary).toBe(status(reopened).blue);
+  expect(reopened.storage()).toEqual(storage);
+});
+
+test('外观保存失败时显示错误，保留原主题与配置，下一次保存可重试', async () => {
+  let saved = JSON.stringify(settingsDocument());
+  const original = saved;
+  let fail = true;
+  const app = await open('./fixtures/Theme.tsx', {
+    ...viewport,
+    modules: {
+      nsh: {
+        'Storage.getItem': () => saved,
+        'Storage.setItem': (_key: string, value: string) => {
+          if (fail) {
+            fail = false;
+            throw new Error('private failure detail');
+          }
+          saved = value;
+        },
+      },
+    },
+  });
+  await app.press('id:settings-appearance');
+  await app.press('id:accent-blue');
+  expect(app.shows('text:无法访问配置，请稍后重试。')).toBe(true);
+  expect(status(app).accent).toBe('neutral');
+  expect(saved).toBe(original);
+  await app.press('id:accent-blue');
+  expect(status(app).accent).toBe('blue');
+  expect(JSON.parse(saved).settings.appearance.accent).toBe('blue');
+});
+
+test('坏配置禁用外观编辑并保留原文档', async () => {
+  const storage = { 'vadu.config': '{' };
+  const app = await open('./fixtures/Theme.tsx', { ...viewport, storage });
+  await app.press('id:settings-appearance');
+  expect(app.enabled('id:appearance-dark')).toBe(false);
+  expect(app.shows('text:配置格式损坏或不受支持，原配置已保留，未覆盖。')).toBe(
+    true,
+  );
+  expect(app.storage()).toEqual(storage);
+});
+
 test('主题默认跟随系统，手动选择优先，切回系统后继续响应', async () => {
   const app = await open('./fixtures/Theme.tsx', {
     ...viewport,
@@ -15,7 +83,7 @@ test('主题默认跟随系统，手动选择优先，切回系统后继续响�
   });
   await app.press('id:settings-appearance');
   expect(status(app)).toMatchObject({
-    appearance: 'system',
+    mode: 'system',
     scheme: 'dark',
     accent: 'neutral',
     style: 'nova',
@@ -28,13 +96,13 @@ test('主题默认跟随系统，手动选择优先，切回系统后继续响�
   await app.press('id:appearance-dark');
   await app.setColorScheme('dark');
   await app.setColorScheme('light');
-  expect(status(app)).toMatchObject({ appearance: 'dark', scheme: 'dark' });
+  expect(status(app)).toMatchObject({ mode: 'dark', scheme: 'dark' });
 
   await app.press('id:appearance-light');
   await app.setColorScheme('dark');
-  expect(status(app)).toMatchObject({ appearance: 'light', scheme: 'light' });
+  expect(status(app)).toMatchObject({ mode: 'light', scheme: 'light' });
   await app.press('id:appearance-system');
-  expect(status(app)).toMatchObject({ appearance: 'system', scheme: 'dark' });
+  expect(status(app)).toMatchObject({ mode: 'system', scheme: 'dark' });
   await app.setColorScheme('light');
   expect(status(app).scheme).toBe('light');
 });
@@ -91,7 +159,7 @@ test('Nova 与 Lyra 切换字体但保持内置字号，导航卸载后保留并
   await app.press('id:settings-shortcuts');
   expect(app.spanStyle('text:全局快捷键').fontSize).toBe(14);
   expect(app.spanStyle('text:唤起翻译浮窗').fontSize).toBe(14);
-  expect(app.spanStyle('id:shortcut-toggle-translate >> text:⌘').fontSize).toBe(
+  expect(app.spanStyle('id:shortcut-open-settings >> text:⌘').fontSize).toBe(
     12,
   );
   await app.press('id:settings-appearance');
@@ -113,16 +181,16 @@ test('外观单选组支持方向键，翻译窗口打开期间共享主题且�
   await app.keyboard.press('enter');
   for (let index = 0; index < 3; index++) await app.keyboard.press('tab');
   await app.keyboard.press('right');
-  expect(status(app).appearance).toBe('light');
+  expect(status(app).mode).toBe('light');
   await app.keyboard.press('right');
-  expect(status(app).appearance).toBe('dark');
+  expect(status(app).mode).toBe('dark');
 
   await app.press('id:open-translate');
   expect(app.window('translate').state()).not.toBeNull();
   await app.press('id:accent-blue');
   await app.press('id:style-lyra');
   expect(status(app)).toMatchObject({
-    appearance: 'dark',
+    mode: 'dark',
     accent: 'blue',
     style: 'lyra',
   });
@@ -130,7 +198,7 @@ test('外观单选组支持方向键，翻译窗口打开期间共享主题且�
   await app.press('id:open-translate');
   expect(app.window('translate').state()).not.toBeNull();
   expect(status(app)).toMatchObject({
-    appearance: 'dark',
+    mode: 'dark',
     accent: 'blue',
     style: 'lyra',
   });

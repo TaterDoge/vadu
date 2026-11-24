@@ -1,15 +1,17 @@
 import { cleanup, computed, effect, keymap, platform, signal } from 'nsh';
 import { GlobalShortcut, Window } from 'nsh/desktop';
 
-import { Settings, SettingsError } from './settings';
 import {
   openTranslateWindow,
   toggleTranslatePin,
-} from './windows/translate/TranslateWindow';
+} from '../../../windows/translate/TranslateWindow';
+import { type AppSettings, currentSettings } from '../store';
+import { SettingsError } from '../validation';
+import { GLOBAL_SHORTCUT_ID } from './config';
 
 const shortcutActions = [
   {
-    id: 'toggle-translate',
+    id: GLOBAL_SHORTCUT_ID,
     scope: 'global',
     run: openTranslateWindow,
   },
@@ -34,12 +36,12 @@ const shortcutActions = [
 export const shortcutRecording = signal(false);
 export const translateShortcutStatus = signal('正在读取快捷键配置…');
 
-export function setupShortcuts() {
+export function setupShortcuts(loaded: Promise<AppSettings>) {
   let disposed = false;
   cleanup(() => {
     disposed = true;
   });
-  void Settings.read().catch((error) => {
+  void loaded.catch((error) => {
     if (!disposed) {
       translateShortcutStatus.set(
         error instanceof SettingsError
@@ -51,26 +53,37 @@ export function setupShortcuts() {
 
   for (const action of shortcutActions) {
     const keystroke = computed(() => {
-      const bindings = Settings.current()?.shortcuts;
+      const bindings = currentSettings()?.shortcuts;
       if (!bindings) return;
       if (action.id === 'hide-translate') {
         if (platform.os !== 'macos') return;
         // 用户已分配的组合优先，包括 mod+w 等别名。
         const label = keymap.label(action.keystroke);
         if (
-          bindings.some(({ keystroke }) => keymap.label(keystroke) === label)
+          bindings.some(
+            ({ enabled, keystroke }) =>
+              enabled &&
+              keystroke !== null &&
+              keymap.label(keystroke) === label,
+          )
         ) {
           return;
         }
         return action.keystroke;
       }
-      return bindings.find(({ id }) => id === action.id)?.keystroke;
+      const binding = bindings.find(({ id }) => id === action.id);
+      if (binding?.enabled) return binding.keystroke;
     });
 
     effect(() => {
       const shortcut = keystroke();
       const recording = shortcutRecording();
-      if (!shortcut) return;
+      if (!shortcut) {
+        if (action.scope === 'global' && currentSettings()) {
+          translateShortcutStatus.set(shortcut === null ? '未绑定' : '已关闭');
+        }
+        return;
+      }
       if (recording) {
         if (action.scope === 'global') {
           translateShortcutStatus.set('录入期间已暂停');

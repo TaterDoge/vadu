@@ -5,7 +5,8 @@ import {
   captureShortcutKeys,
   Settings,
   SettingsError,
-} from '../../src/settings';
+} from '../../src/feature/settings';
+import { provider } from './provider-config';
 
 function SettingsFixture() {
   const status = signal('{}');
@@ -23,13 +24,16 @@ function SettingsFixture() {
   }
 
   async function update() {
-    const first = host.params.first;
+    const { first, target } = host.params;
+    const id = typeof target === 'string' ? target : 'toggle-translate';
     const updates = [
-      Settings.setShortcut(
-        'toggle-translate',
-        typeof first === 'string' ? first : 'Command+Alt+K',
-      ),
-      Settings.setShortcut('open-settings', 'alt+j'),
+      first === null
+        ? Settings.resetShortcut(id)
+        : Settings.setShortcut(
+            id,
+            typeof first === 'string' ? first : 'Command+Alt+K',
+          ),
+      Settings.setShortcutEnabled(id, false),
     ];
     const latest = Settings.read();
     const results = await Promise.allSettled(updates);
@@ -50,6 +54,16 @@ function SettingsFixture() {
         settings,
       }),
     );
+  }
+
+  async function updateModules() {
+    await Promise.all([
+      Settings.setAppearance({ mode: 'dark' }),
+      Settings.setShortcutEnabled('toggle-translate', false),
+      Settings.saveProfile(provider('one', '测试'), true, 'test-key'),
+      Settings.setAppearance({ accent: 'blue' }),
+    ]);
+    await read();
   }
 
   function checkCaptureKeys() {
@@ -80,6 +94,9 @@ function SettingsFixture() {
       </Button>
       <Button testID="update" onPress={update}>
         <Text>同时保存两项</Text>
+      </Button>
+      <Button testID="update-modules" onPress={updateModules}>
+        <Text>并发保存不同模块</Text>
       </Button>
       <Button testID="check-keys" onPress={checkCaptureKeys}>
         <Text>校验键表</Text>

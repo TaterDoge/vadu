@@ -1,20 +1,52 @@
 import { expect, open, test } from 'nsh/test';
 
-import { provider } from './fixtures/provider-config';
+import {
+  checkProfile,
+  normalizeBaseUrl,
+} from '../src/feature/settings/providers/config';
+import { provider, providerStorage } from './fixtures/provider-config';
+import {
+  defaultAppearance,
+  defaultShortcuts as defaults,
+  settingsDocument as config,
+} from './fixtures/settings-config';
 
-const defaults = [
-  { id: 'toggle-translate', keystroke: 'mod+shift+m' },
-  { id: 'open-settings', keystroke: 'mod+,' },
-  { id: 'pin-translate', keystroke: 'mod+p' },
-];
+test('接口地址规范化并拒绝歧义或含凭据的地址', () => {
+  const url = normalizeBaseUrl('https://EXAMPLE.com:443/proxy/v1///');
+  expect(url.href).toBe('https://example.com/proxy/v1');
+  expect(url.origin).toBe('https://example.com');
+  expect(normalizeBaseUrl('https://example.com').href).toBe(
+    'https://example.com/',
+  );
+  for (const raw of [
+    'https://@example.com',
+    'https://a:b@example.com/v1',
+    'https://example.com?key=x',
+    'https://example.com#',
+    'https:///example.com',
+    'file:///tmp/x',
+  ]) {
+    expect(() => normalizeBaseUrl(raw)).toThrow(
+      '请输入有效的 HTTP 或 HTTPS 接口地址',
+    );
+  }
+});
 
-function config(shortcuts: unknown[] = defaults) {
-  return { schemaVersion: 1, settings: { shortcuts } };
-}
-
-function updatedConfig(shortcuts: unknown[] = defaults) {
-  return { ...config(shortcuts), schemaVersion: 3, profiles: [] };
-}
+test('Profile 校验允许空模型，拒绝托管请求头、重复请求头和嵌套凭据', () => {
+  const base = provider('one', '测试', { model: '' });
+  expect(checkProfile(base).profile).toEqual(base);
+  for (const [patch, message] of [
+    [{ headers: '{"Host":"other.example"}' }, '请求头不能覆盖连接或消息格式。'],
+    [{ headers: '{"X-App":"one","x-app":"two"}' }, '请求头名称重复。'],
+    [{ providerOptions: '{"stream":false}' }, '服务商选项不能覆盖模型'],
+    [
+      { providerOptions: '{"nested":[{"X-Access-Token":"mock"}]}' },
+      '服务商选项不能包含认证或凭据字段。',
+    ],
+  ] as const) {
+    expect(() => checkProfile({ ...base, ...patch })).toThrow(message);
+  }
+});
 
 function status(app: Awaited<ReturnType<typeof open>>) {
   const text = app.texts().find((text) => text.startsWith('配置状态 '));
@@ -23,10 +55,26 @@ function status(app: Awaited<ReturnType<typeof open>>) {
 
 const invalidDocuments = [
   { name: '空值', value: null },
+  { name: '缺少设置', value: { profiles: [] } },
+  { name: '缺少服务商列表', value: { settings: config().settings } },
+  {
+    name: '外观缺失',
+    value: { ...config(), settings: { shortcuts: defaults } },
+  },
+  ...[
+    ['缺少字段', { mode: 'dark', accent: 'blue' }],
+    ['未知字段', { ...defaultAppearance, additional: true }],
+    ['显示模式无效', { ...defaultAppearance, mode: 'auto' }],
+    ['主题色无效', { ...defaultAppearance, accent: 'unknown' }],
+    ['风格无效', { ...defaultAppearance, style: null }],
+  ].map(([name, appearance]) => ({
+    name: '外观' + name,
+    value: { ...config(), settings: { shortcuts: defaults, appearance } },
+  })),
   { name: '未知顶层字段', value: { ...config(), extra: true } },
   {
     name: '未知设置字段',
-    value: { schemaVersion: 1, settings: { shortcuts: defaults, extra: true } },
+    value: { ...config(), settings: { ...config().settings, extra: true } },
   },
   {
     name: '未知绑定字段',
@@ -37,20 +85,46 @@ const invalidDocuments = [
   {
     name: '未知 API 协议',
     value: {
-      ...updatedConfig(),
+      ...config(),
       profiles: [{ ...provider('one', '测试'), protocol: 'unknown' }],
     },
   },
   {
     name: '未知动作',
     value: config([
-      { id: 'unknown', keystroke: 'alt+k' },
+      { ...defaults[0], id: 'unknown', keystroke: 'alt+k' },
       ...defaults.slice(1),
     ]),
   },
   {
-    name: '快捷键不是字符串',
+    name: '快捷键不是字符串或空值',
     value: config([{ ...defaults[0], keystroke: 7 }, ...defaults.slice(1)]),
+  },
+  {
+    name: '局内键位为空',
+    value: config([
+      defaults[0],
+      { ...defaults[1], keystroke: null },
+      defaults[2],
+    ]),
+  },
+  {
+    name: '开关不是布尔值',
+    value: config([{ ...defaults[0], enabled: 1 }, ...defaults.slice(1)]),
+  },
+  {
+    name: '混用新旧绑定字段',
+    value: config([
+      { id: 'toggle-translate', keystroke: 'alt+k' },
+      ...defaults.slice(1),
+    ]),
+  },
+  {
+    name: '已关闭的绑定使用非法键位',
+    value: config([
+      { ...defaults[0], enabled: false, keystroke: 'k' },
+      ...defaults.slice(1),
+    ]),
   },
 ];
 
@@ -132,17 +206,20 @@ for (const platform of ['macos', 'windows', 'linux'] as const) {
     await app.press('id:update');
     const settings = {
       shortcuts: [
-        { ...defaults[0], keystroke: apple ? 'alt+mod+k' : 'mod+shift+k' },
-        { ...defaults[1], keystroke: 'alt+j' },
-        defaults[2],
+        {
+          ...defaults[0],
+          keystroke: apple ? 'alt+mod+k' : 'mod+shift+k',
+          enabled: false,
+        },
+        ...defaults.slice(1),
       ],
     };
     expect(status(app)).toEqual({
       results: [{ status: 'fulfilled' }, { status: 'fulfilled' }],
-      settings: { ...settings, profiles: [] },
+      settings: { ...settings, appearance: defaultAppearance, profiles: [] },
     });
     expect(JSON.parse(app.storage()['vadu.config'])).toEqual(
-      updatedConfig(settings.shortcuts),
+      config(settings.shortcuts),
     );
     await app.press('id:check-keys');
     expect(status(app)).toEqual({
@@ -169,15 +246,79 @@ for (const platform of ['macos', 'windows', 'linux'] as const) {
   }
 }
 
-test('v2 服务商读取为 Chat Completions，修改快捷键后保留并迁移配置', async () => {
-  const expected = provider('one', '旧服务商');
-  const legacy: Partial<typeof expected> = { ...expected };
-  delete legacy.protocol;
+test('局内快捷键在设置接口也拒绝改键、重置和开关', async () => {
+  const storage = { 'vadu.config': JSON.stringify(config()) };
+  for (const [target, first] of [
+    ['open-settings', 'alt+k'],
+    ['pin-translate', null],
+  ]) {
+    const app = await open('fixtures/Settings.tsx', {
+      platform: 'macos',
+      storage,
+      host: { params: { target, first } },
+    });
+    await app.press('id:update');
+    expect(status(app).results).toEqual([
+      { status: 'rejected', code: 'INVALID_CONFIG' },
+      { status: 'rejected', code: 'INVALID_CONFIG' },
+    ]);
+    expect(app.storage()).toEqual(storage);
+  }
+});
+
+test('旧版键位按已开启读取，修改时仅补齐开关并保留自定义局内键位', async () => {
+  const old = [
+    { id: 'toggle-translate', keystroke: 'alt+m' },
+    { id: 'open-settings', keystroke: 'alt+j' },
+    { id: 'pin-translate', keystroke: 'mod+p' },
+  ];
+  const storage = { 'vadu.config': JSON.stringify(config(old)) };
+  const app = await open('fixtures/Settings.tsx', {
+    platform: 'macos',
+    storage,
+  });
+  await app.press('id:read');
+  const bindings = old.map((binding) => ({ ...binding, enabled: true }));
+  expect(status(app).settings.shortcuts).toEqual(bindings);
+  expect(app.storage()).toEqual(storage);
+  await app.press('id:update-modules');
+  expect(JSON.parse(app.storage()['vadu.config']).settings.shortcuts).toEqual([
+    { ...bindings[0], enabled: false },
+    ...bindings.slice(1),
+  ]);
+});
+
+test('首次读取写入失败可重试，初始化成功后只读已有配置', async () => {
+  let saved: string | null = null;
+  let writes = 0;
+  const app = await open('fixtures/Settings.tsx', {
+    platform: 'macos',
+    modules: {
+      nsh: {
+        'Storage.getItem': () => saved,
+        'Storage.setItem': (_key: string, value: string) => {
+          if (++writes === 1) throw new Error('unavailable');
+          saved = value;
+        },
+      },
+    },
+  });
+  await app.press('id:read');
+  expect(status(app)).toEqual({ code: 'INTERNAL' });
+  expect(saved).toBeNull();
+  await app.press('id:read');
+  await app.press('id:read');
+  expect(JSON.parse(saved!)).toEqual(config());
+  expect(writes).toBe(2);
+});
+
+test('读取已有配置不写盘，修改快捷键保留服务商和独立凭据', async () => {
+  const expected = provider('one', '测试', { protocol: 'responses' });
   const storage = {
-    'vadu.config': JSON.stringify({
-      ...config(),
-      schemaVersion: 2,
-      profiles: [legacy],
+    ...providerStorage(expected),
+    'vadu.secret.one': JSON.stringify({
+      base_url: expected.baseUrl,
+      key: 'test-key',
     }),
   };
   const app = await open('fixtures/Settings.tsx', {
@@ -189,8 +330,27 @@ test('v2 服务商读取为 Chat Completions，修改快捷键后保留并迁移
   expect(app.storage()).toEqual(storage);
   await app.press('id:update');
   const persisted = JSON.parse(app.storage()['vadu.config']);
-  expect(persisted.schemaVersion).toBe(3);
+  expect(persisted.settings.appearance).toEqual(defaultAppearance);
   expect(persisted.profiles).toEqual([expected]);
+  expect(app.storage()['vadu.secret.one']).toBe(storage['vadu.secret.one']);
+});
+
+test('外观、快捷键与服务商并发保存，一份配置保留每项修改，密钥独立', async () => {
+  const app = await open('fixtures/Settings.tsx', { platform: 'macos' });
+  await app.press('id:update-modules');
+  const appearance = { ...defaultAppearance, mode: 'dark', accent: 'blue' };
+  const shortcuts = [{ ...defaults[0], enabled: false }, ...defaults.slice(1)];
+  const profiles = [provider('one', '测试')];
+  expect(status(app).settings).toEqual({ appearance, shortcuts, profiles });
+  const storage = app.storage();
+  expect(JSON.parse(storage['vadu.config'])).toEqual({
+    settings: { appearance, shortcuts },
+    profiles,
+  });
+  expect(JSON.parse(storage['vadu.secret.one'])).toEqual({
+    base_url: profiles[0].baseUrl,
+    key: 'test-key',
+  });
 });
 
 test('校验失败不阻塞后续保存队列', async () => {
@@ -204,11 +364,7 @@ test('校验失败不阻塞后续保存队列', async () => {
     { status: 'fulfilled' },
   ]);
   expect(JSON.parse(app.storage()['vadu.config'])).toEqual(
-    updatedConfig([
-      defaults[0],
-      { ...defaults[1], keystroke: 'alt+j' },
-      defaults[2],
-    ]),
+    config([{ ...defaults[0], enabled: false }, ...defaults.slice(1)]),
   );
 });
 
@@ -253,19 +409,12 @@ test('意外写入失败不修改原值，后续保存仍读取最新文档', as
       { status: 'fulfilled' },
     ],
     settings: {
-      shortcuts: [
-        defaults[0],
-        { ...defaults[1], keystroke: 'alt+j' },
-        defaults[2],
-      ],
+      appearance: defaultAppearance,
+      shortcuts: [{ ...defaults[0], enabled: false }, ...defaults.slice(1)],
       profiles: [],
     },
   });
   expect(JSON.parse(saved!)).toEqual(
-    updatedConfig([
-      defaults[0],
-      { ...defaults[1], keystroke: 'alt+j' },
-      defaults[2],
-    ]),
+    config([{ ...defaults[0], enabled: false }, ...defaults.slice(1)]),
   );
 });

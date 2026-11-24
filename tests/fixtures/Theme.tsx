@@ -1,7 +1,7 @@
 import { colorScheme, mount, Text, token, View } from 'nsh';
 import { Button } from 'nsh/base';
 
-import { themePreferences } from '../../src/theme';
+import { themePreferences } from '../../src/feature/settings/appearance/theme';
 import { SettingsWindow } from '../../src/windows/settings/SettingsWindow';
 import { openTranslateWindow } from '../../src/windows/translate/TranslateWindow';
 

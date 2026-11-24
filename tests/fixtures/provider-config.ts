@@ -1,4 +1,5 @@
-import type { ProviderProfile } from 'vadu/native';
+import type { ProviderProfile } from '../../src/feature/settings/providers/config';
+import { settingsDocument } from './settings-config';
 
 export function provider(
   id: string,
@@ -22,14 +23,7 @@ export function provider(
 export function providerStorage(...profiles: ProviderProfile[]) {
   return {
     'vadu.config': JSON.stringify({
-      schemaVersion: 3,
-      settings: {
-        shortcuts: [
-          { id: 'toggle-translate', keystroke: 'mod+shift+m' },
-          { id: 'open-settings', keystroke: 'mod+,' },
-          { id: 'pin-translate', keystroke: 'mod+p' },
-        ],
-      },
+      ...settingsDocument(),
       profiles,
     }),
   };

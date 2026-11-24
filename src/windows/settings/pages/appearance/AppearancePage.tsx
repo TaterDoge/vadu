@@ -1,24 +1,58 @@
-import { Text, token, View } from 'nsh';
+import { cleanup, signal, Text, token, View } from 'nsh';
 import { Radio, RadioGroup } from 'nsh/base';
 
 import { buttonFrameClass } from '../../../../components/ui/buttonStyles';
 import { Kbd, KbdGroup } from '../../../../components/ui/Kbd';
+import { Settings, SettingsError } from '../../../../feature/settings';
 import {
   accents,
   appearances,
-  setThemePreferences,
-  themePreferences,
+  type AppearanceSettings,
   themeStyles,
-} from '../../../../theme';
+} from '../../../../feature/settings/appearance/config';
+import { themePreferences } from '../../../../feature/settings/appearance/theme';
 
 const choiceClass = `${buttonFrameClass} group min-w-24 flex-1 gap-1 rounded-md border-border px-3 py-2 checked:border-primary checked:bg-secondary hover:bg-accent`;
 
 export function AppearancePage() {
+  const ready = signal(false);
+  const error = signal('');
+  let mounted = true;
+  cleanup(() => {
+    mounted = false;
+  });
+
+  function report(cause: unknown) {
+    if (mounted)
+      error.set(
+        cause instanceof SettingsError
+          ? cause.message
+          : '无法访问配置，请稍后重试。',
+      );
+  }
+
+  void Settings.read().then(() => {
+    if (mounted) ready.set(true);
+  }, report);
+  async function save(patch: Partial<AppearanceSettings>) {
+    try {
+      await Settings.setAppearance(patch);
+      if (mounted) error.set('');
+    } catch (cause) {
+      report(cause);
+    }
+  }
+
   return (
     <View testID="settings-appearance-page" class="gap-6">
       <Text class="text-xs leading-5 text-muted-foreground">
-        即时应用于所有窗口；当前选择仅在本次运行期间生效。
+        外观设置应用于所有窗口，下次启动时恢复。
       </Text>
+      <If when={error()}>
+        <Text role="alert" class="text-xs text-destructive">
+          {error()}
+        </Text>
+      </If>
       <View role="group" accessibilityLabel="显示模式" class="gap-3">
         <Text
           role="header"
@@ -33,13 +67,9 @@ export function AppearancePage() {
               <Radio
                 testID={'appearance-' + option().value}
                 accessibilityLabel={option().label}
-                checked={themePreferences().appearance === option().value}
-                onChange={() =>
-                  setThemePreferences({
-                    ...themePreferences(),
-                    appearance: option().value,
-                  })
-                }
+                disabled={!ready()}
+                checked={themePreferences().mode === option().value}
+                onChange={() => save({ mode: option().value })}
                 class={
                   choiceClass + ' flex-row items-center justify-center gap-2'
                 }
@@ -65,13 +95,9 @@ export function AppearancePage() {
               <Radio
                 testID={'accent-' + option().value}
                 accessibilityLabel={option().label}
+                disabled={!ready()}
                 checked={themePreferences().accent === option().value}
-                onChange={() =>
-                  setThemePreferences({
-                    ...themePreferences(),
-                    accent: option().value,
-                  })
-                }
+                onChange={() => save({ accent: option().value })}
                 class={choiceClass + ' min-w-20 flex-row items-center gap-2'}
               >
                 <View
@@ -98,13 +124,9 @@ export function AppearancePage() {
               <Radio
                 testID={'style-' + option().value}
                 accessibilityLabel={option().label}
+                disabled={!ready()}
                 checked={themePreferences().style === option().value}
-                onChange={() =>
-                  setThemePreferences({
-                    ...themePreferences(),
-                    style: option().value,
-                  })
-                }
+                onChange={() => save({ style: option().value })}
                 class={choiceClass + ' min-w-48'}
               >
                 <Text class="text-sm font-semibold text-foreground">

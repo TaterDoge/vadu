@@ -1,11 +1,11 @@
 import { host, mount, signal, Text, View } from 'nsh';
 import { GlobalShortcut, Window } from 'nsh/desktop';
 
-import { Settings } from '../../src/settings';
+import { Settings } from '../../src/feature/settings';
 import {
   shortcutRecording,
   translateShortcutStatus,
-} from '../../src/shortcuts';
+} from '../../src/feature/settings/shortcuts/runtime';
 import { SettingsWindow } from '../../src/windows/settings/SettingsWindow';
 
 function ShortcutsFixture() {
@@ -87,8 +87,8 @@ function ShortcutsFixture() {
   host.on('minimize-translate', () => Window.get('translate')?.minimize());
   host.on('focus-settings', () => Window.get('main')?.focus());
   host.on('hide-settings', () => Window.get('main')?.hide());
-  host.on('update-local', () => {
-    void Settings.setShortcut('open-settings', 'alt+j');
+  host.on('update-appearance', () => {
+    void Settings.setAppearance({ mode: 'dark' });
   });
 
   return (

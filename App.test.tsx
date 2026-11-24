@@ -63,17 +63,23 @@ test('快捷键分类挂载独立页面，切换后不残留内容', async () =>
   expect(app.shows('id:shortcut-toggle-translate-status')).toBe(true);
   for (const id of ['toggle-translate', 'open-settings', 'pin-translate']) {
     expect(app.count(`id:shortcut-${id}`)).toBe(1);
+    expect(app.shows(`id:shortcut-${id}-enabled`)).toBe(true);
+    expect(app.enabled(`id:shortcut-${id}-enabled`)).toBe(
+      id === 'toggle-translate',
+    );
   }
   expect(app.shows('id:shortcut-open-settings-status')).toBe(true);
   expect(app.texts()).toContain('已启用');
-  expect(app.count('id:shortcut-open-settings-enabled')).toBe(0);
+  expect(app.shows('id:shortcut-toggle-translate >> text:未绑定')).toBe(true);
   expect(app.shows('id:shortcut-pin-translate >> text:已启用')).toBe(true);
   for (const [id, keys] of [
-    ['toggle-translate', ['⇧', '⌘', 'M']],
+    ['toggle-translate', ['点击录入']],
     ['open-settings', ['⌘', ',']],
     ['pin-translate', ['⌘', 'P']],
   ] as const) {
-    expect(app.enabled(`id:shortcut-${id}-input`)).toBe(true);
+    expect(app.enabled(`id:shortcut-${id}-input`)).toBe(
+      id === 'toggle-translate',
+    );
     for (const key of keys) {
       expect(app.shows(`id:shortcut-${id} >> text:${key}`)).toBe(true);
     }

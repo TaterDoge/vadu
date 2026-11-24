@@ -1,9 +1,13 @@
 import { expect, open, type OpenOptions, test } from 'nsh/test';
 
+import { defaultShortcuts, settingsDocument } from './fixtures/settings-config';
+
 const toggle = 'id:shortcut-toggle-translate-input';
 const recordingTip =
   'text:需要包含 ⌘ / Ctrl / Alt 等修饰键，主键可用字母、数字、方向键或标点键等；F1–F24 也可单独使用。';
 const reset = 'label:重置唤起翻译浮窗快捷键';
+const enabled = 'id:shortcut-toggle-translate-enabled';
+const emptyInput = `${toggle} >> text:点击录入`;
 
 async function openShortcuts(options: OpenOptions = {}) {
   const app = await open('../App.tsx', {
@@ -16,41 +20,43 @@ async function openShortcuts(options: OpenOptions = {}) {
   return app;
 }
 
-test('键帽悬停不录入，点击录入后保存完整配置，重开读取并可重置', async () => {
+test('首次打开全局键位为空，录入后重开读取自定义组合，重置后清空', async () => {
   const app = await openShortcuts();
+  expect(JSON.parse(app.storage()['vadu.config'] ?? 'null')).toEqual(
+    settingsDocument(),
+  );
+  expect(app.shows(emptyInput)).toBe(true);
+  const promptBackground = app.viewStyle(toggle)?.backgroundColor;
+  expect(promptBackground).toBeTruthy();
+  expect(app.shows('id:shortcut-open-settings-input >> text:,')).toBe(true);
+  expect(app.shows('id:shortcut-pin-translate-input >> text:P')).toBe(true);
   await app.hover(toggle);
   expect(app.shows(recordingTip)).toBe(false);
-  expect(app.storage()).toEqual({});
 
   await app.press(toggle);
   expect(app.shows(recordingTip)).toBe(true);
+  expect(app.viewStyle(toggle)?.backgroundColor).toBe(promptBackground);
   await app.keyboard.press('mod+shift+k');
   expect(app.shows(recordingTip)).toBe(false);
   expect(app.shows(`${toggle} >> text:K`)).toBe(true);
+  expect(app.viewStyle(toggle)?.backgroundColor).not.toBe(promptBackground);
   expect(app.shows('id:shortcut-toast')).toBe(false);
   const storage = app.storage();
-  expect(JSON.parse(storage['vadu.config'])).toEqual({
-    schemaVersion: 3,
-    profiles: [],
-    settings: {
-      shortcuts: [
-        { id: 'toggle-translate', keystroke: 'shift+mod+k' },
-        { id: 'open-settings', keystroke: 'mod+,' },
-        { id: 'pin-translate', keystroke: 'mod+p' },
-      ],
-    },
-  });
+  expect(JSON.parse(storage['vadu.config'])).toEqual(
+    settingsDocument([
+      { ...defaultShortcuts[0], keystroke: 'shift+mod+k' },
+      ...defaultShortcuts.slice(1),
+    ]),
+  );
 
   const reopened = await openShortcuts({ storage });
   expect(reopened.shows(`${toggle} >> text:K`)).toBe(true);
   await reopened.press(reset);
-  expect(reopened.shows(`${toggle} >> text:M`)).toBe(true);
-  expect(
-    JSON.parse(reopened.storage()['vadu.config']).settings.shortcuts[0],
-  ).toEqual({
-    id: 'toggle-translate',
-    keystroke: 'shift+mod+m',
-  });
+  expect(reopened.shows(emptyInput)).toBe(true);
+  expect(reopened.viewStyle(toggle)?.backgroundColor).toBe(promptBackground);
+  expect(JSON.parse(reopened.storage()['vadu.config'])).toEqual(
+    settingsDocument(),
+  );
 });
 
 test('重置反馈使用 Toast，重复重置刷新提示并自动关闭', async () => {
@@ -137,6 +143,7 @@ test('录制成功退出焦点，按 Enter 不会重新录入，再次点击仍�
 
 test('录制提示独立于设置项，再次点击键帽取消录入且保留原绑定', async () => {
   const app = await openShortcuts();
+  const saved = app.storage();
   await app.press(toggle);
   expect(
     app.shows(`id:shortcut-toggle-translate-tips >> ${recordingTip}`),
@@ -147,10 +154,10 @@ test('录制提示独立于设置项，再次点击键帽取消录入且保留�
   await app.press(`${toggle} >> text:请按下快捷键…`);
   expect(app.shows(recordingTip)).toBe(false);
   expect(app.shows(`${toggle} >> text:请按下快捷键…`)).toBe(false);
-  expect(app.shows(`${toggle} >> text:M`)).toBe(true);
+  expect(app.shows(emptyInput)).toBe(true);
   await app.keyboard.press('alt+k');
-  expect(app.storage()).toEqual({});
-  expect(app.shows(`${toggle} >> text:M`)).toBe(true);
+  expect(app.storage()).toEqual(saved);
+  expect(app.shows(emptyInput)).toBe(true);
 
   await app.press(toggle);
   expect(app.shows(recordingTip)).toBe(true);
@@ -159,10 +166,11 @@ test('录制提示独立于设置项，再次点击键帽取消录入且保留�
   expect(app.shows('id:shortcut-toggle-translate-tips')).toBe(false);
 });
 
-test('失焦取消后返回原键帽仍能重新录入', async () => {
+test('点击全局开关退出录入，返回原键帽仍能重新录入', async () => {
   const app = await openShortcuts();
   await app.press(toggle);
-  await app.press('id:shortcut-open-settings-input');
+  await app.press(enabled);
+  expect(app.shows(recordingTip)).toBe(false);
   await app.press(toggle);
   expect(app.shows(`${toggle} >> text:请按下快捷键…`)).toBe(true);
   expect(app.shows('id:shortcut-open-settings-input >> text:,')).toBe(true);
@@ -175,6 +183,7 @@ test('失焦取消后返回原键帽仍能重新录入', async () => {
 
 test('冲突或裸字母不保存，保持录入并允许重新输入', async () => {
   const app = await openShortcuts({ clock: {} });
+  const saved = app.storage();
   const toast = 'id:shortcut-toast';
   await app.press(toggle);
   await app.keyboard.press('mod+p');
@@ -182,7 +191,7 @@ test('冲突或裸字母不保存，保持录入并允许重新输入', async ()
     app.shows(`${toast} >> text:此快捷键已用于其他动作，请选择其他组合。`),
   ).toBe(true);
   expect(app.shows(recordingTip)).toBe(true);
-  expect(app.storage()).toEqual({});
+  expect(app.storage()).toEqual(saved);
   await app.wait(4000);
   expect(app.shows(toast)).toBe(true);
   await app.keyboard.press('k');
@@ -191,7 +200,7 @@ test('冲突或裸字母不保存，保持录入并允许重新输入', async ()
       `${toast} >> text:请按 Command / Ctrl / Alt 与其他键的组合，或 F1–F24。`,
     ),
   ).toBe(true);
-  expect(app.storage()).toEqual({});
+  expect(app.storage()).toEqual(saved);
   await app.keyboard.press('alt+k');
   expect(app.shows(`${toggle} >> text:K`)).toBe(true);
   expect(app.shows(recordingTip)).toBe(false);
@@ -220,23 +229,18 @@ test('取消录入清除错误，但不清除重置成功提示', async () => {
 for (const key of ['escape', 'tab', 'shift+tab']) {
   test(`${key} 取消录入并清理临时键表`, async () => {
     const app = await openShortcuts();
+    const saved = app.storage();
     await app.press(toggle);
     await app.keyboard.press(key);
     expect(app.shows(recordingTip)).toBe(false);
     await app.keyboard.press('mod+shift+k');
-    expect(app.storage()).toEqual({});
-    expect(app.shows(`${toggle} >> text:M`)).toBe(true);
+    expect(app.storage()).toEqual(saved);
+    expect(app.shows(emptyInput)).toBe(true);
   });
 }
 
-test('切换录入目标后旧目标失焦，切页与退后台清理键表', async () => {
+test('切页与退后台清理录入键表', async () => {
   const app = await openShortcuts();
-  await app.press(toggle);
-  await app.press('id:shortcut-open-settings-input');
-  expect(app.shows(`${toggle} >> text:M`)).toBe(true);
-  await app.keyboard.press('alt+k');
-  expect(app.shows('id:shortcut-open-settings-input >> text:K')).toBe(true);
-  expect(app.shows(`${toggle} >> text:M`)).toBe(true);
   const saved = app.storage();
 
   await app.press(toggle);
@@ -253,35 +257,36 @@ test('切换录入目标后旧目标失焦，切页与退后台清理键表', as
   expect(app.storage()).toEqual(saved);
 });
 
-test('恢复默认遇到冲突也保留原配置', async () => {
+test('关闭时可预设键位，开启遇冲突保持关闭，恢复默认只清空键位', async () => {
   const app = await openShortcuts();
+  await app.press(enabled);
   await app.press(toggle);
-  await app.keyboard.press('alt+k');
-  await app.press('id:shortcut-open-settings-input');
-  await app.keyboard.press('mod+shift+m');
+  await app.keyboard.press('mod+,');
   const saved = app.storage();
-  await app.press(reset);
+  await app.press(enabled);
   expect(
     app.shows(
       'id:shortcut-toast >> text:此快捷键已用于其他动作，请选择其他组合。',
     ),
   ).toBe(true);
-  expect(app.shows('text:快捷键已恢复默认。')).toBe(false);
   expect(app.storage()).toEqual(saved);
-  expect(app.shows(`${toggle} >> text:K`)).toBe(true);
+  expect(app.shows('id:shortcut-toggle-translate >> text:已关闭')).toBe(true);
+  await app.press(reset);
+  expect(app.shows(emptyInput)).toBe(true);
+  expect(
+    JSON.parse(app.storage()['vadu.config']).settings.shortcuts[0],
+  ).toEqual({ ...defaultShortcuts[0], enabled: false });
 });
 
-for (const raw of ['{', '{"schemaVersion":999,"settings":{}}']) {
-  test(`损坏或新版本配置不被覆盖：${raw}`, async () => {
+for (const raw of ['{', '{"settings":{}}']) {
+  test(`配置格式无效时禁用快捷键编辑并保留原值：${raw}`, async () => {
     const storage = { 'vadu.config': raw };
     const app = await openShortcuts({ storage, clock: {} });
     expect(app.enabled(toggle)).toBe(false);
     expect(app.enabled(reset)).toBe(false);
+    expect(app.enabled(enabled)).toBe(false);
     await app.wait(4000);
-    const error =
-      raw === '{'
-        ? '配置格式损坏或不受支持，原配置已保留，未覆盖。'
-        : '配置版本不受支持，请使用对应版本的应用；原配置未覆盖。';
+    const error = '配置格式损坏或不受支持，原配置已保留，未覆盖。';
     expect(app.shows(`id:shortcut-toast >> text:${error}`)).toBe(true);
     await app.drag('id:shortcut-toast', { x: 100 });
     await app.wait(500);
@@ -291,20 +296,26 @@ for (const raw of ['{', '{"schemaVersion":999,"settings":{}}']) {
 }
 
 test('存储配额不足时保留旧配置与键帽，不显示保存成功', async () => {
-  const storage = { padding: 'x'.repeat(5 * 1024 * 1024 - 'padding'.length) };
+  const config = JSON.stringify(settingsDocument());
+  const storage = {
+    'vadu.config': config,
+    padding: 'x'.repeat(
+      5 * 1024 * 1024 - 'padding'.length - 'vadu.config'.length - config.length,
+    ),
+  };
   const app = await openShortcuts({ storage });
   await app.press(toggle);
-  await app.keyboard.press('mod+shift+k');
+  await app.keyboard.press('mod+shift+f12');
   expect(app.shows('text:配置存储空间不足，修改未保存。')).toBe(true);
   expect(app.storage()).toEqual(storage);
   expect(app.shows(recordingTip)).toBe(true);
   await app.keyboard.press('escape');
-  expect(app.shows(`${toggle} >> text:M`)).toBe(true);
+  expect(app.shows(emptyInput)).toBe(true);
 });
 
 test('Windows 录入 Ctrl 组合并以可移植 mod 保存', async () => {
   const app = await openShortcuts({ platform: 'windows' });
-  expect(app.shows(`${toggle} >> text:Ctrl`)).toBe(true);
+  expect(app.shows(emptyInput)).toBe(true);
   await app.press(toggle);
   await app.keyboard.press('ctrl+shift+k');
   expect(app.shows(`${toggle} >> text:Ctrl`)).toBe(true);

@@ -1,5 +1,5 @@
 import { mount, signal, Text, View } from 'nsh';
-import '../../src/theme';
+import '../../src/feature/settings/appearance/theme';
 
 import { Button } from 'nsh/base';
 

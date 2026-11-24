@@ -6,6 +6,9 @@ import { Logo } from '../../components/Logo';
 import { buttonFrameClass } from '../../components/ui/buttonStyles';
 import { Icon } from '../../components/ui/Icon';
 import { iconHoverMotion } from '../../components/ui/motion';
+import { Settings } from '../../feature/settings';
+import { setupTheme } from '../../feature/settings/appearance/theme';
+import { setupShortcuts } from '../../feature/settings/shortcuts/runtime';
 import {
   lucideHistory,
   lucideKeyboard,
@@ -13,7 +16,6 @@ import {
   lucideServer,
   lucideSettings,
 } from '../../icons';
-import { setupShortcuts } from '../../shortcuts';
 import { setupTray } from '../../tray';
 import { AppearancePage } from './pages/appearance/AppearancePage';
 import { BackupPage } from './pages/backup/BackupPage';
@@ -58,7 +60,8 @@ type SettingsRoute = (typeof settingsPages)[number];
 
 export function SettingsWindow() {
   setupTray(currentWindow());
-  setupShortcuts();
+  setupTheme();
+  setupShortcuts(Settings.read());
   const nav = createNavStack<SettingsRoute>([settingsPages[0]]);
   const activeNav = () => nav.routes()[nav.routes().length - 1];
 

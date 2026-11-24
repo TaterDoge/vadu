@@ -1,4 +1,4 @@
-import { expect, open, test } from 'nsh/test';
+import { expect, open, type OpenOptions, test } from 'nsh/test';
 
 import { provider, providerStorage } from './fixtures/provider-config';
 
@@ -6,6 +6,7 @@ const viewport = { width: 480, height: 320, platform: 'macos' } as const;
 
 test('翻译窗口保留截图分区，原文编辑不触发翻译', async () => {
   const app = await open('./fixtures/Translate.tsx', viewport);
+  const initialStorage = app.storage();
 
   expect(app.shows('label:翻译工作台')).toBe(true);
   expect(app.shows('id:translation-toolbar')).toBe(true);
@@ -31,7 +32,7 @@ test('翻译窗口保留截图分区，原文编辑不触发翻译', async () =>
   expect(app.value('id:translation-source-input')).toBe('a\n待翻译的文本');
   expect(app.shows('id:translation-result >> text:翻译结果')).toBe(true);
   expect(app.requests()).toEqual([]);
-  expect(app.storage()).toEqual({});
+  expect(app.storage()).toEqual(initialStorage);
 });
 
 test('浮窗仅列出已启用、已设模型且协议已接入的配置，必须手动选择', async () => {
@@ -52,6 +53,93 @@ test('浮窗仅列出已启用、已设模型且协议已接入的配置，必�
   ]);
   await app.press('text:本轮服务 · demo-model');
   expect(app.enabled('id:translation-submit')).toBe(true);
+});
+
+const readyProfile = provider('ready', '本轮服务', {
+  headers: '{"X-Profile":"ready"}',
+  providerOptions: '{"max_tokens":40}',
+});
+const translationKey = 'fake-translation-key';
+const completionRoute = `POST ${readyProfile.baseUrl}/chat/completions`;
+const sseHeaders = { 'content-type': 'text/event-stream; charset=utf-8' };
+const result = 'id:translation-result';
+
+async function openReadyTranslation(network: OpenOptions['network']) {
+  const app = await open('./fixtures/Translate.tsx', {
+    ...viewport,
+    storage: {
+      ...providerStorage(readyProfile),
+      'vadu.secret.ready': JSON.stringify({
+        base_url: readyProfile.baseUrl,
+        key: translationKey,
+      }),
+    },
+    network,
+    clock: {},
+  });
+  await app.type('id:translation-source-input', 'Fake source');
+  await app.press('id:translation-provider');
+  await app.press('text:本轮服务 · demo-model');
+  return app;
+}
+
+test('翻译解析 SSE 分段，流提前结束时保留部分结果并显示安全错误', async () => {
+  const first =
+    ': heartbeat\r\n\r\ndata: {"choices":[\r\ndata: {"delta":{"content":"原"}}]}\r\n\r\n';
+  const second =
+    'data: {"choices":[{"delta":{"content":"文"},"finish_reason":"stop"}]}\n\n';
+  let incomplete = false;
+  const app = await openReadyTranslation({
+    [completionRoute]: () => ({
+      headers: sseHeaders,
+      body: incomplete ? first : first + second + 'data: [DONE]\n\n',
+    }),
+  });
+  await app.press('label:翻译');
+  await app.waitFor(`${result} >> text:原文`);
+  await app.waitFor('label:翻译');
+  expect(app.requests()).toHaveLength(1);
+  expect(app.requests()[0].headers).toMatchObject({
+    accept: 'text/event-stream',
+    authorization: `Bearer ${translationKey}`,
+    'x-profile': 'ready',
+  });
+  const body = JSON.parse(app.requests()[0].body!);
+  expect(body).toMatchObject({
+    model: 'demo-model',
+    max_tokens: 40,
+    stream: true,
+  });
+  expect(body.messages[0].content).toContain('Simplified Chinese');
+  expect(body.messages[1]).toEqual({ role: 'user', content: 'Fake source' });
+
+  incomplete = true;
+  await app.press('label:翻译');
+  await app.waitFor(`${result} >> text:服务商返回的响应格式无效或不完整。`);
+  expect(app.shows(`${result} >> text:原`)).toBe(true);
+  expect(app.enabled('label:翻译')).toBe(true);
+});
+
+test('取消翻译后丢弃迟到的响应，并可重试同一服务商', async () => {
+  const chunk = 'data: {"choices":[{"delta":{"content":"译文"}}]}\n\n';
+  const app = await openReadyTranslation({
+    [completionRoute]: {
+      headers: sseHeaders,
+      body: chunk + 'data: [DONE]\n\n',
+      delay: 500,
+    },
+  });
+  await app.press('label:翻译');
+  await app.waitUntil(() => app.requests().length === 1);
+  await app.press('label:取消翻译');
+  await app.wait(600);
+  expect(app.shows(`${result} >> text:已取消翻译`)).toBe(true);
+  expect(app.shows(`${result} >> text:译文`)).toBe(false);
+
+  await app.press('label:翻译');
+  await app.waitFor(`${result} >> text:译文`);
+  expect(app.requests()).toHaveLength(2);
+  expect(app.shows(`${result} >> text:已取消翻译`)).toBe(false);
 });
 
 test('有原文时可完整复制并清空，空白时工具置灰禁用', async () => {

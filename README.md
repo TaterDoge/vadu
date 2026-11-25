@@ -16,8 +16,9 @@
 ```text
 App.tsx                                  # 挂载设置主窗口
 src/windows/settings/SettingsWindow.tsx   # 设置侧栏与内容路由
-src/components/ui/Item.tsx                # 可复用设置项容器
-theme.json                               # shadcn 语义 token、深浅配色与强调色色板
+components/ui/                           # shadcn-nsh 组件
+lib/ui/                                  # shadcn-nsh 主题、样式与图标工具
+theme.json                               # 深浅配色、语义 token 与强调色色板
 src/windows/settings/pages/              # 分类页、服务商配置、外观与快捷键
 src/feature/settings/index.ts            # 窗口与翻译业务调用的 Settings 入口
 src/feature/settings/store.ts            # 整包读写、串行更新与响应式快照
@@ -34,26 +35,9 @@ src/api/translation.ts                   # 翻译请求与 Chat Completions 解�
 src/api/translation-task.ts              # 翻译事件、请求生命周期与取消
 ```
 
-设置窗口采用左右布局，侧栏包含品牌区与线框图标，使用常驻 MenuItem；NSH 0.5 的 Menu 是弹层，不适用于常驻导航。内容通过 `nsh/base` 的 NavStack / NavPage 路由。通用、服务商、外观、快捷键、备份恢复五个一级分类通过 `replace` 切换，默认通用，不累积返回历史；键盘通过 Tab 移动焦点、Enter / Space 激活。主窗口不提供翻译工作台入口；全局快捷键调用 `openTranslateWindow()` 创建或重用独立窗口并聚焦。`App.test.tsx` 覆盖品牌与默认页、分类切换、无返回历史、矮窗口滚动、尺寸变化与键盘导航；独立翻译窗口的唤起按钮仅存在于测试 fixture。
+设置侧栏使用 shadcn-nsh 的固定 Sidebar，内容由 NavStack / NavPage 承载。通用、服务商、外观、快捷键、备份恢复五个一级分类通过 `replace` 切换，默认通用。键盘用 Tab 移动焦点，Enter 或 Space 激活。全局快捷键调用 `openTranslateWindow()` 聚焦独立翻译窗。侧栏滚动、缩放与键盘导航由 `App.test.tsx` 覆盖。
 
-`Item` 用 NSH 的 `View` / `Text` 构建，`title` 必填，`description`、`media`、`actions` 可选；原生属性（如 `testID`、`style`、`class`、事件与可访问属性）继续透传到根容器。内容与操作区按可用宽度换行，业务状态由调用方拥有，不引入 React / shadcn 运行时。
-
-```tsx
-import { Item } from './src/components/ui/Item';
-
-<Item
-  title="设置项标题"
-  description="设置项说明"
-  media={<Image src={icon} class="h-5 w-5" />}
-  actions={
-    <Switch
-      checked={enabled()}
-      onChange={({ checked }) => enabled.set(checked)}
-      accessibilityLabel="启用设置项"
-    />
-  }
-/>;
-```
+组件源码由 CLI 写入项目，registry 固定在 v0.10.0。新增通用控件前先查现有组件，按需运行 `npx shadcn-nsh@0.10.0 add <组件名>`。复制组件的来源与许可见 [NOTICE](./NOTICE)、[shadcn-nsh MIT](./assets/licenses/shadcn-nsh-LICENSE.txt)、[NSH Apache-2.0](./assets/licenses/NSH-LICENSE-APACHE.txt)。
 
 ## 菜单栏托盘
 
@@ -63,13 +47,11 @@ import { Item } from './src/components/ui/Item';
 
 ## 原生主题
 
-设置 → 外观可选择浅色、深色或跟随系统，支持中性、蓝色、翠绿、琥珀、玫红、紫色六种强调色，以及 Nova / Lyra 两种风格。默认跟随系统、中性色、Nova；切换即时作用于设置与翻译窗口，切页或重开翻译窗口不重置。启动时从 `vadu.config` 恢复已保存的选择。
+设置 → 外观可选择浅色、深色或跟随系统，支持默认色、蓝色、翠绿、琥珀、玫红、紫色六种强调色，以及 Nova / Lyra 两种风格。默认跟随系统、使用预设的黄绿色和 Nova。切换即时作用于设置与翻译窗口，启动时从 `vadu.config` 恢复已保存的选择。
 
-- `nsh.json` 通过 `theme` 加载 `theme.json`，使用 NSH 的 `setTheme` / `setColorScheme`，不引入 CSS、React 或 shadcn 运行时。
-- `theme.json` 是颜色的单一来源；色块预览也读取对应 token。非中性色只覆盖强调色及配对前景色，琥珀色始终使用深色文字。
-- Nova 使用 Geist Mono；Lyra 使用 JetBrains Mono，仅切换字体，不再改变字号与圆角。两种字体随应用打包，来源与 OFL 许可证见 `assets/fonts/`；快捷键符号使用 Lucida Grande，缺字由平台回退。
-- 新 UI 的颜色使用 `bg-background`、`text-foreground`、`border-border` 等语义类，不写死主题颜色；字号、行高、圆角与间距使用 `text-sm`、`leading-5`、`rounded-md`、`p-4` 等 NSH 内置类，不再定义主题尺寸 token。SVG 图标用原生 `tintColor` 跟随颜色 token。
-- 原生滚动条宽 6pt，滑块使用前景色 20% / 悬停 35% 透明度。不设置 ring 样式；键盘焦点使用可见边框。窗口拖拽沿用原生 `desktop.windowDrag`，不迁入浏览器的 View Transition 或 `-webkit-*` 规则。
+- 构建预设为 shadcn-nsh v0.10.0 的 NSH Gallery UI，由 `init --theme default` 生成，`nsh-ui.json` 中记录为 `"theme": "theme"`。切换预设时同步更新 `theme.json` 的配色和 `lib/ui/semantics.json` 的控件尺寸和交互样式。外观设置通过 `selectTheme` 应用强调色和字体，通过 `setColorScheme` 应用显示模式。琥珀色使用深色前景。
+- Nova 使用 Geist Mono，Lyra 使用 JetBrains Mono。两种字体随应用打包，来源与 OFL 许可证见 `assets/fonts/`。键帽修饰键符号使用 Lucida Grande。
+- 组件采用 Gallery 的圆角、渐变和阴影，按钮的键盘焦点沿用 Gallery 预设，使用 `ring` 色边框和 3 点半透明光环。普通输入框的焦点边框使用当前强调色。滚动条沿用 NSH 原生实现，窗口拖拽使用 `desktop.windowDrag`。
 
 ## 配置并开始翻译
 
@@ -88,6 +70,14 @@ import { Item } from './src/components/ui/Item';
 
 “唤起翻译浮窗”默认开启、键位为空。录入后立即注册，关闭开关会释放组合，重新开启会沿用已保存的键位。恢复默认会清空键位，保留开关状态。重复按键会聚焦同一浮窗。未固定时，点击其他窗口或切换 Space 使浮窗失焦时会自动隐藏。macOS 上，浮窗聚焦时也可按 `⌘W` 隐藏，下次唤起保留原文。若已将 `⌘W` 分配给其他快捷键，优先使用已保存的绑定。设置窗口隐藏后快捷键仍有效。录入期间暂停全局与局内动作，取消后恢复，设置窗口卸载时统一清理绑定。全局项显示实际注册状态。注册失败会保留已保存的组合，可换键或释放占用后重新开启。
 
+使用 Rift 管理虚拟工作区时，可将翻译窗排除在工作区分配之外。在 `~/.config/rift/config.toml` 的 `virtual_workspaces.app_rules` 中添加以下规则，匹配 NSH 开发宿主中的翻译窗标题。
+
+```toml
+{ app_name = "nsh", title_regex = "^vadu 翻译$", manage = false },
+```
+
+执行 `rift-cli execute config reload` 后重开 vadu，使翻译窗使用新标题。
+
 “浮窗内打开设置”默认 `mod+,`（macOS 为 Command + 逗号），仅翻译窗口聚焦时生效；显示并聚焦原设置窗口，保留当前分类，也可恢复隐藏或最小化的设置窗口。翻译窗失焦、隐藏或关闭时解绑。
 
 “浮窗内切换固定窗口”默认 `mod+p`（macOS 为 `⌘P`），也可点击浮窗工具栏的图钉。固定后窗口置顶，切换到其他应用仍保持可见。再次触发即取消固定，恢复失焦自动隐藏。关闭后重新打开默认未固定。
@@ -96,7 +86,7 @@ import { Item } from './src/components/ui/Item';
 
 Settings 通过同一队列提交三个模块的修改，服务商密钥独立存储。`nsh` CLI 负责构建平台宿主和打包应用。
 
-界面和托盘共用 `src/icons.ts` 内按需生成的图标。健康检测期间，按钮前的 Lucide 心电图切换为三点动画。桌面端按 `svg-spinners:3-dots-scale` 的节奏用 NSH 原生动画依次缩放圆点；开启系统“减少动态效果”时显示原版静态图标。`bun install` 从 `vendor/nsh-icons` 安装[上游 TSX 包](https://github.com/SuperNSH/icons/tree/95c1f04bef7e853309081f04039a5db2471b9107/packages/nsh-icons)。新增图标可运行 `bun run icons:add lucide:heart`，再运行 `bun fmt src/icons.ts`。图标许可见 [Hugeicons LICENSE](./assets/licenses/Hugeicons-LICENSE.txt)、[Lucide LICENSE](./assets/licenses/Lucide-LICENSE.txt) 和 [SVG Spinners LICENSE](./assets/licenses/SVG-Spinners-LICENSE.txt)。
+界面图标使用 `lucide` 和 shadcn-nsh 的 Icon。健康检测期间，按钮显示 Spinner，并遵循系统的减少动态效果设置。原生托盘使用 `src/icons.ts` 中的 Hugeicons 图标，由 `vendor/nsh-icons` 生成。许可见 [Hugeicons](./assets/licenses/Hugeicons-LICENSE.txt) 与 [Lucide](./assets/licenses/Lucide-LICENSE.txt)。
 
 ```sh
 bun install --frozen-lockfile # 安装依赖

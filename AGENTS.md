@@ -26,7 +26,7 @@ nsh package --target macos    # 默认输出到 .nsh/out/
 
 - **设置与托盘**　`App.tsx` 挂载 `src/windows/settings/SettingsWindow.tsx`。设置页放在 `src/windows/settings/pages/`。一级分类用 `nav.replace`，选中态取自路由栈。保留侧栏独立滚动。`src/tray.ts` 配合 `nsh.json` 实现主窗口关闭时隐藏、从托盘聚焦原窗口。
 - **快捷键与翻译浮窗**　动作、作用域、注册和清理集中在 `src/feature/settings/shortcuts/runtime.ts`。录入期间暂停绑定，局内动作仅在浮窗聚焦时生效，全局动作显示实际注册结果。快捷键唤起或聚焦 `src/windows/translate/TranslateWindow.tsx` 的独立窗口；设置导航不添加翻译入口。
-- **界面与主题**　使用 NSH 的 `signal`、`effect`、`cleanup` 和 `nsh/base`。元素条件渲染优先 `<If>`，列表用 `<Each>`。复用 `src/components/ui/` 的 `Item`、`Kbd`，业务状态归页面。颜色取 `theme.json` 语义 token。界面图标通过 `src/components/ui/Icon.tsx` 渲染 `src/icons.ts` 中的 Lucide 数据，尺寸以点指定。保留可访问名称、可见键盘焦点和原生拖拽，不设 ring。注释用中文说明原因。
+- **界面与主题**　优先使用 `components/ui/` 的 shadcn-nsh 组件和 `lib/ui/theme.ts` 的语义样式。用 `npx shadcn-nsh@0.10.0 add <组件名>` 按需添加，registry 版本取 `nsh-ui.json`。业务状态归页面，响应式使用 NSH 的 `signal`、`effect`、`cleanup`，条件和列表优先用 `<If>`、`<Each>`。界面图标通过 `lib/ui/icons.tsx` 渲染 `lucide` 图标，尺寸以点指定。保留可访问名称、shadcn-nsh 预设键盘焦点样式和原生拖拽。注释用中文说明原因。
 - **服务商与翻译**　服务商编辑在 `src/windows/settings/pages/providers/`。`src/feature/settings/providers/` 管理 Profile、接口地址校验及与地址绑定的密钥。请求实现集中在 `src/api/`。`request.ts` 和 `stream.ts` 提供 JSON 与 SSE 接口，`models.ts` 和 `translation.ts` 实现 Chat Completions 业务请求，`translation-task.ts` 管理翻译生命周期。
 
 ## 配置、凭据与任务边界

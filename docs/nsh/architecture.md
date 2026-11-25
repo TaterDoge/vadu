@@ -18,11 +18,13 @@ NSH 自有窗口由同一个应用 engine 渲染，共享响应式状态与模�
 
 因此，两扇应用窗口可以共用视图状态，不需要互发窗口消息。普通配置统一由 TS 设置模块读取、校验和更新；UI 中的共享状态只是视图快照，不能绕过保存校验。
 
-`App.tsx` 只挂载设置主窗口；TSX 窗口实现分别放在 `src/windows/settings/SettingsWindow.tsx` 与 `src/windows/translate/TranslateWindow.tsx`。设置窗口采用左右布局，侧栏是常驻 MenuItem 导航（Menu 本身是弹层，不作为侧栏容器），内容使用 `NavStack` / `NavPage`；五个一级分类用 `replace` 切换，不累积返回历史，选中态直接来自路由栈。
+`App.tsx` 挂载设置主窗口。窗口 TSX 分别位于 `src/windows/settings/SettingsWindow.tsx` 和 `src/windows/translate/TranslateWindow.tsx`。设置窗口使用 shadcn-nsh 的固定 Sidebar 和 NavStack / NavPage。五个一级分类用 `replace` 切换，选中态来自路由栈。SidebarContent 独立滚动。
 
 五个设置分类各自使用 `src/windows/settings/pages/<分类>/` 下的独立 Page 组件，路由配置通过 `render` 统一挂载当前页，不为快捷键页单独分支。`SettingsWindow.tsx` 负责侧栏、路由、滚动容器与内容区的可访问名称，不再渲染公共标题、分类说明或业务未迁移提示。快捷键页通过 NSH keymap 录入全局组合，通过 TS Settings 保存键位和开关或清空键位。局内键帽和开关只读。`src/feature/settings/shortcuts/runtime.ts` 集中声明已实现动作的 ID、作用域与执行函数，由 `setupShortcuts` 统一观察已保存组合：全局作用域使用 NSH GlobalShortcut，窗口作用域通过响应式 `Window.get` / `state` 仅在目标窗口可见且聚焦时使用 NSH keymap。翻译窗组件不再读取快捷键配置或维护绑定；录入期间两类动作均暂停，管理器卸载时统一清理，重挂时可重新绑定仍打开的翻译窗；外观页提供显示模式、强调色与 Nova / Lyra 风格切换；服务商页管理翻译 Profile 与本地存储中的 API Key，通过 TypeScript 请求模块查询模型。通用与备份恢复页为空容器。
 
-主题由 `theme.json` 定义，`src/feature/settings/appearance/theme.ts` 用 NSH 的 `setTheme` / `setColorScheme` 更新应用级 token；两窗口共享主题及当前选择，不传窗口消息。字体随应用打包；现有容器、文字、图标与滚动条读取语义颜色 token，字号、行高、圆角与间距使用 NSH 内置类。文本输入的常态边框使用 `input`，聚焦时切换到 `ring` 颜色。搜索栏、密钥框和翻译原文区由外层容器统一绘制边框，样式集中在 `src/components/ui/inputStyles.ts`。按钮在按下或键盘聚焦时使用同一 `ring` 色细边框，普通按钮、图标按钮和选择器触发器复用 `src/components/ui/buttonStyles.ts`。服务商列表以整行底色和半粗体名称标记选中项，键盘焦点通过底色区分。外观页只提交改动的字段。启动读取和保存成功时，主题监听器把快照中的 `settings.appearance` 应用于两个窗口。
+两窗口共享 NSH Gallery UI 的语义 token 和组件样式。`nsh-ui.json` 记录构建预设 `theme`，`theme.json` 提供实际配色。`src/feature/settings/appearance/theme.ts` 读取 `settings.appearance`，用 `selectTheme` 应用强调色和字体，用 `setColorScheme` 应用显示模式。组件的尺寸和交互样式来自 `lib/ui/semantics.json`。按钮的键盘焦点沿用预设的 `focusRing()` 样式。设置页输入框使用当前强调色绘制焦点边框。翻译浮窗的原文编辑区与下方工具栏共用 1pt 外边框，默认透明，悬停使用 `border` 色，面板内聚焦时使用 `muted-foreground` 色。文本光标提示编辑位置，工具按钮保留独立的键盘焦点轮廓。输入、弹层、通知和图标使用 registry 组件或其样式工具。
+
+翻译浮窗使用 shadcn-nsh 的 `TitleBar` 拖拽窗口，两个工具按钮沿用 `IconButton`。设置窗口的拖拽区域覆盖可滚动的侧栏，横向 `TitleBar` 无法覆盖这块区域，固定 `Sidebar` 因此透传 `desktop.windowDrag`。快捷键录入使用 `Kbd`，外层 NSH `View` 在失焦时取消录入。服务商列表每行只有一个 Tab 焦点，`buttonLook` 的焦点环包住拖拽手柄、名称和状态。手柄通过原生 responder 拖拽排序，整行提供上移 / 下移辅助操作。列表与详情的滚动区各为焦点环预留 4 点。翻译结果用原生 `Scroll` 和可选文本呈现流式结果。托盘使用 `nsh/desktop` 的 `Tray` 和原生图像。
 
 翻译工作台定位为只通过快捷键唤起，不接入设置主窗口导航。当前 `openTranslateWindow()` 通过 `Window.open` 使用固定 ID `translate` 创建或重用翻译窗口，再聚焦；不设置父窗口。窗口类型与层级约束见[窗口与导航范围](../nsh-migration.md#2-窗口与导航范围)，不把翻译窗聚焦等同于激活整个应用。未固定的浮窗失焦时调用 `hide()` 并保留输入。固定后使用 `aboveDock` 层级，失焦时保持可见。设置窗口挂载时，仅为开启且有键位的全局项注册快捷键。隐藏设置窗口时保持注册，关闭开关或清空键位时释放组合，录入时暂停，卸载时注销并忽略过期回调。窗口切换与注册生命周期已有 headless 测试。macOS 原生测试宿主已用本地服务确认浮窗隐藏和关闭时断开上游连接。跨应用热键与其他桌面后端的原生行为仍需验证。
 
@@ -73,7 +75,7 @@ NSH 自有窗口由同一个应用 engine 渲染，共享响应式状态与模�
 | 唤起浮窗、编辑、复制、固定   | `openTranslateWindow` 复用固定窗口 ID。`TranslateInput` 持有输入引用并调用剪贴板，图钉更新窗口层级                                                                                   | 空输入禁用操作，复制失败显示提示，未固定失焦隐藏，关闭释放窗口状态                                                         | TranslateWindow、AppShortcuts、GlobalShortcuts     |
 | 提交翻译、收取增量、取消     | 浮窗明确选择 Profile 和语言。`translation-session.ts` 保存本窗活动 ID 与显示结果，`translation-task.ts` 按请求登记回调与中止控制器，`translation.ts` 从 `stream.ts` 读取 SSE         | 拒绝受理直接返回错误。受理后每个请求各有一个终态。取消、隐藏、关闭或卸载先使本窗 ID 失效，再中止请求，保留已显示的部分译文 | TranslationTask、TranslateWindow、AppShortcuts     |
 
-快捷键页与服务商编辑器复用 `PageToast.tsx` 的显示、消退和定时器清理，每个页面实例持有自己的通知。`translation-languages.ts` 同时提供选择器标签和翻译指令的目标语言名，增删语言只需修改一处。
+快捷键页与服务商编辑器通过 shadcn-nsh 的 `toast` 更新各自的通知，卸载时按 ID 清除。设置窗口的 `Toaster` 统一呈现通知。`translation-languages.ts` 同时提供选择器标签和翻译指令的目标语言名，增删语言只需修改一处。
 
 ## 4. 业务调用与平台 API
 

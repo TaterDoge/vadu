@@ -104,7 +104,7 @@ export function ShortcutsPage() {
   }
 
   function shortcutLabel(id: string) {
-    if (isRecording(id)) return '请按下快捷键…';
+    if (isRecording(id)) return '请按下快捷键';
     const binding = bindingFor(id);
     if (!binding) return '不可用';
     return binding.keystroke === null
@@ -120,11 +120,14 @@ export function ShortcutsPage() {
     cancelledByBlur = null;
   }
 
-  function cancel() {
+  function cancel(releaseFocus = true) {
+    const field = recordingField;
     clearBlurCancellation();
     recording.set(null);
     shortcutRecording.set(false);
     recordingField = undefined;
+    // 先结束录入再失焦，避免 blur 取消逻辑吞掉下一次点击。
+    if (releaseFocus) field?.blur();
     dismissPersistent();
   }
 
@@ -144,19 +147,14 @@ export function ShortcutsPage() {
 
   function handleRecordingBlur(id: string) {
     if (!isRecording(id)) return;
-    cancel();
+    cancel(false);
     // macOS 先失焦再派发点击，避免同次点击重新开始录制。
     cancelledByBlur = id;
   }
 
   async function save(id: string, keystroke: string) {
     if (await apply(() => Settings.setShortcut(id, keystroke))) {
-      if (recording() === id) {
-        const field = recordingField;
-        // 先结束录入再失焦，避免 blur 取消逻辑吞掉下一次点击。
-        cancel();
-        field?.blur();
-      }
+      if (recording() === id) cancel();
     }
   }
 
@@ -183,9 +181,11 @@ export function ShortcutsPage() {
       ),
       { when: 'always' },
     );
-    const stopEscape = keymap.bind('escape', cancel, { when: 'always' });
+    const stopEscape = keymap.bind('escape', () => cancel(), {
+      when: 'always',
+    });
     const stopTab = keymap.bind(
-      { tab: cancel, 'shift+tab': cancel },
+      { tab: () => cancel(false), 'shift+tab': () => cancel(false) },
       { when: 'always', passThrough: true },
     );
     return () => {
@@ -223,7 +223,7 @@ export function ShortcutsPage() {
                   bindingFor(shortcut().id)?.keystroke === null;
                 const enabled = () =>
                   bindingFor(shortcut().id)?.enabled ?? false;
-                const recordingButton = buttonLook('ghost', { size: 'sm' });
+                const recordingButton = buttonLook('ghost', { size: 'lg' });
 
                 return (
                   <>
@@ -290,20 +290,20 @@ export function ShortcutsPage() {
                           onPress={() => toggleRecording(shortcut().id, field)}
                           onBlur={() => handleRecordingBlur(shortcut().id)}
                         >
-                          <KbdGroup>
-                            <If
-                              when={showPrompt()}
-                              else={
+                          <If
+                            when={showPrompt()}
+                            else={
+                              <KbdGroup>
                                 <Each of={shortcutKeys(shortcut().id)}>
                                   {(key) => <Kbd>{key()}</Kbd>}
                                 </Each>
-                              }
-                            >
-                              <Kbd style={{ minWidth: 96 }}>
-                                {shortcutLabel(shortcut().id)}
-                              </Kbd>
-                            </If>
-                          </KbdGroup>
+                              </KbdGroup>
+                            }
+                          >
+                            <Text class="px-2 text-xs font-medium text-muted-foreground">
+                              {shortcutLabel(shortcut().id)}
+                            </Text>
+                          </If>
                         </View>
                         <If when={isGlobal()}>
                           <IconButton
@@ -316,16 +316,6 @@ export function ShortcutsPage() {
                             <Icon icon={RotateCcw} {...iconButtonGlyph()} />
                           </IconButton>
                         </If>
-                        <Text
-                          testID={'shortcut-' + shortcut().id + '-status'}
-                          class="max-w-48 text-xs leading-5 text-muted-foreground"
-                        >
-                          {isGlobal()
-                            ? translateShortcutStatus()
-                            : enabled()
-                              ? '已启用'
-                              : '未启用'}
-                        </Text>
                         <Switch
                           testID={'shortcut-' + shortcut().id + '-enabled'}
                           accessibilityLabel={
@@ -352,8 +342,7 @@ export function ShortcutsPage() {
                       <Alert testID={'shortcut-' + shortcut().id + '-tips'}>
                         <AlertDescription>
                           需要包含 ⌘ / Ctrl / Alt
-                          等修饰键，主键可用字母、数字、方向键或标点键等；F1–F24
-                          也可单独使用。
+                          等修饰键，主键可用字母、数字、方向键或标点键等；
                         </AlertDescription>
                       </Alert>
                     </If>

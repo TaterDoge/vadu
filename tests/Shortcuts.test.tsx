@@ -105,12 +105,14 @@ test('重置 Toast 悬停暂停计时并可滑动关闭', async () => {
 test('键盘可用 Enter 或 Space 开始录入，并保存功能键', async () => {
   const app = await openShortcuts();
   await app.press(toggle);
-  await app.keyboard.press('escape');
-  await app.keyboard.press('shift+tab');
   await app.keyboard.press('tab');
+  expect(app.shows(recordingTip)).toBe(false);
+  await app.keyboard.press('shift+tab');
   await app.keyboard.press('enter');
   expect(app.shows(recordingTip)).toBe(true);
-  await app.keyboard.press('escape');
+  await app.keyboard.press('shift+tab');
+  expect(app.shows(recordingTip)).toBe(false);
+  await app.keyboard.press('tab');
   await app.keyboard.press('space');
   expect(app.shows(recordingTip)).toBe(true);
   await app.keyboard.press('f12');
@@ -224,6 +226,18 @@ test('取消录入清除错误，但不清除重置成功提示', async () => {
   await app.keyboard.press('escape');
   await app.wait(500);
   expect(app.shows(toast)).toBe(false);
+});
+
+test('Esc 取消录入后释放焦点，按 Enter 不会重新录入', async () => {
+  const app = await openShortcuts();
+  await app.press(toggle);
+  expect(app.shows(recordingTip)).toBe(true);
+  await app.keyboard.press('escape');
+  expect(app.shows(recordingTip)).toBe(false);
+  await app.keyboard.press('enter');
+  expect(app.shows(recordingTip)).toBe(false);
+  await app.press(toggle);
+  expect(app.shows(recordingTip)).toBe(true);
 });
 
 for (const key of ['escape', 'tab', 'shift+tab']) {

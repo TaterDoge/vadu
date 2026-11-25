@@ -55,6 +55,55 @@ test('翻译窗口首次唤起即把键盘输入交给原文输入', async () =>
   expect(app.value('id:translation-source-input')).toBe('a');
 });
 
+test('浮窗可用 Tab 到达并激活主要控件', async () => {
+  const app = await openWindows({
+    storage: providerStorage(provider('ready', '键盘测试服务')),
+    network: {
+      'POST https://example.com/v1/chat/completions': {
+        headers: { 'content-type': 'text/event-stream' },
+        body: 'data: {"choices":[{"delta":{"content":"键盘译文"}}]}\n\ndata: [DONE]\n\n',
+      },
+    },
+  });
+  const key = (keys: string) => app.keyboard.press(keys);
+  const input = 'id:translation-source-input';
+  await app.host.send('open-translate');
+
+  await key('shift+tab');
+  await key('shift+tab');
+  await key('space');
+  expect(app.shows('label:取消固定窗口')).toBe(true);
+  await key('space');
+  expect(app.shows('label:固定窗口')).toBe(true);
+
+  await key('tab'); // 打开设置
+  await key('tab'); // 原文
+  await key('a');
+  expect(app.value(input)).toBe('a');
+  await key('tab'); // 复制原文
+  await key('tab'); // 清空原文
+  await key('space');
+  expect(app.value(input)).toBe('');
+  await key('b');
+  expect(app.value(input)).toBe('b');
+
+  await key('tab'); // 复制原文
+  await key('tab'); // 清空原文
+  await key('tab'); // 目标语言
+  await key('enter');
+  await app.waitFor('text:繁體中文');
+  await key('escape');
+  await key('tab'); // 翻译服务商
+  await key('enter');
+  await app.waitFor('text:键盘测试服务 · demo-model');
+  await key('down');
+  await key('enter');
+  expect(app.enabled('id:translation-submit')).toBe(true);
+  await key('tab'); // 翻译
+  await key('space');
+  await app.waitFor('id:translation-result >> text:键盘译文');
+});
+
 test('翻译窗口 Command + W 隐藏窗口，重新唤起后保留原文与输入焦点', async () => {
   const app = await openWindows();
   await app.host.send('open-translate');

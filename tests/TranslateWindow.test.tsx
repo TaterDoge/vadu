@@ -160,10 +160,11 @@ test('有原文时可完整复制并清空，空白时工具置灰禁用', async
   }
   const original = ' 第一行\n第二行 ';
   await app.type(input, '第一行\n第二行 ');
-  for (const tool of tools) {
+  for (const tool of [copy, clear]) {
     expect(app.viewStyle(tool)?.opacity).toBe(1);
   }
 
+  expect(app.viewStyle(read)?.opacity).toBeLessThan(1);
   expect(app.enabled(read)).toBe(false);
   expect(app.enabled(copy)).toBe(true);
   expect(app.enabled(clear)).toBe(true);
@@ -208,19 +209,24 @@ test('翻译窗口使用语义配色，跟随系统切换深浅主题', async ()
   const app = await open('./fixtures/Translate.tsx', {
     ...viewport,
     colorScheme: 'light',
+    storage: providerStorage(readyProfile),
   });
 
-  expect(app.spanStyle('text:简体中文').color).toBe('#0a0a0aff');
+  await app.type('id:translation-source-input', '原文');
+  await app.press('id:translation-provider');
+  await app.press('text:本轮服务 · demo-model');
+  expect(app.enabled('label:翻译')).toBe(true);
+  expect(app.spanStyle('text:简体中文').color).toBe('#101319ff');
   expect(app.spanStyle('id:translation-submit >> text:翻译').color).toBe(
-    '#ffffffff',
+    '#13160cff',
   );
-  expect(app.spanStyle('text:翻译结果').color).toBe('#737373ff');
+  expect(app.spanStyle('text:翻译结果').color).toBe('#5f636aff');
   await app.setColorScheme('dark');
-  expect(app.spanStyle('text:简体中文').color).toBe('#fafafaff');
+  expect(app.spanStyle('text:简体中文').color).toBe('#eeeff1ff');
   expect(app.spanStyle('id:translation-submit >> text:翻译').color).toBe(
-    '#0a0a0aff',
+    '#13160cff',
   );
-  expect(app.spanStyle('text:翻译结果').color).toBe('#a1a1a1ff');
+  expect(app.spanStyle('text:翻译结果').color).toBe('#9a9ea5ff');
 });
 
 test('翻译窗口缩放后保留输入、操作行与结果分区', async () => {

@@ -1,3 +1,4 @@
+import { Eye, EyeOff } from 'lucide';
 import {
   cleanup,
   computed,
@@ -7,18 +8,22 @@ import {
   Text,
   View,
 } from 'nsh';
-import { Input } from 'nsh/base';
 import { currentWindow } from 'nsh/desktop';
 
-import { IconButton } from '../../../../components/IconButton';
-import { inputFrameClass } from '../../../../components/ui/inputStyles';
+import { IconButton, iconButtonGlyph } from '@/components/ui/button';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@/components/ui/input-group';
+import { Icon } from '@/lib/ui/icons';
+
 import {
   providerConnectionsSupported,
   Settings,
   SettingsError,
 } from '../../../../feature/settings';
 import type { ProviderProfile } from '../../../../feature/settings/providers/config';
-import { lucideEye, lucideEyeOff } from '../../../../icons';
 import { hintClass, providerHeadingClass } from './providerStyles';
 
 export function ProviderKeyField(props: {
@@ -74,10 +79,8 @@ export function ProviderKeyField(props: {
   return (
     <View class="gap-1.5">
       <Text class={providerHeadingClass}>API Key</Text>
-      <View
-        class={`${inputFrameClass} h-8 min-w-0 flex-row items-center gap-1 rounded-lg bg-background pr-1`}
-      >
-        <Input
+      <InputGroup>
+        <InputGroupInput
           testID="provider-api-key"
           accessibilityLabel="API Key"
           masked={!keyVisible()}
@@ -87,16 +90,17 @@ export function ProviderKeyField(props: {
           value={apiKey()}
           onChange={({ value }) => changeKey(value)}
           disabled={!providerConnectionsSupported || props.busy}
-          class="h-full min-w-0 flex-1 pl-2.5 text-sm text-foreground placeholder:text-muted-foreground"
         />
-        <IconButton
-          label={keyVisible() ? '隐藏密钥' : '显示密钥'}
-          icon={keyVisible() ? lucideEyeOff : lucideEye}
-          disabled={!providerConnectionsSupported || props.busy || !apiKey()}
-          onPress={() => keyVisible.set(!keyVisible())}
-          class="shrink-0 disabled:opacity-50"
-        />
-      </View>
+        <InputGroupAddon align="inline-end" style={{ paddingEnd: 1 }}>
+          <IconButton
+            accessibilityLabel={keyVisible() ? '隐藏密钥' : '显示密钥'}
+            disabled={!providerConnectionsSupported || props.busy || !apiKey()}
+            onPress={() => keyVisible.set(!keyVisible())}
+          >
+            <Icon icon={keyVisible() ? EyeOff : Eye} {...iconButtonGlyph()} />
+          </IconButton>
+        </InputGroupAddon>
+      </InputGroup>
       <Text class={hintClass}>
         {providerConnectionsSupported
           ? keyStatus() || 'API Key 随服务商保存，留空保持已有 Key。'

@@ -1,21 +1,32 @@
-import { Scroll, Text, token, View } from 'nsh';
-import { createNavStack, MenuItem, NavPage, NavStack } from 'nsh/base';
+import {
+  History,
+  Keyboard,
+  Palette,
+  Server,
+  Settings as SettingsIcon,
+} from 'lucide';
+import { Scroll, Text, View, windowSize } from 'nsh';
 import { currentWindow } from 'nsh/desktop';
 
+import { Card } from '@/components/ui/card';
+import { createNavStack, NavPage, NavStack } from '@/components/ui/nav-stack';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarMenu,
+  SidebarMenuButton,
+  sidebarMenuButtonLook,
+  SidebarMenuItem,
+  SidebarProvider,
+} from '@/components/ui/sidebar';
+import { Toaster } from '@/components/ui/toast';
+import { Icon } from '@/lib/ui/icons';
+import { rounded, shape } from '@/lib/ui/theme';
+
 import { Logo } from '../../components/Logo';
-import { buttonFrameClass } from '../../components/ui/buttonStyles';
-import { Icon } from '../../components/ui/Icon';
-import { iconHoverMotion } from '../../components/ui/motion';
 import { Settings } from '../../feature/settings';
 import { setupTheme } from '../../feature/settings/appearance/theme';
 import { setupShortcuts } from '../../feature/settings/shortcuts/runtime';
-import {
-  lucideHistory,
-  lucideKeyboard,
-  lucidePalette,
-  lucideServer,
-  lucideSettings,
-} from '../../icons';
 import { setupTray } from '../../tray';
 import { AppearancePage } from './pages/appearance/AppearancePage';
 import { BackupPage } from './pages/backup/BackupPage';
@@ -27,31 +38,31 @@ const settingsPages = [
   {
     id: 'general',
     label: '通用',
-    icon: lucideSettings,
+    icon: SettingsIcon,
     render: () => <GeneralPage />,
   },
   {
     id: 'providers',
     label: '服务商',
-    icon: lucideServer,
+    icon: Server,
     render: () => <ProvidersPage />,
   },
   {
     id: 'appearance',
     label: '外观',
-    icon: lucidePalette,
+    icon: Palette,
     render: () => <AppearancePage />,
   },
   {
     id: 'shortcuts',
     label: '快捷键',
-    icon: lucideKeyboard,
+    icon: Keyboard,
     render: () => <ShortcutsPage />,
   },
   {
     id: 'backup',
     label: '备份恢复',
-    icon: lucideHistory,
+    icon: History,
     render: () => <BackupPage />,
   },
 ] as const;
@@ -66,11 +77,10 @@ export function SettingsWindow() {
   const activeNav = () => nav.routes()[nav.routes().length - 1];
 
   return (
-    <View
+    <SidebarProvider
       testID="settings-center"
       role="region"
       accessibilityLabel="设置中心"
-      class="flex-1 flex-row bg-background text-foreground"
       style={{
         paddingTop: 'env(safe-area-inset-top)',
         paddingRight: 'env(safe-area-inset-right)',
@@ -78,71 +88,58 @@ export function SettingsWindow() {
         paddingLeft: 'env(safe-area-inset-left)',
       }}
     >
-      <View
+      <Sidebar
         testID="settings-sidebar"
-        class="w-48 shrink-0 border-r border-sidebar-border bg-sidebar md:w-60"
+        collapsible="none"
+        width={windowSize().width < 768 ? 192 : 240}
         desktop={{ windowDrag: true }}
       >
-        <Scroll testID="settings-sidebar-scroll" class="min-h-0 flex-1">
+        <SidebarContent testID="settings-sidebar-scroll">
           <Logo />
-
-          <View
-            role="navigation"
-            accessibilityLabel="设置分类"
-            class="gap-1 px-2 pb-4"
-          >
-            <Each of={settingsPages}>
-              {(page) => {
-                const iconMotion = iconHoverMotion();
+          <View role="navigation" accessibilityLabel="设置分类" class="px-3">
+            <SidebarMenu>
+              {settingsPages.map((page) => {
+                const active = () => activeNav().id === page.id;
+                const look = sidebarMenuButtonLook({ size: 'lg', active });
                 return (
-                  <View onMouseEnter={() => void iconMotion.play()}>
-                    <MenuItem
-                      testID={`settings-${page().id}`}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      testID={`settings-${page.id}`}
                       role="link"
-                      accessibilityLabel={page().label}
-                      onSelect={() => {
-                        if (activeNav().id !== page().id) nav.replace(page());
-                      }}
-                      class={`${buttonFrameClass} h-11 flex-row items-center gap-3 rounded-xl border-transparent px-3 hover:bg-sidebar-accent`}
-                      classList={{
-                        'bg-sidebar-accent': activeNav().id === page().id,
+                      size="lg"
+                      accessibilityLabel={page.label}
+                      isActive={active()}
+                      onPress={() => {
+                        if (!active()) nav.replace(page);
                       }}
                     >
                       <Icon
-                        icon={page().icon}
-                        size={20}
-                        color={token('sidebar-foreground')}
-                        style={iconMotion.style}
+                        icon={page.icon}
+                        size={look.glyph.size}
+                        tint={look.glyph.tint}
                       />
-                      <Text
-                        class="text-sm text-sidebar-foreground"
-                        classList={{
-                          'font-semibold': activeNav().id === page().id,
-                        }}
-                      >
-                        {page().label}
-                      </Text>
-                    </MenuItem>
-                  </View>
+                      <Text style={look.label}>{page.label}</Text>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 );
-              }}
-            </Each>
+              })}
+            </SidebarMenu>
           </View>
-        </Scroll>
-      </View>
-      <View class="min-w-0 flex-1 p-4">
+        </SidebarContent>
+      </Sidebar>
+      <View
+        class="m-4 min-w-0 flex-1 overflow-hidden"
+        style={rounded(shape.container)}
+      >
         <NavStack state={nav} testID="settings-router" class="min-w-0 flex-1">
           {(page) => (
-            <NavPage
-              title={page.label}
-              headerVisible={false}
-              animation="default"
-            >
-              <View
+            <NavPage headerVisible={false} animation="default">
+              <Card
                 testID="settings-content"
                 role="region"
                 accessibilityLabel={page.label}
-                class="min-h-0 flex-1 rounded-xl border border-border bg-background"
+                class="min-h-0 flex-1"
+                style={{ paddingVertical: 0 }}
               >
                 <If
                   when={page.id === 'providers'}
@@ -154,11 +151,12 @@ export function SettingsWindow() {
                 >
                   {page.render()}
                 </If>
-              </View>
+              </Card>
             </NavPage>
           )}
         </NavStack>
       </View>
-    </View>
+      <Toaster closeOnEscape={false} />
+    </SidebarProvider>
   );
 }

@@ -13,7 +13,7 @@ export function provider(
     baseUrl: 'https://example.com/v1',
     model: 'demo-model',
     enabled: true,
-    temperature: '0.3',
+    temperature: 0.3,
     providerOptions: '',
     headers: '',
     ...fields,

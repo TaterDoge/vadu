@@ -4,7 +4,7 @@ import {
   checkProfile,
   normalizeBaseUrl,
 } from '../src/feature/settings/providers/config';
-import { provider, providerStorage } from './fixtures/provider-config';
+import { provider } from './fixtures/provider-config';
 import {
   defaultAppearance,
   defaultShortcuts as defaults,
@@ -45,6 +45,25 @@ test('Profile 校验允许空模型，拒绝托管请求头、重复请求头和
     ],
   ] as const) {
     expect(() => checkProfile({ ...base, ...patch })).toThrow(message);
+  }
+});
+
+test('温度只接受范围内的有限数值或旧版十进制文本', () => {
+  const base = provider('one', '测试');
+  for (const temperature of [
+    '',
+    ' ',
+    '0x1',
+    '1e999',
+    -0.1,
+    1.1,
+    NaN,
+    null,
+    false,
+  ]) {
+    expect(() => checkProfile({ ...base, temperature })).toThrow(
+      '温度须为 0 到 1 之间的数字。',
+    );
   }
 });
 
@@ -312,10 +331,16 @@ test('首次读取写入失败可重试，初始化成功后只读已有配置',
   expect(writes).toBe(2);
 });
 
-test('读取已有配置不写盘，修改快捷键保留服务商和独立凭据', async () => {
-  const expected = provider('one', '测试', { protocol: 'responses' });
+test('读取旧温度不写盘，修改快捷键时按数字保存并保留凭据', async () => {
+  const expected = provider('one', '测试', {
+    protocol: 'responses',
+    temperature: 0.75,
+  });
   const storage = {
-    ...providerStorage(expected),
+    'vadu.config': JSON.stringify({
+      ...config(),
+      profiles: [{ ...expected, temperature: '7.5e-1' }],
+    }),
     'vadu.secret.one': JSON.stringify({
       base_url: expected.baseUrl,
       key: 'test-key',

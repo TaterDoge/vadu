@@ -7,7 +7,7 @@ export type ProviderProfile = {
   baseUrl: string;
   model: string;
   enabled: boolean;
-  temperature: string;
+  temperature: number;
   providerOptions: string;
   headers: string;
 };
@@ -41,12 +41,13 @@ export const defaultProfileFields: Omit<ProviderProfile, 'id'> = {
   baseUrl: '',
   model: '',
   enabled: true,
-  temperature: '0.3',
+  temperature: 0.3,
   providerOptions: '',
   headers: '',
 };
 
 const profileFields = ['id', ...Object.keys(defaultProfileFields)];
+const legacyDecimal = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 function jsonObject(text: string, message: string) {
   if (text === '') return {};
@@ -149,7 +150,7 @@ export function checkProfile(value: unknown) {
     baseUrl,
     model,
     enabled,
-    temperature,
+    temperature: rawTemperature,
     providerOptions,
     headers,
   } = value;
@@ -162,7 +163,6 @@ export function checkProfile(value: unknown) {
     typeof baseUrl !== 'string' ||
     typeof model !== 'string' ||
     typeof enabled !== 'boolean' ||
-    typeof temperature !== 'string' ||
     typeof providerOptions !== 'string' ||
     typeof headers !== 'string'
   ) {
@@ -176,11 +176,16 @@ export function checkProfile(value: unknown) {
     throw invalidConfig('名称或模型 ID 过长。');
   }
   const url = normalizeBaseUrl(baseUrl);
-  const degrees = Number(temperature);
+  // 旧输入框保存十进制文本，只转换原格式允许的值。
+  const temperature =
+    typeof rawTemperature === 'string' && legacyDecimal.test(rawTemperature)
+      ? Number(rawTemperature)
+      : rawTemperature;
   if (
-    !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(temperature) ||
-    degrees < 0 ||
-    degrees > 1
+    typeof temperature !== 'number' ||
+    !Number.isFinite(temperature) ||
+    temperature < 0 ||
+    temperature > 1
   ) {
     throw invalidConfig('温度须为 0 到 1 之间的数字。');
   }

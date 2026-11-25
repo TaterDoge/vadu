@@ -3,6 +3,7 @@ import { expect, open, type OpenOptions, test } from 'nsh/test';
 import { provider, providerStorage } from './fixtures/provider-config';
 
 const list = 'id:providers-list-scroll';
+const emptyList = 'id:providers-list-empty';
 const name = 'id:provider-name';
 const address = 'id:provider-base-url';
 const model = 'id:provider-model';
@@ -31,21 +32,37 @@ async function openProviders(options: OpenOptions = {}) {
   return app;
 }
 
-test('服务商可选择、搜索与切换分类，识别和语音标明尚未接入', async () => {
+test('服务商可选择、用搜索框内的图标筛选与切换分类，识别和语音标明尚未接入', async () => {
   const app = await openProviders();
+  const searchBar = 'label:服务商搜索与筛选';
+  const bar = app.layout(searchBar)!;
+  const button = app.layout(filter)!;
+  const rightInset = bar.x + bar.width - (button.x + button.width);
+  expect(rightInset).toBe(button.y - bar.y);
   expect(app.shows(`${list} >> label:test，已启用`)).toBe(true);
   expect(app.value(name)).toBe('test');
   await app.press('label:aaa，已启用');
   expect(app.value(name)).toBe('aaa');
-  await app.type('label:搜索服务商', '  TESt  ');
+  await app.type(`${searchBar} >> label:搜索服务商`, '  TESt  ');
+  expect(app.shows('text:全部状态')).toBe(false);
+  await app.press(`${searchBar} >> ${filter}`);
+  await app.press('text:仅已停用');
+  expect(app.shows(`${emptyList} >> text:没有匹配的服务商`)).toBe(true);
+  expect(app.value(name)).toBe('aaa');
+  expect(app.shows('text:仅已停用')).toBe(false);
+  await app.press(filter);
+  await app.press('text:仅已启用');
   expect(app.shows('label:test，已启用')).toBe(true);
   expect(app.shows('label:aaa，已启用')).toBe(false);
 
-  await app.press('label:识别');
-  expect(app.shows(list)).toBe(false);
-  expect(app.shows('text:识别服务尚未接入')).toBe(true);
-  await app.press('label:语音');
-  expect(app.shows('text:语音服务尚未接入')).toBe(true);
+  for (const tab of ['识别', '语音']) {
+    await app.press(`label:${tab}`);
+    expect(app.shows(`${emptyList} >> text:暂无服务商`)).toBe(true);
+    expect(
+      app.shows(`id:provider-editor-scroll >> text:${tab}服务尚未接入`),
+    ).toBe(true);
+    expect(app.shows('label:新增翻译服务商')).toBe(false);
+  }
   await app.press('label:翻译');
   expect(app.shows(`${list} >> label:aaa，已启用`)).toBe(true);
 });
@@ -211,7 +228,10 @@ test('首次保存允许空模型，地址需确认，启停与删除写入配�
   const key = 'fake-first-save-key';
   const app = await openProviders({ height, storage: {} });
   const initialStorage = app.storage();
-  expect(app.shows('text:暂无服务商')).toBe(true);
+  expect(app.shows(`${emptyList} >> text:暂无服务商`)).toBe(true);
+  expect(app.shows('id:provider-editor-scroll >> text:选择或新增服务商')).toBe(
+    true,
+  );
   await app.press('label:新增翻译服务商');
   await app.press('label:保存');
   expect(app.shows('text:请填写名称和接口地址。')).toBe(true);
@@ -372,7 +392,7 @@ test('API 协议可切换并随服务商保存，未接入协议不发请求', a
 test('健康检测当前模型，模型列表和密钥只使用已保存的 Profile', async () => {
   const baseUrl = 'https://example.com/proxy/v1';
   const key = 'fake-test-key';
-  const dots = 'id:health-check-dots';
+  const checking = 'label:正在检测模型';
   const check = 'label:健康检测';
   let checkingDuringRequest = false;
   let checks = 0;
@@ -390,7 +410,7 @@ test('健康检测当前模型，模型列表和密钥只使用已保存的 Prof
     ),
     network: {
       [`POST ${baseUrl}/chat/completions`]: () => {
-        checkingDuringRequest = app.shows(`label:正在检测模型 >> ${dots}`);
+        checkingDuringRequest = app.shows(checking);
         return ++checks === 1
           ? { body: { choices: [{ message: { content: 'OK' } }] } }
           : { status: 503, body: 'fake upstream details' };
@@ -414,7 +434,7 @@ test('健康检测当前模型，模型列表和密钥只使用已保存的 Prof
   expect(checkingDuringRequest).toBe(true);
   await app.waitFor(check);
   expect(app.enabled(check)).toBe(true);
-  expect(app.shows(dots)).toBe(false);
+  expect(app.shows(checking)).toBe(false);
   expect(app.shows(`${toast} >> text:模型 demo-model 可以正常对话。`)).toBe(
     true,
   );
@@ -447,7 +467,7 @@ test('健康检测当前模型，模型列表和密钥只使用已保存的 Prof
   expect(app.value(model)).toBe('model-b');
   await app.press(check);
   await app.waitFor(`${toast} >> text:服务商暂时不可用，请稍后重试。`);
-  expect(app.shows(dots)).toBe(false);
+  expect(app.shows(checking)).toBe(false);
   expect(app.enabled(check)).toBe(true);
   expect(JSON.parse(app.requests()[2].body!).model).toBe('model-b');
   expect(JSON.parse(app.storage()['vadu.config']).profiles[0].model).toBe(
@@ -597,7 +617,9 @@ test('高级选项可折叠，保存后随服务商恢复', async () => {
   for (const field of [temperature, providerOptions, headers]) {
     expect(app.shows(field)).toBe(false);
   }
-  await app.press(advanced);
+  await app.type(model, '');
+  await app.keyboard.press('tab');
+  await app.keyboard.press('space');
   expect(app.texts()).toContain(optionsJson);
   expect(app.texts()).toContain(headersJson);
   expect(app.value(temperature)).toBe('0.3');
@@ -611,6 +633,9 @@ test('高级选项可折叠，保存后随服务商恢复', async () => {
   await app.press(advanced);
   expect(app.value(providerOptions)).toBe(optionsJson);
   await app.press('label:保存');
+  expect(JSON.parse(app.storage()['vadu.config']).profiles[0].temperature).toBe(
+    0,
+  );
 
   await app.press('label:aaa，已启用');
   await app.press(advanced);
@@ -625,13 +650,15 @@ test('高级选项可折叠，保存后随服务商恢复', async () => {
   await app.clear(temperature);
   await app.type(temperature, '1');
   await app.press('label:保存');
-  expect(app.shows('text:温度须为 0 到 1 之间的数字。')).toBe(false);
+  expect(JSON.parse(app.storage()['vadu.config']).profiles[0].temperature).toBe(
+    1,
+  );
   await app.clear(temperature);
   await app.press('label:保存');
   expect(app.value(temperature)).toBe('0.3');
-  expect(
-    JSON.parse(app.storage()['vadu.config']).profiles[0].providerOptions,
-  ).toBe(optionsJson);
+  const saved = JSON.parse(app.storage()['vadu.config']).profiles[0];
+  expect(saved.temperature).toBe(0.3);
+  expect(saved.providerOptions).toBe(optionsJson);
 });
 
 test('高级选项格式不合法时保留草稿并拒绝保存', async () => {
@@ -662,6 +689,44 @@ test('高级选项格式不合法时保留草稿并拒绝保存', async () => {
     expect(app.value(name)).toBe('test');
   }
   expect(app.storage()).toEqual(seeded);
+});
+
+test('Tab 逐行聚焦服务商，Enter 和 Space 选择整行', async () => {
+  const app = await openProviders();
+  expect(app.shows('id:provider-row-2 >> id:provider-grip-2')).toBe(true);
+  await app.type('label:搜索服务商', ' ');
+  await app.keyboard.press('tab'); // 筛选按钮
+  await app.keyboard.press('tab'); // 第一个服务商
+  await app.keyboard.press('tab'); // 第二个服务商
+  expect(app.value(name)).toBe('test');
+  await app.keyboard.press('enter');
+  expect(app.value(name)).toBe('aaa');
+  await app.keyboard.press('shift+tab');
+  await app.keyboard.press('space');
+  expect(app.value(name)).toBe('test');
+});
+
+test('服务商列表与详情的滚动区为焦点环留白，宽窄布局保持对齐', async () => {
+  const app = await openProviders();
+  for (const width of [960, 600]) {
+    await app.setViewport(width, 620);
+    const row = app.layout('id:provider-row-1')!;
+    const search = app.layout('label:服务商搜索与筛选')!;
+    const field = app.layout(name)!;
+    const editor = app.layout('id:provider-editor-scroll')!;
+    expect(row.x).toBe(search.x);
+    expect(row.width).toBe(search.width);
+    for (const [control, scroll] of [
+      [row, app.layout(list)!],
+      [field, editor],
+      [app.layout(advanced)!, editor],
+    ]) {
+      expect(control.x - scroll.x).toBe(4);
+      expect(scroll.x + scroll.width - (control.x + control.width)).toBe(4);
+    }
+    if (width === 960) expect(field.x - (row.x + row.width)).toBe(16);
+    else expect(field.x).toBe(row.x);
+  }
 });
 
 test('服务商可用手柄排序，拖动保留编辑草稿', async () => {
@@ -704,9 +769,9 @@ test('筛选后拖拽排序保留隐藏服务商的位置', async () => {
 
 test('服务商深浅配色可读，缩小窗口后列表滚动不影响搜索和新增', async () => {
   const app = await openProviders({ colorScheme: 'light' });
-  expect(app.spanStyle('text:名称').color).toBe('#0a0a0aff');
+  expect(app.spanStyle('text:名称').color).toBe('#101319ff');
   await app.setColorScheme('dark');
-  expect(app.spanStyle('text:名称').color).toBe('#fafafaff');
+  expect(app.spanStyle('text:名称').color).toBe('#eeeff1ff');
 
   const search = 'label:搜索服务商';
   const add = 'label:新增翻译服务商';

@@ -1,3 +1,4 @@
+import { RotateCcw } from 'lucide';
 import {
   cleanup,
   effect,
@@ -8,13 +9,27 @@ import {
   View,
   type ViewRef,
 } from 'nsh';
-import { Button, Switch } from 'nsh/base';
 
-import { buttonFrameClass } from '../../../../components/ui/buttonStyles';
-import { Icon } from '../../../../components/ui/Icon';
-import { Item } from '../../../../components/ui/Item';
-import { Kbd, KbdGroup } from '../../../../components/ui/Kbd';
-import { createPageToast } from '../../../../components/ui/PageToast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  buttonLook,
+  IconButton,
+  iconButtonGlyph,
+} from '@/components/ui/button';
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from '@/components/ui/item';
+import { Kbd, KbdGroup } from '@/components/ui/kbd';
+import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/toast';
+import { Icon } from '@/lib/ui/icons';
+import { colors } from '@/lib/ui/theme';
+
 import {
   type AppSettings,
   captureShortcutKeys,
@@ -26,15 +41,23 @@ import {
   shortcutRecording,
   translateShortcutStatus,
 } from '../../../../feature/settings/shortcuts/runtime';
-import { lucideInfo, lucideRotateCcw } from '../../../../icons';
 import { shortcutGroups } from './constants';
 
 export function ShortcutsPage() {
   const settings = signal<AppSettings | null>(null);
   const recording = signal<string | null>(null);
   const pending = signal(false);
-  const { showToast, dismissPersistent, ToastOutlet } =
-    createPageToast('shortcut');
+  const toastId = 'shortcut-toast';
+  let persistentToast = false;
+  function showToast(text: string, persistent = false) {
+    persistentToast = persistent;
+    toast(text, { id: toastId, duration: persistent ? Infinity : 3000 });
+  }
+  function dismissPersistent() {
+    if (!persistentToast) return;
+    persistentToast = false;
+    toast.dismiss(toastId);
+  }
   let cancelledByBlur: string | null = null;
   let recordingField: ViewRef | undefined;
   const captureKeys = captureShortcutKeys();
@@ -42,6 +65,7 @@ export function ShortcutsPage() {
   cleanup(() => {
     disposed = true;
     shortcutRecording.set(false);
+    toast.dismiss(toastId);
   });
 
   async function apply(
@@ -180,7 +204,6 @@ export function ShortcutsPage() {
 
   return (
     <View testID="settings-shortcuts-page" class="gap-6">
-      <ToastOutlet />
       <Each of={shortcutGroups}>
         {(group) => (
           <View class="gap-4">
@@ -200,43 +223,74 @@ export function ShortcutsPage() {
                   bindingFor(shortcut().id)?.keystroke === null;
                 const enabled = () =>
                   bindingFor(shortcut().id)?.enabled ?? false;
+                const recordingButton = buttonLook('ghost', { size: 'sm' });
 
                 return (
                   <>
                     <Item
                       testID={'shortcut-' + shortcut().id}
-                      title={shortcut().title}
-                      description={shortcut().description}
-                      media={<Icon icon={shortcut().icon} size={20} />}
-                      actions={
-                        <>
-                          <KbdGroup
-                            ref={(node) => {
-                              field = node;
-                            }}
-                            testID={'shortcut-' + shortcut().id + '-input'}
-                            accessible
-                            role="button"
-                            disabled={!isGlobal() || !settings()}
-                            accessibilityLabel={
-                              shortcut().title +
-                              '快捷键 ' +
-                              (isRecording(shortcut().id)
-                                ? '正在录入，再次点击或按 Esc 取消'
-                                : shortcutLabel(shortcut().id))
-                            }
-                            accessibilityState={{
-                              selected: isRecording(shortcut().id),
-                            }}
-                            class={`${buttonFrameClass} rounded-lg border-transparent p-1 disabled:opacity-40`}
-                            classList={{ 'bg-accent': showPrompt() }}
-                            onMouseEnter={clearBlurCancellation}
-                            onFocus={clearBlurCancellation}
-                            onPress={() =>
-                              toggleRecording(shortcut().id, field)
-                            }
-                            onBlur={() => handleRecordingBlur(shortcut().id)}
-                          >
+                      variant="outline"
+                      style={{ flexWrap: 'wrap' }}
+                    >
+                      <ItemMedia variant="icon">
+                        <Icon
+                          icon={shortcut().icon}
+                          size={18}
+                          tint={colors.foreground}
+                        />
+                      </ItemMedia>
+                      <ItemContent style={{ flexBasis: 128 }}>
+                        <ItemTitle style={{ fontSize: 14 }}>
+                          {shortcut().title}
+                        </ItemTitle>
+                        <ItemDescription>
+                          {shortcut().description}
+                        </ItemDescription>
+                      </ItemContent>
+                      <ItemActions style={{ flexWrap: 'wrap' }}>
+                        {/* 原生 View 提供录入所需的失焦事件。 */}
+                        <View
+                          role="button"
+                          focusable
+                          accessible
+                          ref={(node) => {
+                            field = node;
+                          }}
+                          testID={'shortcut-' + shortcut().id + '-input'}
+                          disabled={!isGlobal() || !settings()}
+                          accessibilityLabel={
+                            shortcut().title +
+                            '快捷键 ' +
+                            (isRecording(shortcut().id)
+                              ? '正在录入，再次点击或按 Esc 取消'
+                              : shortcutLabel(shortcut().id))
+                          }
+                          accessibilityState={{
+                            selected: isRecording(shortcut().id),
+                          }}
+                          style={[
+                            recordingButton.style,
+                            {
+                              paddingHorizontal: 4,
+                              backgroundColor: showPrompt()
+                                ? colors.sidebarAccent
+                                : undefined,
+                            },
+                          ]}
+                          hoverStyle={
+                            showPrompt() ? null : recordingButton.hoverStyle
+                          }
+                          activeStyle={
+                            showPrompt() ? null : recordingButton.activeStyle
+                          }
+                          focusVisibleStyle={recordingButton.focusVisibleStyle}
+                          disabledStyle={recordingButton.disabledStyle}
+                          onMouseEnter={clearBlurCancellation}
+                          onFocus={clearBlurCancellation}
+                          onPress={() => toggleRecording(shortcut().id, field)}
+                          onBlur={() => handleRecordingBlur(shortcut().id)}
+                        >
+                          <KbdGroup>
                             <If
                               when={showPrompt()}
                               else={
@@ -245,70 +299,63 @@ export function ShortcutsPage() {
                                 </Each>
                               }
                             >
-                              <Kbd class="min-w-24">
+                              <Kbd style={{ minWidth: 96 }}>
                                 {shortcutLabel(shortcut().id)}
                               </Kbd>
                             </If>
                           </KbdGroup>
-                          <If when={isGlobal()}>
-                            <Button
-                              disabled={!settings() || pending()}
-                              onPress={() => resetShortcut(shortcut().id)}
-                              accessibilityLabel={
-                                '重置' + shortcut().title + '快捷键'
-                              }
-                              class={`${buttonFrameClass} h-8 w-8 items-center justify-center rounded-lg border-transparent disabled:opacity-40`}
-                            >
-                              <Icon icon={lucideRotateCcw} />
-                            </Button>
-                          </If>
-                          <Text
-                            testID={'shortcut-' + shortcut().id + '-status'}
-                            class="max-w-48 text-xs leading-5 text-muted-foreground"
-                          >
-                            {isGlobal()
-                              ? translateShortcutStatus()
-                              : enabled()
-                                ? '已启用'
-                                : '未启用'}
-                          </Text>
-                          <Switch
-                            testID={'shortcut-' + shortcut().id + '-enabled'}
+                        </View>
+                        <If when={isGlobal()}>
+                          <IconButton
+                            disabled={!settings() || pending()}
+                            onPress={() => resetShortcut(shortcut().id)}
                             accessibilityLabel={
-                              '启用' + shortcut().title + '快捷键'
+                              '重置' + shortcut().title + '快捷键'
                             }
-                            checked={enabled()}
-                            disabled={!isGlobal() || !settings() || pending()}
-                            onChange={({ checked }) => {
-                              cancel();
-                              void apply(
-                                () =>
-                                  Settings.setShortcutEnabled(
-                                    shortcut().id,
-                                    checked,
-                                  ),
-                                showToast,
-                              );
-                            }}
-                            class={`${buttonFrameClass} h-8 shrink-0 justify-center rounded-lg border-transparent px-1 disabled:opacity-40`}
-                            trackClass="h-5 w-8 justify-center rounded-full bg-muted-foreground px-0.5 checked:bg-foreground"
-                            thumbClass="h-4 w-4 rounded-full bg-background checked:translate-x-3"
-                          />
-                        </>
-                      }
-                    />
+                          >
+                            <Icon icon={RotateCcw} {...iconButtonGlyph()} />
+                          </IconButton>
+                        </If>
+                        <Text
+                          testID={'shortcut-' + shortcut().id + '-status'}
+                          class="max-w-48 text-xs leading-5 text-muted-foreground"
+                        >
+                          {isGlobal()
+                            ? translateShortcutStatus()
+                            : enabled()
+                              ? '已启用'
+                              : '未启用'}
+                        </Text>
+                        <Switch
+                          testID={'shortcut-' + shortcut().id + '-enabled'}
+                          accessibilityLabel={
+                            '启用' + shortcut().title + '快捷键'
+                          }
+                          checked={enabled()}
+                          disabled={!isGlobal() || !settings() || pending()}
+                          onChange={({ checked }) => {
+                            cancel();
+                            void apply(
+                              () =>
+                                Settings.setShortcutEnabled(
+                                  shortcut().id,
+                                  checked,
+                                ),
+                              showToast,
+                            );
+                          }}
+                          size="sm"
+                        />
+                      </ItemActions>
+                    </Item>
                     <If when={isRecording(shortcut().id)}>
-                      <View
-                        testID={'shortcut-' + shortcut().id + '-tips'}
-                        class="flex-row items-start gap-2 rounded-xl border border-border bg-card p-3"
-                      >
-                        <Icon icon={lucideInfo} size={20} />
-                        <Text class="min-w-0 flex-1 text-xs leading-5 text-muted-foreground">
+                      <Alert testID={'shortcut-' + shortcut().id + '-tips'}>
+                        <AlertDescription>
                           需要包含 ⌘ / Ctrl / Alt
                           等修饰键，主键可用字母、数字、方向键或标点键等；F1–F24
                           也可单独使用。
-                        </Text>
-                      </View>
+                        </AlertDescription>
+                      </Alert>
                     </If>
                   </>
                 );

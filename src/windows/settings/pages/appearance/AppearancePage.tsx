@@ -1,8 +1,17 @@
 import { cleanup, signal, Text, token, View } from 'nsh';
-import { Radio, RadioGroup } from 'nsh/base';
 
-import { buttonFrameClass } from '../../../../components/ui/buttonStyles';
-import { Kbd, KbdGroup } from '../../../../components/ui/Kbd';
+import { Alert, AlertTitle } from '@/components/ui/alert';
+import { buttonLabel, buttonLook } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Kbd, KbdGroup } from '@/components/ui/kbd';
+import { Radio, RadioGroup } from '@/components/ui/radio-group';
+
 import { Settings, SettingsError } from '../../../../feature/settings';
 import {
   accents,
@@ -11,8 +20,6 @@ import {
   themeStyles,
 } from '../../../../feature/settings/appearance/config';
 import { themePreferences } from '../../../../feature/settings/appearance/theme';
-
-const choiceClass = `${buttonFrameClass} group min-w-24 flex-1 gap-1 rounded-md border-border px-3 py-2 checked:border-primary checked:bg-secondary hover:bg-accent`;
 
 export function AppearancePage() {
   const ready = signal(false);
@@ -49,9 +56,9 @@ export function AppearancePage() {
         外观设置应用于所有窗口，下次启动时恢复。
       </Text>
       <If when={error()}>
-        <Text role="alert" class="text-xs text-destructive">
-          {error()}
-        </Text>
+        <Alert variant="destructive">
+          <AlertTitle>{error()}</AlertTitle>
+        </Alert>
       </If>
       <View role="group" accessibilityLabel="显示模式" class="gap-3">
         <Text
@@ -70,12 +77,11 @@ export function AppearancePage() {
                 disabled={!ready()}
                 checked={themePreferences().mode === option().value}
                 onChange={() => save({ mode: option().value })}
-                class={
-                  choiceClass + ' flex-row items-center justify-center gap-2'
-                }
+                variant="tile"
+                indicator={false}
+                style={{ minWidth: 96, flex: 1 }}
               >
-                <View class="h-2 w-2 rounded-full bg-transparent group-checked:bg-primary" />
-                <Text class="text-sm text-foreground">{option().label}</Text>
+                {option().label}
               </Radio>
             )}
           </Each>
@@ -98,7 +104,9 @@ export function AppearancePage() {
                 disabled={!ready()}
                 checked={themePreferences().accent === option().value}
                 onChange={() => save({ accent: option().value })}
-                class={choiceClass + ' min-w-20 flex-row items-center gap-2'}
+                variant="tile"
+                indicator={false}
+                style={{ minWidth: 80, flex: 1, justifyContent: 'flex-start' }}
               >
                 <View
                   class="h-4 w-4 shrink-0 rounded-full"
@@ -127,34 +135,41 @@ export function AppearancePage() {
                 disabled={!ready()}
                 checked={themePreferences().style === option().value}
                 onChange={() => save({ style: option().value })}
-                class={choiceClass + ' min-w-48'}
+                variant="tile"
+                indicator={false}
+                style={{ minWidth: 150, flex: 1, justifyContent: 'flex-start' }}
               >
-                <Text class="text-sm font-semibold text-foreground">
-                  {option().label}
-                </Text>
-                <Text class="text-xs leading-5 text-muted-foreground">
-                  {option().description}
-                </Text>
+                <View>
+                  <Text class="text-sm font-semibold text-foreground">
+                    {option().label}
+                  </Text>
+                  <Text class="text-xs text-muted-foreground">
+                    {option().description}
+                  </Text>
+                </View>
               </Radio>
             )}
           </Each>
         </RadioGroup>
       </View>
-      <View class="gap-3 rounded-lg border border-border bg-card p-4">
-        <Text
-          testID="theme-preview-title"
-          class="text-xl leading-6 font-semibold text-card-foreground"
+      <Card>
+        <CardHeader>
+          <CardTitle testID="theme-preview-title" style={{ fontSize: 20 }}>
+            Aa 0123456789 · 你好
+          </CardTitle>
+          <CardDescription>字体、强调色与控件样式预览</CardDescription>
+        </CardHeader>
+        <CardContent
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}
         >
-          Aa 0123456789 · 你好
-        </Text>
-        <Text class="text-sm leading-5 text-muted-foreground">
-          字体与强调色随主题切换，字号与圆角使用 NSH 内置尺寸。
-        </Text>
-        <View class="flex-row flex-wrap items-center gap-3">
-          <View class="rounded-md bg-primary px-3 py-2">
+          <View style={buttonLook('default').style}>
             <Text
               testID="theme-preview-primary"
-              class="text-sm font-medium text-primary-foreground"
+              style={[buttonLabel('default'), { fontSize: 14 }]}
             >
               强调色预览
             </Text>
@@ -169,8 +184,8 @@ export function AppearancePage() {
             <Kbd>⇧</Kbd>
             <Kbd>K</Kbd>
           </KbdGroup>
-        </View>
-      </View>
+        </CardContent>
+      </Card>
     </View>
   );
 }

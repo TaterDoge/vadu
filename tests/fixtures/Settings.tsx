@@ -1,5 +1,6 @@
 import { host, keymap, mount, signal, Text, View } from 'nsh';
-import { Button } from 'nsh/base';
+
+import { Button } from '@/components/ui/button';
 
 import {
   captureShortcutKeys,
@@ -90,16 +91,16 @@ function SettingsFixture() {
   return (
     <View>
       <Button testID="read" onPress={read}>
-        <Text>读取配置</Text>
+        读取配置
       </Button>
       <Button testID="update" onPress={update}>
-        <Text>同时保存两项</Text>
+        同时保存两项
       </Button>
       <Button testID="update-modules" onPress={updateModules}>
-        <Text>并发保存不同模块</Text>
+        并发保存不同模块
       </Button>
       <Button testID="check-keys" onPress={checkCaptureKeys}>
-        <Text>校验键表</Text>
+        校验键表
       </Button>
       <Text>{`配置状态 ${status()}`}</Text>
     </View>

@@ -1,8 +1,15 @@
+import { Copy, Eraser, Volume2 } from 'lucide';
 import { Clipboard, type InputRef, signal, Text, View } from 'nsh';
-import { Input } from 'nsh/base';
 
-import { IconButton } from '../../../components/IconButton';
-import { lucideCopy, lucideEraser, lucideVolume2 } from '../../../icons';
+import { IconButton, iconButtonGlyph } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Icon } from '@/lib/ui/icons';
+import { alpha, colors } from '@/lib/ui/theme';
+
+// Gallery 的默认悬停色与原文面板同色。
+const sourceToolHoverStyle = () => ({
+  backgroundColor: alpha(colors.foreground, 0.05),
+});
 
 export function TranslateInput(props: {
   inputRef: (node: InputRef) => void;
@@ -13,7 +20,6 @@ export function TranslateInput(props: {
   let input: InputRef | undefined;
   const copyFailed = signal(false);
   const hasText = () => props.value.trim().length > 0;
-  const toolClass = () => (hasText() ? 'hover:bg-foreground/5' : 'opacity-40');
 
   async function copySource() {
     try {
@@ -33,10 +39,14 @@ export function TranslateInput(props: {
   return (
     <View
       testID="translation-source-panel"
-      class="min-h-0 overflow-hidden rounded-xl bg-muted p-1"
-      style={{ flex: 3 }}
+      class="rounded-md border border-transparent bg-muted"
+      style={{ flex: 3, minHeight: 0 }}
+      focusWithinStyle={{ borderColor: colors.border }}
     >
       <Input
+        variant="ghost"
+        // 原文编辑区与工具栏共用外层焦点边框。
+        focusWithinStyle={{ borderColor: 'transparent', outlineWidth: 0 }}
         ref={(node) => {
           input = node;
           props.inputRef(node);
@@ -50,18 +60,21 @@ export function TranslateInput(props: {
         multiline
         placeholder="输入要翻译的文本…"
         autoFocus
-        style={{ caretColor: 'blue' }}
-        class="min-h-0 flex-1 bg-transparent px-1 py-2 text-sm leading-5 text-foreground placeholder:text-muted-foreground"
+        style={{ flex: 1, minHeight: 0 }}
       />
-      <View class="h-6 shrink-0 flex-row items-center gap-1">
-        <IconButton label="朗读原文" icon={lucideVolume2} class={toolClass()} />
+      <View class="mx-1 mb-1 shrink-0 flex-row items-center gap-1">
+        <IconButton size="sm" accessibilityLabel="朗读原文" disabled>
+          <Icon icon={Volume2} {...iconButtonGlyph({ size: 'sm' })} />
+        </IconButton>
         <IconButton
-          label="复制原文"
-          icon={lucideCopy}
-          class={toolClass()}
+          size="sm"
+          accessibilityLabel="复制原文"
+          hoverStyle={sourceToolHoverStyle()}
           disabled={!hasText()}
           onPress={copySource}
-        />
+        >
+          <Icon icon={Copy} {...iconButtonGlyph({ size: 'sm' })} />
+        </IconButton>
         <View class="flex-1">
           <If when={copyFailed()}>
             <Text role="alert" class="text-xs text-destructive">
@@ -70,12 +83,14 @@ export function TranslateInput(props: {
           </If>
         </View>
         <IconButton
-          label="清空原文"
-          icon={lucideEraser}
-          class={props.readonly ? 'opacity-40' : toolClass()}
+          size="sm"
+          accessibilityLabel="清空原文"
+          hoverStyle={sourceToolHoverStyle()}
           disabled={props.readonly || !hasText()}
           onPress={clearSource}
-        />
+        >
+          <Icon icon={Eraser} {...iconButtonGlyph({ size: 'sm' })} />
+        </IconButton>
       </View>
     </View>
   );

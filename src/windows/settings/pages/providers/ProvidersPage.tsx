@@ -1,27 +1,43 @@
 import { randomUUID } from 'crypto';
 
-import { cleanup, computed, Scroll, signal, Text, token, View } from 'nsh';
-import { Button, Input, Select, Tab, Tabs } from 'nsh/base';
+import {
+  AudioLines,
+  Funnel,
+  GripVertical,
+  Inbox,
+  ScanText,
+  Server,
+} from 'lucide';
+import { cleanup, computed, Scroll, signal, Text, View } from 'nsh';
+import { Select } from 'nsh/base';
 
-import { buttonFrameClass } from '../../../../components/ui/buttonStyles';
-import { Icon } from '../../../../components/ui/Icon';
-import { inputFrameClass } from '../../../../components/ui/inputStyles';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button, buttonLook, IconButton } from '@/components/ui/button';
+import {
+  Empty,
+  EMPTY_ICON,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@/components/ui/input-group';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Icon } from '@/lib/ui/icons';
+import { listboxProps, OptionRow } from '@/lib/ui/listbox';
+import { colors } from '@/lib/ui/theme';
+
 import { Settings, SettingsError } from '../../../../feature/settings';
 import type { ProviderProfile } from '../../../../feature/settings/providers/config';
-import {
-  lucideFunnel,
-  lucideGripVertical,
-  lucideServer,
-} from '../../../../icons';
 import { ProviderEditor } from './ProviderEditor';
-import {
-  providerButtonClass,
-  providerHeadingClass,
-  providerOptionsClass,
-} from './providerStyles';
 
 const capabilities = ['翻译', '识别', '语音'] as const;
 type Capability = (typeof capabilities)[number];
+const capabilityIcons = { 翻译: Server, 识别: ScanText, 语音: AudioLines };
 const filters = [
   { value: 'all', title: '全部状态' },
   { value: 'enabled', title: '仅已启用' },
@@ -149,101 +165,122 @@ export function ProvidersPage() {
   return (
     <View
       testID="settings-providers-page"
-      class="min-h-0 min-w-0 flex-1 gap-3 px-4 py-2"
+      class="min-h-0 min-w-0 flex-1 gap-3 p-1"
     >
-      <Tabs
-        accessibilityLabel="服务商类别"
-        class="shrink-0 flex-row self-center rounded-xl bg-muted p-1"
-      >
-        <Each of={capabilities}>
-          {(item) => (
-            <Tab
-              accessibilityLabel={item()}
-              selected={capability() === item()}
-              onPress={() => selectCapability(item())}
-              class={`${buttonFrameClass} selected:bg-background items-center rounded-lg border-transparent px-2 py-0.5`}
-            >
-              <Text
-                classList={{
-                  'font-semibold text-foreground': capability() === item(),
-                  'text-muted-foreground': capability() !== item(),
-                }}
-                class="text-sm leading-5"
+      <Tabs value={capability()} style={{ alignSelf: 'center', flexShrink: 0 }}>
+        <TabsList accessibilityLabel="服务商类别">
+          <Each of={capabilities}>
+            {(item) => (
+              <TabsTrigger
+                accessibilityLabel={item()}
+                value={item()}
+                disabled={busy()}
+                onPress={() => selectCapability(item())}
               >
                 {item()}
-              </Text>
-            </Tab>
-          )}
-        </Each>
+              </TabsTrigger>
+            )}
+          </Each>
+        </TabsList>
       </Tabs>
       <View
-        class={
-          compact()
-            ? 'min-h-0 min-w-0 flex-1 gap-3'
-            : 'min-h-0 min-w-0 flex-1 flex-row gap-6'
-        }
+        class="min-h-0 min-w-0 flex-1 gap-2"
+        classList={{ 'flex-row': !compact() }}
         onLayout={({ bounds }) => compact.set(bounds.size.width < 440)}
       >
         <View
           class={
-            compact() ? 'min-h-36 flex-1 gap-2' : 'min-h-0 w-48 shrink-0 gap-2'
+            compact()
+              ? 'min-h-36 flex-1 gap-1 p-1'
+              : 'min-h-0 w-48 shrink-0 gap-1 p-1'
           }
         >
-          <View
-            class={`${inputFrameClass} h-8 shrink-0 flex-row items-center gap-1 rounded-lg px-1.5`}
-          >
-            <Input
+          <InputGroup class="shrink-0" accessibilityLabel="服务商搜索与筛选">
+            <InputGroupInput
               accessibilityLabel="搜索服务商"
               value={query()}
               onChange={({ value }) => query.set(value)}
               placeholder="搜索服务商"
-              class="h-7 min-w-0 flex-1 px-1 text-sm text-foreground placeholder:text-muted-foreground"
+              class="min-w-0"
             />
-            <Select
-              accessibilityLabel="按启用状态筛选"
-              items={filters}
-              value={filter()}
-              onChange={({ value }) => filter.set(value ?? 'all')}
-              align="end"
-              cover={false}
-              popupClass="min-w-28 rounded-lg border border-border bg-popover p-1 text-popover-foreground"
-              itemClass={providerOptionsClass}
-              trigger={
-                <View
-                  class={`${buttonFrameClass} h-6 w-6 shrink-0 items-center justify-center rounded-md border-transparent hover:bg-accent`}
-                  classList={{ 'bg-accent': filter() !== 'all' }}
-                >
-                  <Icon icon={lucideFunnel} color={token('muted-foreground')} />
-                </View>
-              }
-            />
-          </View>
+            <InputGroupAddon align="inline-end" style={{ paddingEnd: 1 }}>
+              <Select
+                {...listboxProps({ minWidth: 112 })}
+                items={filters}
+                value={filter()}
+                onChange={({ value }) => filter.set(value ?? 'all')}
+                align="end"
+                cover={false}
+                trigger={
+                  <IconButton
+                    accessibilityLabel="按启用状态筛选"
+                    icon={Funnel}
+                    selected={filter() !== 'all'}
+                  />
+                }
+                renderItem={(item) => <OptionRow item={item} />}
+              />
+            </InputGroupAddon>
+          </InputGroup>
           <If
             when={visibleProviders().length > 0}
             else={
-              <Text class="min-h-0 flex-1 text-xs leading-4 text-muted-foreground">
-                {capability() !== '翻译'
-                  ? `${capability()}服务尚未接入`
-                  : query().trim() || filter() !== 'all'
+              <Empty
+                testID="providers-list-empty"
+                style={{ padding: 8, gap: 4 }}
+              >
+                <Icon icon={Inbox} size={18} tint={colors.mutedForeground} />
+                <EmptyDescription>
+                  {capability() === '翻译' &&
+                  (query().trim() || filter() !== 'all')
                     ? '没有匹配的服务商'
                     : '暂无服务商'}
-              </Text>
+                </EmptyDescription>
+              </Empty>
             }
           >
             <Scroll
+              scrollbar={false}
               testID="providers-list-scroll"
-              class="min-h-0 flex-1"
+              class="-mx-1 min-h-0 flex-1 p-1"
               contentClass="gap-2"
               onScroll={({ offset }) => scrollY.set(offset.y)}
             >
               <Each of={visibleProviders()} key={(p) => p.id}>
                 {(item, index) => (
                   <View
+                    testID={`provider-row-${item().id}`}
+                    role="button"
+                    focusable
+                    accessibilityLabel={
+                      item().name + (item().enabled ? '，已启用' : '，已停用')
+                    }
+                    accessibilityState={{
+                      selected: selectedId() === item().id,
+                    }}
+                    accessibilityActions={[
+                      ...(index() > 0
+                        ? [{ name: 'move-up', label: '上移' }]
+                        : []),
+                      ...(index() + 1 < visibleProviders().length
+                        ? [{ name: 'move-down', label: '下移' }]
+                        : []),
+                    ]}
+                    onAccessibilityAction={({ actionName }) => {
+                      if (actionName === 'move-up')
+                        moveProvider(index(), index() - 1);
+                      if (actionName === 'move-down')
+                        moveProvider(index(), index() + 1);
+                    }}
+                    onPress={() => {
+                      if (!busy()) select(item().id);
+                    }}
+                    focusVisibleStyle={buttonLook('ghost').focusVisibleStyle}
                     onLayout={({ bounds }) => {
-                      // 列表从 y=0 开始，第二行的坐标包含行高和间距。
+                      // 行在无内边距的内容容器内，第二行的 y 就是排序步长。
                       if (index() === 1) rowStep = bounds.origin.y;
                     }}
-                    class="h-9 flex-row items-center rounded-lg pl-1 hover:bg-accent"
+                    class="h-9 flex-row items-center gap-2 rounded-lg pr-2 pl-1 hover:bg-accent"
                     classList={{
                       'bg-muted': selectedId() === item().id,
                       'shadow-md': preview()?.from === index(),
@@ -251,7 +288,7 @@ export function ProvidersPage() {
                     style={{
                       backgroundColor:
                         preview()?.from === index()
-                          ? token('background')
+                          ? colors.background
                           : undefined,
                       zIndex: preview()?.from === index() ? 1 : 0,
                       transform: [{ translateY: rowOffset(index()) }],
@@ -278,59 +315,29 @@ export function ProvidersPage() {
                       onResponderTerminate={() => drag.set(null)}
                     >
                       <Icon
-                        icon={lucideGripVertical}
+                        icon={GripVertical}
                         size={14}
-                        color={token('muted-foreground')}
+                        tint={colors.mutedForeground}
                       />
                     </View>
-                    <View
-                      testID={`provider-row-${item().id}`}
-                      role="button"
-                      focusable
-                      accessibilityLabel={
-                        item().name + (item().enabled ? '，已启用' : '，已停用')
-                      }
-                      accessibilityState={{
-                        selected: selectedId() === item().id,
+                    <Icon icon={Server} size={16} tint={colors.foreground} />
+                    <Text
+                      class="min-w-0 flex-1 text-xs text-foreground"
+                      classList={{
+                        'font-semibold': selectedId() === item().id,
                       }}
-                      accessibilityActions={[
-                        ...(index() > 0
-                          ? [{ name: 'move-up', label: '上移' }]
-                          : []),
-                        ...(index() + 1 < visibleProviders().length
-                          ? [{ name: 'move-down', label: '下移' }]
-                          : []),
-                      ]}
-                      onAccessibilityAction={({ actionName }) => {
-                        if (actionName === 'move-up')
-                          moveProvider(index(), index() - 1);
-                        if (actionName === 'move-down')
-                          moveProvider(index(), index() + 1);
-                      }}
-                      onPress={() => {
-                        if (!busy()) select(item().id);
-                      }}
-                      class="h-full min-w-0 flex-1 flex-row items-center gap-2 rounded-lg px-2 focus-visible:bg-border"
+                      style={{ numberOfLines: 1, textOverflow: 'ellipsis' }}
                     >
-                      <Icon icon={lucideServer} />
-                      <Text
-                        class="min-w-0 flex-1 text-xs text-foreground"
-                        classList={{
-                          'font-semibold': selectedId() === item().id,
-                        }}
-                        style={{ numberOfLines: 1, textOverflow: 'ellipsis' }}
-                      >
-                        {item().name}
-                      </Text>
-                      <View
-                        class={
-                          'h-2 w-2 shrink-0 rounded-full ' +
-                          (item().enabled
-                            ? 'bg-accent-emerald'
-                            : 'bg-destructive')
-                        }
-                      />
-                    </View>
+                      {item().name}
+                    </Text>
+                    <View
+                      class={
+                        'h-2 w-2 shrink-0 rounded-full ' +
+                        (item().enabled
+                          ? 'bg-accent-emerald'
+                          : 'bg-destructive')
+                      }
+                    />
                   </View>
                 )}
               </Each>
@@ -341,26 +348,55 @@ export function ProvidersPage() {
               accessibilityLabel="新增翻译服务商"
               disabled={busy()}
               onPress={() => select(randomUUID())}
-              class={`${providerButtonClass} shrink-0 border-border hover:bg-accent`}
+              variant="secondary"
+              style={{ flexShrink: 0 }}
             >
-              <Text class={providerHeadingClass}>新增翻译服务商</Text>
+              新增翻译服务商
             </Button>
           </If>
         </View>
-        <Scroll testID="provider-editor-scroll" class="min-h-0 min-w-0 flex-1">
+        <Scroll
+          scrollbar={false}
+          testID="provider-editor-scroll"
+          class="min-h-0 min-w-0 flex-1 p-1"
+          contentClass="grow"
+        >
           <If when={error()}>
-            <Text role="alert" class="text-xs text-destructive">
-              {error()}
-            </Text>
+            <Alert variant="destructive">
+              <AlertDescription>{error()}</AlertDescription>
+            </Alert>
           </If>
           <If when={!selectedId() && !error()}>
-            <Text class="text-sm text-muted-foreground">
-              {busy()
-                ? '正在读取服务商…'
-                : capability() === '翻译'
-                  ? '选择或新增服务商'
-                  : ''}
-            </Text>
+            <If
+              when={!busy()}
+              else={
+                <Text class="text-sm text-muted-foreground">
+                  正在读取服务商…
+                </Text>
+              }
+            >
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Icon
+                      icon={capabilityIcons[capability()]}
+                      size={EMPTY_ICON}
+                      tint={colors.foreground}
+                    />
+                  </EmptyMedia>
+                  <EmptyTitle>
+                    {capability() === '翻译'
+                      ? '选择或新增服务商'
+                      : `${capability()}服务尚未接入`}
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    {capability() === '翻译'
+                      ? '在这里配置接口地址、模型和 API Key。'
+                      : '切换到「翻译」可管理翻译服务商。'}
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            </If>
           </If>
           {/* 按 ID 挂载，切换时清理编辑状态，排序时保留草稿。 */}
           <Each of={selectedId() ? [selectedId()] : []}>

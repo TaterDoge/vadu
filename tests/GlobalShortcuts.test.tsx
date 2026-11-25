@@ -144,6 +144,7 @@ test('全局快捷键唤起无边框翻译窗，隐藏不改变设置窗可见�
   expect(options?.level ?? 'normal').toBe('normal');
   expect(options).toMatchObject({
     id: 'translate',
+    title: 'vadu 翻译',
     frame: 'none',
     transparent: true,
     workspaces: 'all',

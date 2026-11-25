@@ -1,27 +1,30 @@
+import { Activity, Layers, RefreshCw } from 'lucide';
 import { cleanup, computed, effect, signal, Text, View } from 'nsh';
-import { Button, Command, Input, Popover } from 'nsh/base';
 import { currentWindow } from 'nsh/desktop';
+
+import {
+  Button,
+  buttonGlyph,
+  IconButton,
+  iconButtonGlyph,
+} from '@/components/ui/button';
+import { Command } from '@/components/ui/command';
+import { Input } from '@/components/ui/input';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Icon } from '@/lib/ui/icons';
 
 import {
   checkModel,
   listModels,
   listModelsDraft,
 } from '../../../../api/models';
-import { buttonFrameClass } from '../../../../components/ui/buttonStyles';
-import { Icon } from '../../../../components/ui/Icon';
 import { providerConnectionsSupported } from '../../../../feature/settings';
 import type { ProviderProfile } from '../../../../feature/settings/providers/config';
-import {
-  lucideActivity,
-  lucideLayers,
-  lucideRefreshCw,
-} from '../../../../icons';
-import { HealthCheckSpinner } from './HealthCheckSpinner';
-import {
-  inputClass,
-  providerButtonClass,
-  providerHeadingClass,
-} from './providerStyles';
+import { providerHeadingClass } from './providerStyles';
 
 export function createProviderModelField({
   draft,
@@ -59,7 +62,7 @@ export function createProviderModelField({
     busy() ||
     connection()?.protocol !== 'chat-completions' ||
     !draft().model.trim();
-  const actionClass = `${providerButtonClass} gap-1.5 border-border bg-background hover:bg-accent disabled:opacity-50`;
+
   const window = currentWindow();
   let networkRequest: AbortController | undefined;
   const abort = () => networkRequest?.abort();
@@ -139,80 +142,82 @@ export function createProviderModelField({
           <Text class={`${providerHeadingClass} shrink-0`}>模型</Text>
           <View class="min-w-0 flex-row flex-wrap justify-end gap-1.5">
             <Button
+              testID="provider-health-check"
               accessibilityLabel={checkingModel() ? '正在检测模型' : '健康检测'}
-              disabled={checkDisabled()}
+              variant="secondary"
+              busy={checkingModel()}
+              disabled={checkDisabled() && !checkingModel()}
               onPress={checkCurrentModel}
-              class={actionClass}
             >
-              <If when={checkingModel()} else={<Icon icon={lucideActivity} />}>
-                <HealthCheckSpinner />
+              <If when={!checkingModel()}>
+                <Icon icon={Activity} {...buttonGlyph('secondary')} />
               </If>
-              <Text class={providerHeadingClass}>健康检测</Text>
+              健康检测
             </Button>
             <Popover
               open={modelPickerOpen()}
               onOpenChange={({ open }) => changeModelPicker(open)}
-              placement="top"
-              align="end"
-              offset={4}
-              margin={8}
-              popupClass="w-80 overflow-hidden rounded-xl border border-border bg-popover shadow-md"
-              trigger={
+            >
+              <PopoverTrigger>
                 <Button
                   testID="provider-model-list"
                   accessibilityLabel="选择模型"
+                  variant="secondary"
                   disabled={!canFetchModels() || busy()}
-                  class={actionClass}
                 >
-                  <Icon icon={lucideLayers} />
-                  <Text class={providerHeadingClass}>选择模型</Text>
+                  <Icon icon={Layers} {...buttonGlyph('secondary')} />
+                  选择模型
                 </Button>
-              }
-            >
-              <Command
-                class="min-h-0 shrink"
-                accessibilityLabel="模型列表"
-                searchAccessibilityLabel="搜索模型"
-                placeholder="搜索模型…"
-                autoFocus
-                loading={busy()}
-                items={models().map((id) => ({
-                  id,
-                  label: id,
-                  checked: id === draft().model,
-                  disabled: busy(),
-                }))}
-                searchBarClass="shrink-0 flex-row items-center gap-1.5 border-b border-border p-2"
-                searchClass={inputClass + ' flex-1'}
-                listClass="max-h-72 p-1"
-                itemClass={`${buttonFrameClass} min-h-9 justify-center rounded-md border-transparent px-3 py-1.5 text-sm text-popover-foreground checked:bg-secondary focus:bg-accent`}
-                searchSuffix={
-                  <Button
-                    accessibilityLabel="刷新模型列表"
-                    disabled={busy()}
-                    onPress={fetchModels}
-                    class={`${buttonFrameClass} size-8 shrink-0 items-center justify-center rounded-md border-transparent hover:bg-accent disabled:opacity-50`}
-                  >
-                    <Icon icon={lucideRefreshCw} />
-                  </Button>
-                }
-                empty={
-                  <Text class="px-3 py-2 text-sm text-muted-foreground">
-                    {models().length ? '没有匹配的模型' : '暂无模型'}
-                  </Text>
-                }
-                footer={
-                  <If when={busy() && models().length === 0}>
+              </PopoverTrigger>
+              <PopoverContent
+                placement="top"
+                align="end"
+                offset={4}
+                margin={8}
+                width={320}
+                compact
+              >
+                <Command
+                  class="min-h-0 shrink"
+                  accessibilityLabel="模型列表"
+                  searchAccessibilityLabel="搜索模型"
+                  placeholder="搜索模型…"
+                  autoFocus
+                  loading={busy()}
+                  items={models().map((id) => ({
+                    id,
+                    label: id,
+                    checked: id === draft().model,
+                    disabled: busy(),
+                  }))}
+                  listStyle={{ maxHeight: 288 }}
+                  searchSuffix={
+                    <IconButton
+                      accessibilityLabel="刷新模型列表"
+                      disabled={busy()}
+                      onPress={fetchModels}
+                    >
+                      <Icon icon={RefreshCw} {...iconButtonGlyph()} />
+                    </IconButton>
+                  }
+                  empty={
                     <Text class="px-3 py-2 text-sm text-muted-foreground">
-                      正在获取模型…
+                      {models().length ? '没有匹配的模型' : '暂无模型'}
                     </Text>
-                  </If>
-                }
-                onSelect={({ id }) => {
-                  changeModel(id);
-                  changeModelPicker(false);
-                }}
-              />
+                  }
+                  footer={
+                    <If when={busy() && models().length === 0}>
+                      <Text class="px-3 py-2 text-sm text-muted-foreground">
+                        正在获取模型…
+                      </Text>
+                    </If>
+                  }
+                  onSelect={({ id }) => {
+                    changeModel(id);
+                    changeModelPicker(false);
+                  }}
+                />
+              </PopoverContent>
             </Popover>
           </View>
         </View>
@@ -224,7 +229,6 @@ export function createProviderModelField({
           value={draft().model}
           onChange={({ value }) => changeModel(value)}
           placeholder="输入模型 ID"
-          class={inputClass}
         />
       </View>
     );

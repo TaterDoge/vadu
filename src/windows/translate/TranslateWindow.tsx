@@ -1,3 +1,4 @@
+import { Pin, Settings as SettingsIcon } from 'lucide';
 import {
   cleanup,
   computed,
@@ -6,51 +7,29 @@ import {
   Scroll,
   signal,
   Text,
-  token,
   untracked,
   View,
 } from 'nsh';
-import { Button, Select } from 'nsh/base';
 import { currentWindow, Window } from 'nsh/desktop';
 
-import { IconButton } from '../../components/IconButton';
-import { buttonFrameClass } from '../../components/ui/buttonStyles';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button, IconButton, iconButtonGlyph } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Select, SelectContent, SelectTrigger } from '@/components/ui/select';
+import { TitleBar } from '@/components/ui/title-bar';
+import { Icon } from '@/lib/ui/icons';
+
 import {
   providerConnectionsSupported,
   Settings,
   SettingsError,
 } from '../../feature/settings';
 import '../../feature/settings/appearance/theme';
-import { Icon } from '../../components/ui/Icon';
-import { lucideChevronDown, lucidePin, lucideSettings } from '../../icons';
 import { translationLanguages } from '../../translation-languages';
 import { TranslateInput } from './components/TranslateInput';
 import { createTranslationSession } from './translation-session';
 
 const pinned = signal(false);
-const pickerPopup =
-  'rounded-lg border border-border bg-popover p-1 text-popover-foreground';
-const pickerItem = `${buttonFrameClass} min-h-8 rounded-md border-transparent px-2 focus:bg-accent selected:bg-accent`;
-
-function PickerLabel(props: { title: string; muted?: boolean }) {
-  return (
-    <View
-      class={`${buttonFrameClass} h-8 min-w-0 flex-row items-center justify-between gap-1 rounded-lg border-border bg-background px-2`}
-    >
-      <Text
-        class={`min-w-0 shrink text-sm leading-5 ${props.muted ? 'text-muted-foreground' : 'text-foreground'}`}
-        style={{ numberOfLines: 1, textOverflow: 'ellipsis' }}
-      >
-        {props.title}
-      </Text>
-      <Icon
-        icon={lucideChevronDown}
-        size={12}
-        color={token('muted-foreground')}
-      />
-    </View>
-  );
-}
 
 export function toggleTranslatePin() {
   pinned.set(!pinned());
@@ -112,23 +91,28 @@ export function TranslateWindow() {
       accessibilityLabel="翻译工作台"
       class="min-w-0 flex-1 overflow-hidden rounded-xl bg-background text-foreground"
     >
-      <View
+      <TitleBar
         testID="translation-toolbar"
-        class="h-8 shrink-0 flex-row items-center justify-between px-3"
-        desktop={{ windowDrag: true }}
+        style={{
+          justifyContent: 'space-between',
+          backgroundColor: 'transparent',
+          borderBottomColor: ' transparent',
+        }}
       >
         <IconButton
-          label={pinned() ? '取消固定窗口' : '固定窗口'}
-          icon={lucidePin}
+          accessibilityLabel={pinned() ? '取消固定窗口' : '固定窗口'}
           selected={pinned()}
           onPress={toggleTranslatePin}
-        />
+        >
+          <Icon icon={Pin} {...iconButtonGlyph({ selected: pinned() })} />
+        </IconButton>
         <IconButton
-          label="打开设置"
-          icon={lucideSettings}
+          accessibilityLabel="打开设置"
           onPress={() => Window.get('main')?.focus()}
-        />
-      </View>
+        >
+          <Icon icon={SettingsIcon} {...iconButtonGlyph()} />
+        </IconButton>
+      </TitleBar>
       <View class="min-h-0 flex-1 gap-2 px-2 pb-4">
         <TranslateInput
           inputRef={(node) => {
@@ -138,54 +122,44 @@ export function TranslateWindow() {
           readonly={pending()}
           onChange={source.set}
         />
-        <View class="h-8 shrink-0 flex-row gap-2">
+        <View class="shrink-0 flex-row items-center gap-2">
           <Select
-            testID="translation-language"
-            accessibilityLabel="目标语言"
             value={target()}
-            items={translationLanguages}
             onChange={({ value }) => {
               if (value !== null) target.set(value);
             }}
             disabled={pending()}
-            cover={false}
-            class="w-24 shrink-0"
-            popupClass={pickerPopup}
-            itemClass={pickerItem}
-            trigger={
-              <PickerLabel
-                title={
-                  translationLanguages.find(({ value }) => value === target())
-                    ?.title ?? '目标语言'
-                }
-              />
-            }
-          />
+          >
+            <SelectTrigger
+              testID="translation-language"
+              accessibilityLabel="目标语言"
+              style={{ width: 120, minWidth: 0, flexShrink: 0 }}
+            />
+            <SelectContent items={translationLanguages} cover={false} />
+          </Select>
           <Select
-            testID="translation-provider"
-            accessibilityLabel="翻译服务商"
             value={chosen()?.id ?? null}
-            items={profiles().map(({ id, name, model }) => ({
-              value: id,
-              title: `${name} · ${model}`,
-            }))}
             onChange={({ value }) => profileId.set(value)}
             disabled={
               !providerConnectionsSupported ||
               profiles().length === 0 ||
               pending()
             }
-            cover={false}
-            class="min-w-0 flex-1"
-            popupClass={pickerPopup}
-            itemClass={pickerItem}
-            trigger={
-              <PickerLabel
-                title={chosen()?.name ?? '选择服务商'}
-                muted={!chosen()}
-              />
-            }
-          />
+            placeholder="选择服务商"
+          >
+            <SelectTrigger
+              testID="translation-provider"
+              accessibilityLabel="翻译服务商"
+              style={{ flex: 1, minWidth: 0 }}
+            />
+            <SelectContent
+              items={profiles().map(({ id, name, model }) => ({
+                value: id,
+                title: `${name} · ${model}`,
+              }))}
+              cover={false}
+            />
+          </Select>
           <Button
             testID="translation-submit"
             disabled={
@@ -198,24 +172,21 @@ export function TranslateWindow() {
               if (pending()) cancel();
               else if (profile) submit(profile.id, target(), source());
             }}
-            class={`${buttonFrameClass} w-24 shrink-0 items-center justify-center rounded-lg border-transparent bg-foreground disabled:opacity-50`}
+            style={{ width: 96, flexShrink: 0 }}
           >
-            <Text class="text-sm leading-5 font-semibold text-background">
-              {pending() ? '取消翻译' : '翻译'}
-            </Text>
+            {pending() ? '取消翻译' : '翻译'}
           </Button>
         </View>
-        <View
+        <Card
           testID="translation-result"
           role="region"
           accessibilityLabel="翻译结果"
-          class="min-h-0 gap-1 rounded-xl bg-muted p-3"
-          style={{ flex: 2 }}
+          style={{ flex: 2, minHeight: 0, padding: 10, gap: 4 }}
         >
           <If when={error() || configError()}>
-            <Text role="alert" class="text-xs text-destructive">
-              {error() || configError()}
-            </Text>
+            <Alert variant="destructive" style={{ padding: 4 }}>
+              <AlertDescription>{error() || configError()}</AlertDescription>
+            </Alert>
           </If>
           <If when={cancelled()}>
             <Text class="text-xs text-muted-foreground">已取消翻译</Text>
@@ -241,13 +212,18 @@ export function TranslateWindow() {
                 : '当前平台不支持服务商连接。'}
             </Text>
           </If>
-        </View>
+        </Card>
       </View>
     </View>
   );
 }
 
 export function openTranslateWindow() {
+  const currentWindow = Window.get('translate');
+  if (currentWindow) {
+    currentWindow.focus();
+    return;
+  }
   const window = Window.open(TranslateWindow, {
     id: 'translate',
     frame: 'none',

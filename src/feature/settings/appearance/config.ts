@@ -7,7 +7,7 @@ export const appearances = [
 ] as const;
 
 export const accents = [
-  { value: 'neutral', label: '中性', token: 'accent-neutral' },
+  { value: 'neutral', label: '默认色', token: 'accent-neutral' },
   { value: 'blue', label: '蓝色', token: 'accent-blue' },
   { value: 'emerald', label: '翠绿', token: 'accent-emerald' },
   { value: 'amber', label: '琥珀', token: 'accent-amber' },

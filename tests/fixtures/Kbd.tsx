@@ -1,9 +1,8 @@
 import { mount, signal, Text, View } from 'nsh';
+
+import { Button } from '@/components/ui/button';
+import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import '../../src/feature/settings/appearance/theme';
-
-import { Button } from 'nsh/base';
-
-import { Kbd, KbdGroup } from '../../src/components/ui/Kbd';
 
 function KbdFixture() {
   const alternate = signal(false);
@@ -19,7 +18,7 @@ function KbdFixture() {
       >
         <Kbd>{alternate() ? '⌥' : '⌘'}</Kbd>
         <Kbd
-          class={alternate() ? 'h-8 min-w-8' : undefined}
+          style={alternate() ? { height: 32, minWidth: 32 } : undefined}
           onLayout={({ bounds }) =>
             keySize.set(
               Math.round(bounds.size.width) +
@@ -36,7 +35,7 @@ function KbdFixture() {
         testID="change-keys"
         onPress={() => alternate.update((value) => !value)}
       >
-        <Text>切换按键</Text>
+        切换按键
       </Button>
     </View>
   );

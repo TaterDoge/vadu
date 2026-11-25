@@ -1,6 +1,7 @@
-import { host, mount, Text, View } from 'nsh';
-import { Button } from 'nsh/base';
+import { host, mount, View } from 'nsh';
 import { Window } from 'nsh/desktop';
+
+import { Button } from '@/components/ui/button';
 
 import { SettingsWindow } from '../../src/windows/settings/SettingsWindow';
 import { openTranslateWindow } from '../../src/windows/translate/TranslateWindow';
@@ -14,13 +15,13 @@ function Windows() {
     <View class="flex-1">
       <SettingsWindow />
       <Button testID="open-translate" onPress={openTranslateWindow}>
-        <Text>打开翻译窗口</Text>
+        打开翻译窗口
       </Button>
       <Button
         testID="hide-translate"
         onPress={() => Window.get('translate')?.hide()}
       >
-        <Text>隐藏翻译窗口</Text>
+        隐藏翻译窗口
       </Button>
     </View>
   );

@@ -61,7 +61,7 @@ export function completion(
 ): Payload {
   return {
     ...JSON.parse(profile.providerOptions || '{}'),
-    temperature: Number(profile.temperature),
+    temperature: profile.temperature,
     ...fields,
   };
 }

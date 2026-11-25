@@ -1,5 +1,8 @@
 import { colorScheme, mount, Text, token, View } from 'nsh';
-import { Button } from 'nsh/base';
+import { Window } from 'nsh/desktop';
+
+import { Button } from '@/components/ui/button';
+import { currentTheme, focusRing, press } from '@/lib/ui/theme';
 
 import { themePreferences } from '../../src/feature/settings/appearance/theme';
 import { SettingsWindow } from '../../src/windows/settings/SettingsWindow';
@@ -9,21 +12,34 @@ function ThemeFixture() {
   return (
     <View class="flex-1">
       <SettingsWindow />
-      <Button testID="open-translate" onPress={openTranslateWindow}>
-        <Text>打开翻译窗口</Text>
-      </Button>
+      <View class="flex-row gap-2">
+        <Button testID="open-translate" onPress={openTranslateWindow}>
+          打开翻译窗口
+        </Button>
+        <Button
+          testID="close-translate"
+          onPress={() => Window.get('translate')?.close()}
+        >
+          关闭翻译窗口
+        </Button>
+      </View>
       <Text class="h-4 text-xs">
         {'主题状态 ' +
           JSON.stringify({
             ...themePreferences(),
             scheme: colorScheme(),
+            theme: currentTheme(),
+            pressScale: press.scale,
             font: token('font-sans'),
             keyFont: token('font-key'),
             primary: token('primary'),
+            brand: token('brand'),
             primaryForeground: token('primary-foreground'),
             sidebarPrimary: token('sidebar-primary'),
             sidebarForeground: token('sidebar-primary-foreground'),
             border: token('border'),
+            mutedForeground: token('muted-foreground'),
+            focus: focusRing(),
             neutral: token('accent-neutral'),
             blue: token('accent-blue'),
             emerald: token('accent-emerald'),

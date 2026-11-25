@@ -1,19 +1,20 @@
+import { cleanup, computed, type Signal, signal, Text, View } from 'nsh';
+
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import {
-  cleanup,
-  computed,
-  Scroll,
-  type Signal,
-  signal,
-  Text,
-  token,
-  View,
-} from 'nsh';
-import { Button, Dialog, Input, Select, Switch } from 'nsh/base';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectTrigger } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/toast';
 
 import { ProviderRequestError } from '../../../../api/request';
-import { buttonFrameClass } from '../../../../components/ui/buttonStyles';
-import { Icon } from '../../../../components/ui/Icon';
-import { createPageToast } from '../../../../components/ui/PageToast';
 import {
   providerConnectionsSupported,
   Settings,
@@ -23,19 +24,16 @@ import {
   defaultProfileFields,
   type ProviderProfile,
 } from '../../../../feature/settings/providers/config';
-import { lucideChevronDown } from '../../../../icons';
-import { ProviderAdvancedFields } from './ProviderAdvancedFields';
+import {
+  type AdvancedFields,
+  ProviderAdvancedFields,
+} from './ProviderAdvancedFields';
 import { ProviderKeyField } from './ProviderKeyField';
 import { createProviderModelField } from './ProviderModelField';
-import {
-  hintClass,
-  inputClass,
-  providerButtonClass,
-  providerHeadingClass,
-  providerOptionsClass,
-} from './providerStyles';
+import { hintClass, providerHeadingClass } from './providerStyles';
 
-type ProviderFields = Omit<ProviderProfile, 'id'>;
+type ProviderFields = Omit<ProviderProfile, 'id' | keyof AdvancedFields> &
+  AdvancedFields;
 type Draft = ProviderFields & { id?: string };
 type Confirmation = {
   title: string;
@@ -75,11 +73,15 @@ export function ProviderEditor(props: {
       ? profile
       : null;
   });
-  const { showToast, ToastOutlet } = createPageToast('provider');
+  const toastId = 'provider-toast';
+  function showToast(message: string) {
+    if (mounted) toast(message, { id: toastId, duration: 3000 });
+  }
   let mounted = true;
   cleanup(() => {
     mounted = false;
     draftKey.set(null);
+    toast.dismiss(toastId);
   });
 
   const { ModelField, resetModels } = createProviderModelField({
@@ -166,8 +168,7 @@ export function ProviderEditor(props: {
         baseUrl: value.baseUrl.trim(),
         model: value.model.trim(),
         enabled: value.enabled,
-        temperature:
-          value.temperature.trim() || defaultProfileFields.temperature,
+        temperature: value.temperature ?? defaultProfileFields.temperature,
         providerOptions: value.providerOptions.trim(),
         headers: value.headers.trim(),
       });
@@ -220,9 +221,9 @@ export function ProviderEditor(props: {
   return (
     <View class="gap-2.5">
       <If when={error() !== ''}>
-        <Text role="alert" class="text-xs text-destructive">
-          {error()}
-        </Text>
+        <Alert variant="destructive">
+          <AlertDescription>{error()}</AlertDescription>
+        </Alert>
       </If>
       <View class="gap-1.5">
         <View class="flex-row items-center justify-between gap-2">
@@ -233,9 +234,7 @@ export function ProviderEditor(props: {
             disabled={busy()}
             checked={draft().enabled}
             onChange={({ checked }) => patchDraft({ enabled: checked })}
-            class={`${buttonFrameClass} h-8 shrink-0 justify-center rounded-lg border-transparent px-1`}
-            trackClass="h-5 w-8 justify-center rounded-full bg-muted-foreground px-0.5 checked:bg-foreground"
-            thumbClass="h-4 w-4 rounded-full bg-background checked:translate-x-3"
+            size="sm"
           />
         </View>
         <Input
@@ -245,45 +244,24 @@ export function ProviderEditor(props: {
           readonly={busy()}
           value={draft().name}
           onChange={({ value }) => patchDraft({ name: value })}
-          class={inputClass}
         />
       </View>
       <View class="gap-1.5">
         <Text class={providerHeadingClass}>API 协议</Text>
         <Select
-          testID="provider-protocol"
-          accessibilityLabel="API 协议"
-          items={protocols}
           value={draft().protocol}
           onChange={({ value }) => {
             const protocol = protocols.find((item) => item.value === value);
             if (protocol) patchDraft({ protocol: protocol.value });
           }}
-          cover={false}
           disabled={busy()}
-          popupClass="rounded-lg border border-border bg-popover p-1 text-popover-foreground"
-          itemClass={providerOptionsClass}
-          trigger={
-            <View
-              class={`${buttonFrameClass} h-8 min-w-0 flex-row items-center justify-between gap-2 rounded-lg border-input bg-background px-2.5`}
-            >
-              <Text
-                class="min-w-0 shrink text-sm text-foreground"
-                style={{ numberOfLines: 1 }}
-              >
-                {
-                  protocols.find(({ value }) => value === draft().protocol)
-                    ?.title
-                }
-              </Text>
-              <Icon
-                icon={lucideChevronDown}
-                size={12}
-                color={token('muted-foreground')}
-              />
-            </View>
-          }
-        />
+        >
+          <SelectTrigger
+            testID="provider-protocol"
+            accessibilityLabel="API 协议"
+          />
+          <SelectContent items={protocols} cover={false} />
+        </Select>
         <If when={draft().protocol !== 'chat-completions'}>
           <Text class={hintClass}>该 API 协议尚未接入，可保存配置。</Text>
         </If>
@@ -300,7 +278,6 @@ export function ProviderEditor(props: {
           readonly={busy()}
           value={draft().baseUrl}
           onChange={({ value }) => patchDraft({ baseUrl: value })}
-          class={inputClass}
         />
         <Text class={hintClass}>填写含版本路径的接口根地址。</Text>
       </View>
@@ -324,63 +301,56 @@ export function ProviderEditor(props: {
           accessibilityLabel="保存"
           disabled={busy()}
           onPress={requestSave}
-          class={`${providerButtonClass} border-transparent bg-foreground hover:opacity-90`}
         >
-          <Text class="text-sm font-semibold text-background">保存</Text>
+          保存
         </Button>
         <If when={draft().id !== undefined}>
           <Button
             accessibilityLabel="删除"
             disabled={busy()}
             onPress={requestDelete}
-            class={
-              providerButtonClass +
-              ' border-transparent bg-destructive/10 hover:bg-destructive/20'
-            }
+            variant="destructive"
           >
-            <Text class="text-sm font-semibold text-destructive">删除</Text>
+            删除
           </Button>
         </If>
       </View>
-      <ToastOutlet />
       <Dialog
-        testID="provider-confirm-dialog"
         open={confirmation() !== null}
-        role="alertdialog"
-        accessibilityLabel={confirmation()?.title ?? '确认操作'}
-        accessibilityDescription={confirmation()?.description}
-        animation="fade"
-        closeOnBackdropPress={false}
         onOpenChange={({ open }) => {
           if (!open) confirmation.set(null);
         }}
-        backdropClass="bg-background/75"
-        class="m-auto w-80 max-w-[90%] gap-3 rounded-xl border border-border bg-popover p-4 shadow-lg"
       >
-        <Text class={providerHeadingClass}>{confirmation()?.title}</Text>
-        <Scroll class="max-h-40">
-          <Text class="text-sm leading-5 text-muted-foreground">
-            {confirmation()?.description}
-          </Text>
-        </Scroll>
-        <View class="flex-row flex-wrap justify-end gap-2">
-          <Button
-            accessibilityLabel="取消"
-            onPress={() => confirmation.set(null)}
-            class={`${providerButtonClass} border-border hover:bg-accent`}
-          >
-            <Text class={providerHeadingClass}>取消</Text>
-          </Button>
-          <Button
-            accessibilityLabel={confirmation()?.button ?? '确认'}
-            onPress={confirm}
-            class={`${providerButtonClass} border-transparent bg-foreground hover:opacity-90`}
-          >
-            <Text class="text-sm font-semibold text-background">
+        <DialogContent
+          testID="provider-confirm-dialog"
+          role="alertdialog"
+          accessibilityLabel={confirmation()?.title ?? '确认操作'}
+          accessibilityDescription={confirmation()?.description}
+          closeOnBackdropPress={false}
+        >
+          <DialogTitle>{confirmation()?.title}</DialogTitle>
+          <DialogDescription>{confirmation()?.description}</DialogDescription>
+          <DialogFooter style={{ flexWrap: 'wrap' }}>
+            <Button
+              variant="secondary"
+              accessibilityLabel="取消"
+              onPress={() => confirmation.set(null)}
+            >
+              取消
+            </Button>
+            <Button
+              accessibilityLabel={confirmation()?.button ?? '确认'}
+              variant={
+                confirmation()?.button === '确认删除'
+                  ? 'destructive'
+                  : 'default'
+              }
+              onPress={confirm}
+            >
               {confirmation()?.button}
-            </Text>
-          </Button>
-        </View>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </View>
   );

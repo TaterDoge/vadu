@@ -30,6 +30,8 @@ test('外观保存后重开，在进入外观页前应用已保存的主题', as
   expect(status(reopened)).toMatchObject({
     ...appearance,
     scheme: 'dark',
+    theme: 'default',
+    pressScale: 0.97,
     font: 'JetBrains Mono',
   });
   expect(status(reopened).primary).toBe(status(reopened).blue);
@@ -88,11 +90,11 @@ test('主题默认跟随系统，手动选择优先，切回系统后继续响�
     accent: 'neutral',
     style: 'nova',
   });
-  expect(app.spanStyle('text:Aa 0123456789 · 你好').color).toBe('#fafafaff');
+  expect(app.spanStyle('text:Aa 0123456789 · 你好').color).toBe('#eeeff1ff');
 
   await app.setColorScheme('light');
   expect(status(app).scheme).toBe('light');
-  expect(app.spanStyle('text:Aa 0123456789 · 你好').color).toBe('#0a0a0aff');
+  expect(app.spanStyle('text:Aa 0123456789 · 你好').color).toBe('#101319ff');
   await app.press('id:appearance-dark');
   await app.setColorScheme('dark');
   await app.setColorScheme('light');
@@ -107,31 +109,41 @@ test('主题默认跟随系统，手动选择优先，切回系统后继续响�
   expect(status(app).scheme).toBe('light');
 });
 
-test('六种强调色使用主题色值，深浅前景可读，恢复中性不残留覆盖', async () => {
+test('切换强调色时深浅前景可读，焦点保持预设光环，恢复默认色时清除覆盖', async () => {
   const app = await open('./fixtures/Theme.tsx', viewport);
   await app.press('id:settings-appearance');
 
   for (const scheme of ['light', 'dark'] as const) {
     await app.setColorScheme(scheme);
-    const neutral = status(app);
+    const preset = status(app);
+    expect(preset.neutral).toBe(preset.primary);
+    expect(preset.brand).toBe(preset.primary);
+    expect(preset.focus).toMatchObject({
+      borderColor: preset.mutedForeground,
+      outlineWidth: 3,
+      outlineOffset: 0,
+    });
     for (const accent of ['blue', 'emerald', 'amber', 'rose', 'violet']) {
       await app.press('id:accent-' + accent);
       const selected = status(app);
       expect(selected.primary).toBe(selected[accent]);
+      expect(selected.brand).toBe(selected.primary);
       expect(selected.sidebarPrimary).toBe(selected.primary);
       expect(selected.sidebarForeground).toBe(selected.primaryForeground);
-      expect(selected.border).toBe(neutral.border);
-      expect(selected.neutral).toBe(neutral.primary);
+      expect(selected.border).toBe(preset.border);
+      expect(selected.focus).toEqual(preset.focus);
+      expect(selected.neutral).toBe(preset.primary);
       expect(app.spanStyle('text:强调色预览').color).toBe(
         accent === 'amber' || scheme === 'dark' ? '#0a0a0aff' : '#fafafaff',
       );
     }
     await app.press('id:accent-neutral');
     expect(status(app)).toMatchObject({
-      primary: neutral.primary,
-      primaryForeground: neutral.primaryForeground,
-      sidebarPrimary: neutral.sidebarPrimary,
-      sidebarForeground: neutral.sidebarForeground,
+      primary: preset.primary,
+      primaryForeground: preset.primaryForeground,
+      brand: preset.brand,
+      sidebarPrimary: preset.sidebarPrimary,
+      sidebarForeground: preset.sidebarForeground,
     });
   }
 });
@@ -186,7 +198,17 @@ test('外观单选组支持方向键，翻译窗口打开期间共享主题且�
   expect(status(app).mode).toBe('dark');
 
   await app.press('id:open-translate');
-  expect(app.window('translate').state()).not.toBeNull();
+  await app.press('label:固定窗口');
+  for (const [mode, color] of [
+    ['light', '#f6f6f9ff'],
+    ['dark', '#16191fff'],
+  ]) {
+    await app.press(`id:appearance-${mode}`);
+    expect(app.window('translate').state()?.visible).toBe(true);
+    for (const region of ['settings-center', 'translation-workspace']) {
+      expect(app.viewStyle(`id:${region}`)?.backgroundColor).toBe(color);
+    }
+  }
   await app.press('id:accent-blue');
   await app.press('id:style-lyra');
   expect(status(app)).toMatchObject({
@@ -194,7 +216,8 @@ test('外观单选组支持方向键，翻译窗口打开期间共享主题且�
     accent: 'blue',
     style: 'lyra',
   });
-  await app.window('translate').pressClose();
+  await app.press('id:close-translate');
+  expect(app.window('translate').state()).toBeNull();
   await app.press('id:open-translate');
   expect(app.window('translate').state()).not.toBeNull();
   expect(status(app)).toMatchObject({

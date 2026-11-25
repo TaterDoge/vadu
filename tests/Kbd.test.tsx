@@ -15,7 +15,7 @@ test('Kbd 支持单键和组合键，保留响应式内容、样式与可访问�
   expect(app.spanStyle('text:M')).toMatchObject({
     fontSize: 12,
     fontWeight: 500,
-    color: '#737373ff',
+    color: '#5f636aff',
   });
 
   await app.keyboard.press('tab');
@@ -27,7 +27,7 @@ test('Kbd 支持单键和组合键，保留响应式内容、样式与可访问�
   expect(app.shows('id:alternate-group >> text:P')).toBe(true);
 });
 
-test('单键键帽方正，尺寸随高度与最小宽度类一起变', async () => {
+test('单键键帽方正，支持覆盖高度与最小宽度', async () => {
   const app = await open('./fixtures/Kbd.tsx', {
     width: 360,
     height: 640,
@@ -44,8 +44,7 @@ test('单键键帽方正，尺寸随高度与最小宽度类一起变', async ()
     return { width, height };
   };
 
-  // 只靠上下 padding 撑高的单键会又窄又高，宽度得由最小宽度撑住。
-  expect(keySize()).toEqual({ width: 28, height: 28 });
+  expect(keySize()).toEqual({ width: 20, height: 20 });
   await app.press('id:change-keys');
   expect(keySize()).toEqual({ width: 32, height: 32 });
 });

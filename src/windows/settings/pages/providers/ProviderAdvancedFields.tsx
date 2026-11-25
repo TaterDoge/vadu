@@ -1,53 +1,51 @@
-import { signal, Text, token, View } from 'nsh';
-import { Editor, Input } from 'nsh/base';
+import { Text, View } from 'nsh';
 
-import { buttonFrameClass } from '../../../../components/ui/buttonStyles';
-import { Icon } from '../../../../components/ui/Icon';
-import { inputFrameClass } from '../../../../components/ui/inputStyles';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { Editor } from '@/components/ui/editor';
+import { NumberInput } from '@/components/ui/number-input';
+
 import type { ProviderProfile } from '../../../../feature/settings/providers/config';
-import { lucideChevronDown, lucideChevronRight } from '../../../../icons';
-import { hintClass, inputClass, providerHeadingClass } from './providerStyles';
+import { hintClass, providerHeadingClass } from './providerStyles';
 
-type AdvancedFields = Pick<
+export type AdvancedFields = Pick<
   ProviderProfile,
-  'temperature' | 'providerOptions' | 'headers'
->;
-const editorClass = `${inputFrameClass} h-24 min-w-0 rounded-lg bg-background`;
+  'providerOptions' | 'headers'
+> & {
+  temperature: number | null;
+};
+const editorClass = 'h-24 min-w-0';
 
 export function ProviderAdvancedFields(props: {
   value: AdvancedFields;
   busy: boolean;
   onChange: (patch: Partial<AdvancedFields>) => void;
 }) {
-  const advancedOpen = signal(false);
   return (
-    <>
-      <View
-        role="button"
-        focusable
+    <Collapsible>
+      {/* 表单没有列表行的额外边距，触发器与输入框同宽才能完整显示焦点环。 */}
+      <CollapsibleTrigger
+        first
         accessibilityLabel="高级选项"
-        accessibilityState={{ expanded: advancedOpen() }}
-        onPress={() => advancedOpen.set(!advancedOpen())}
-        class={`${buttonFrameClass} min-h-8 flex-row items-center gap-2 self-start rounded-lg border-transparent px-1 hover:bg-accent`}
+        style={{ marginHorizontal: 0 }}
       >
-        <Icon
-          icon={advancedOpen() ? lucideChevronDown : lucideChevronRight}
-          size={12}
-          color={token('muted-foreground')}
-        />
-        <Text class="text-sm font-medium text-foreground">高级选项</Text>
-      </View>
-      <If when={advancedOpen()}>
+        高级选项
+      </CollapsibleTrigger>
+      <CollapsibleContent>
         <View class="gap-2.5">
           <View class="gap-1.5">
             <Text class={providerHeadingClass}>温度</Text>
-            <Input
+            <NumberInput
+              class="ml-0.5"
               accessibilityLabel="温度"
-              keyboardType="decimal-pad"
+              step={0.1}
               readonly={props.busy}
               value={props.value.temperature}
               onChange={({ value }) => props.onChange({ temperature: value })}
-              class={`${inputClass} w-36`}
+              style={{ width: 144 }}
             />
             <Text class={hintClass}>输入 0 到 1，留空后保存可恢复默认值。</Text>
           </View>
@@ -88,7 +86,7 @@ export function ProviderAdvancedFields(props: {
             </Text>
           </View>
         </View>
-      </If>
-    </>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

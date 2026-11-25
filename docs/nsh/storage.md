@@ -20,7 +20,7 @@
 - **一包提交**：校验和编码全部成功后，只调用一次 `Storage.setItem`；业务校验失败或存储配额不足，不修改原值。成功读取或保存后更新 `Settings.current()` 响应式快照，供主题、快捷键与翻译窗口观察；失败不发布新值。
 - **不分散读写**：后续普通配置仍由对应业务入口提交，不在页面直接调用 Storage。暂不建立通用仓储接口、订阅层或迁移框架。
 
-配置与密钥使用 `nsh` 导出的异步 `Storage.getItem`、`Storage.setItem` 和 `Storage.removeItem`，路径及写盘由 [NSH Storage](https://nsh.dev/zh-CN/modules/nsh/#storage) 管理。`JSON.parse` 的结果作为不可信输入逐层校验，不能靠类型断言跳过。NSH 负责本地加载与后台写盘。快捷键兼容上一版的完整绑定列表，其余配置按当前文档结构校验。
+配置与密钥使用 `nsh` 导出的异步 `Storage.getItem`、`Storage.setItem` 和 `Storage.removeItem`，路径及写盘由 [NSH Storage](https://nsh.dev/zh-CN/modules/nsh/#storage) 管理。`JSON.parse` 的结果作为不可信输入逐层校验，不能靠类型断言跳过。NSH 负责本地加载与后台写盘。读取时兼容上一版的完整快捷键绑定列表和服务商温度的十进制字符串。
 
 ## 2. 当前数据格式
 
@@ -43,7 +43,7 @@ NSH 的外层文件是 KV 字典。普通配置使用 `vadu.config`，其字符�
 - 动作 ID 稳定，组合键存 NSH 语法，不存 `⌘` 等显示文本。`mod` 在 Apple 平台代表 Command，其余平台代表 Ctrl；保存时规范化修饰键顺序。
 - 首次读取发现 `vadu.config` 缺失时，在同一队列内保存各模块的默认配置，包括三项快捷键绑定。后续读取沿用已保存的配置。已保存的配置必须包含完整的外观字段，`mode`、`accent`、`style` 只接受应用提供的选项。
 - 快捷键列表必须恰好包含这三个动作。`enabled` 是布尔值，`keystroke` 仅全局项可为 `null`（未绑定）。已启用动作的组合必须互不相同。旧列表的三项均只有 `id` 和字符串 `keystroke` 时，按已开启读取，保留原键位，下次保存时补上 `enabled`。混合新旧字段按坏配置处理。
-- `profiles` 按列表顺序存放用户配置，每项记录唯一 ID、API 协议与规范化 Base URL。未知或非法字段、重复服务商 ID 均拒绝。
+- `profiles` 按列表顺序存放用户配置，每项记录唯一 ID、API 协议与规范化 Base URL。`temperature` 保存为 0 到 1 之间的 JSON 数字，含两端，默认 `0.3`。读取旧配置时将合法的十进制温度字符串转为数字，下次保存配置时写回。未知或非法字段、重复服务商 ID 均拒绝。
 - JSON 损坏或字段校验失败时，页面提示并禁用编辑，保留原文档。重置本地开发配置时，退出应用，只移除 `storage.json` 中的 `vadu.config` 键，重启后使用默认配置。
 
 ### 存放位置与承诺

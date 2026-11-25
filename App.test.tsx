@@ -13,6 +13,7 @@ test('侧栏显示品牌与五个分类，切换时不显示公共标题与说�
   expect(app.count('label:通用')).toBe(2);
   expect(app.count('text:应用偏好设置尚未迁移。')).toBe(0);
   expect(app.count('text:设置项业务尚未迁移，暂不可编辑。')).toBe(0);
+  const sidebar = app.layout('id:settings-sidebar-scroll')!;
   for (const [id, label] of [
     ['general', '通用'],
     ['providers', '服务商'],
@@ -22,6 +23,11 @@ test('侧栏显示品牌与五个分类，切换时不显示公共标题与说�
   ]) {
     expect(app.count(`id:settings-${id}`)).toBe(1);
     expect(app.shows(`label:${label}`)).toBe(true);
+    expect(app.shows(`id:settings-${id} >> text:${label}`)).toBe(true);
+    const row = app.layout(`id:settings-${id}`)!;
+    const leftInset = row.x - sidebar.x;
+    expect(leftInset).toBeGreaterThan(0);
+    expect(sidebar.x + sidebar.width - (row.x + row.width)).toBe(leftInset);
   }
 
   for (const [id, label] of [
@@ -33,12 +39,16 @@ test('侧栏显示品牌与五个分类，切换时不显示公共标题与说�
   ]) {
     await app.press(`id:settings-${id}`);
     expect(app.count(`label:${label}`)).toBe(2);
-    expect(app.texts().filter((text) => text === label).length).toBe(1);
+    expect(app.count(`id:settings-${id} >> text:${label}`)).toBe(1);
+    expect(app.count(`id:settings-router >> text:${label}`)).toBe(0);
     expect(app.count('text:设置项业务尚未迁移，暂不可编辑。')).toBe(0);
     expect(app.count('id:settings-shortcuts-page')).toBe(
       id === 'shortcuts' ? 1 : 0,
     );
     expect(app.count('id:settings-content')).toBe(1);
+    expect(app.layout('id:settings-content')!.y).toBe(
+      app.layout('id:settings-router')!.y,
+    );
   }
   await app.press('id:settings-general');
   // 原生驱动无历史时空操作，headless 则报告无可返回页面。

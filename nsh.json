@@ -15,5 +15,10 @@
       "style": "hidden",
       "height": 52
     }
+  },
+  "resolve": {
+    "alias": {
+      "@": "./"
+    }
   }
 }

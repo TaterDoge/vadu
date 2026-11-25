@@ -4,6 +4,7 @@
     "icons:add": "bun node_modules/supernsh-icons/cli/nsh-icons.ts add"
   },
   "dependencies": {
+    "lucide": "^1.66.0",
     "supernsh-icons": "file:vendor/nsh-icons"
   },
   "devDependencies": {

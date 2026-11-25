@@ -1,0 +1,65 @@
+shadcn-nsh
+Copyright (c) 2026 Aning (MIT License, see LICENSE)
+
+This project adapts the shared UI layer of NSH (Native Shell):
+
+  Source:   https://github.com/longbridge/nsh
+  Path:     examples/nsh-gallery-ui/
+  Baseline: the commit `port-map.json` records in `upstream.commit`
+  Copyright 2026 Longbridge <https://longbridge.com>
+  License:  Apache License, Version 2.0
+            https://www.apache.org/licenses/LICENSE-2.0
+
+What was changed: the looks of the shared controls (their state design and
+geometry) are re-expressed as copy-into-app components over `nsh/base`, with this
+library's own theme in place of the original colours — the theme's data is the
+library's (`packages/theme/theme.json` and `semantics.json`, stored in `oklch()`),
+and shadcn's neutral palette is an alternative theme installed by
+`init --theme shadcn`, not the default one. The Terminal idiom, the sounds and the
+website playground adapters are left out, and the API is named and composed the way
+shadcn/ui names and composes its own: a family keeps shadcn's part roles
+(`Trigger`, `Content`, `Item`, …) and the axes it writes (`variant`, `size`,
+`tone`).
+
+Each adapted file says where it came from in its header (`Derived from NSH
+examples/nsh-gallery-ui (Apache-2.0, © Longbridge); modified. See NOTICE.`). The
+adapted parts keep this notice's license: Apache-2.0. Which file came from which
+is `port-map.json`'s to say.
+
+The Solid Glass theme (`packages/theme/themes/solid-glass/`) is derived from the
+colour and finish values of Solid Glass's stylesheet:
+
+  Source:   https://github.com/deeplethe/solid-glass
+  Path:     src/solid-glass.css
+  Commit:   6e8903e
+  Copyright (c) 2026 DeepLethe
+  License:  MIT License
+            https://github.com/deeplethe/solid-glass/blob/main/LICENSE
+
+What was changed: the stylesheet's shadcn/ui colour variables and its glass
+finishes (edges, hairlines, shadows) are read into this library's theme files
+(`theme.json`, `semantics.json`), written in `oklch()`, with the roles this
+library adds mapped from them. Its components, typefaces and site are not
+taken.
+
+MIT License
+
+Copyright (c) 2026 DeepLethe
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

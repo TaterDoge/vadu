@@ -44,7 +44,7 @@ test('单键键帽方正，支持覆盖高度与最小宽度', async () => {
     return { width, height };
   };
 
-  expect(keySize()).toEqual({ width: 20, height: 20 });
+  expect(keySize()).toEqual({ width: 24, height: 24 });
   await app.press('id:change-keys');
   expect(keySize()).toEqual({ width: 32, height: 32 });
 });

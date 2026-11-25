@@ -16,7 +16,7 @@ import {
 
 /** A key's look: the cap itself, the type on it, and a row of them. Spread each one. */
 export interface KbdLook {
-  /** The cap: one line high, at least as wide, a light fill and a hairline edge. */
+  /** The cap: at least as wide as tall, a light fill and a hairline edge. */
   readonly kbd: ViewStyle;
   /** The key's name on the cap: small, medium, and a step quieter than the page's text. */
   readonly text: TextStyle;
@@ -25,10 +25,10 @@ export interface KbdLook {
 }
 
 /** The side of a key: one line of small type with room above and below it. */
-const side = 20;
+const side = 24;
 
 /**
- * A key's look, after shadcn/ui's `Kbd`: one line high (20 points with a pointer, one Cell row in
+ * A key's look, after shadcn/ui's `Kbd`: 24 points with a pointer (one Cell row in
  * the terminal), as wide as its name with a padding either side and at least a square, the theme's
  * small corners, a hairline edge and the `muted` fill, the name small (12 points), medium and in
  * the muted ink. The terminal draws no fill and no edge, its keys standing in the row as their

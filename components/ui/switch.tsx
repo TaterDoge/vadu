@@ -373,6 +373,7 @@ export function Switch(props: SwitchProps) {
   return (
     <BaseSwitch
       {...rest}
+      class={joinClass('disabled:opacity-50', props.class)}
       hitSlop={
         props.hitSlop ??
         (props.children == null ? switchHitSlop(size) : undefined)

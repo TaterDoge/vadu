@@ -1,4 +1,4 @@
-import { cleanup, computed, type Signal, signal, Text, View } from 'nsh';
+import { cleanup, computed, signal, Text, View } from 'nsh';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -50,11 +50,10 @@ const protocols = [
 
 export function ProviderEditor(props: {
   profileId: string;
-  busy: Signal<boolean>;
   onCreated: () => void;
   onDeleted: () => void;
 }) {
-  const busy = props.busy;
+  const busy = signal(false);
   const saved = computed(() =>
     Settings.current()?.profiles.find((p) => p.id === props.profileId),
   );

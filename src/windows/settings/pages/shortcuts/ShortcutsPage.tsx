@@ -37,10 +37,7 @@ import {
   Settings,
   SettingsError,
 } from '../../../../feature/settings';
-import {
-  shortcutRecording,
-  translateShortcutStatus,
-} from '../../../../feature/settings/shortcuts/runtime';
+import { shortcutRecording } from '../../../../feature/settings/shortcuts/runtime';
 import { shortcutGroups } from './constants';
 
 export function ShortcutsPage() {

@@ -1,119 +1,119 @@
 ---
 version: alpha
-name: "NSH Gallery UI"
-description: "Default NSH Gallery UI theme."
+name: 'NSH Gallery UI'
+description: 'Default NSH Gallery UI theme.'
 colors:
-  scrim: "#00000073"
-  media: "#10131a"
-  on-media: "#ffffff"
+  scrim: '#00000073'
+  media: '#10131a'
+  on-media: '#ffffff'
   light:
-    background: "#f6f6f9"
-    foreground: "#101319"
-    card: "#ffffff"
-    card-foreground: "#101319"
-    popover: "#ffffff"
-    popover-foreground: "#101319"
-    primary: "#c6ef6a"
-    primary-foreground: "#13160c"
-    secondary: "#f3f4f7"
-    secondary-foreground: "#101319"
-    muted: "#eeeff2"
-    muted-foreground: "#5f636a"
-    accent: "#eeeff2"
-    accent-foreground: "#101319"
-    destructive: "#d43a4a"
-    border: "#cacbcd"
-    input: "#cacbcd"
-    ring: "#5f636a"
-    chart-1: "#c6ef6a"
-    chart-2: "#3d63d1"
-    chart-3: "#138a5a"
-    chart-4: "#b26a00"
-    chart-5: "#d43a4a"
-    sidebar: "#f6f6f9"
-    sidebar-foreground: "#101319"
-    sidebar-primary: "#c6ef6a"
-    sidebar-primary-foreground: "#13160c"
-    sidebar-accent: "#eeeff2"
-    sidebar-accent-foreground: "#101319"
-    sidebar-border: "#e4e4e7"
-    sidebar-ring: "#5f636a"
-    inset: "#eeeff2"
-    raised: "#f3f4f7"
-    field: "#ffffff"
-    line: "#e4e4e7"
-    hover: "#eeeff2"
-    faint: "#9a9da3"
-    brand: "#c6ef6a"
-    brand-edge: "#cacbcd"
-    track: "#eeeff2"
-    knob: "#ffffff"
-    info: "#3d63d1"
-    warn: "#b26a00"
-    up: "#138a5a"
-    brand-tint: "#c6ef6a1a"
-    inverse: "#ffffff"
-    inverse-foreground: "#101319"
-    inverse-brand: "#13160c"
-    info-tint: "#3d63d11a"
-    warn-tint: "#b26a001a"
-    destructive-tint: "#d43a4a1a"
-    up-tint: "#138a5a1a"
-    down-tint: "#d43a4a1a"
+    background: '#f6f6f9'
+    foreground: '#101319'
+    card: '#ffffff'
+    card-foreground: '#101319'
+    popover: '#ffffff'
+    popover-foreground: '#101319'
+    primary: '#c6ef6a'
+    primary-foreground: '#13160c'
+    secondary: '#f3f4f7'
+    secondary-foreground: '#101319'
+    muted: '#eeeff2'
+    muted-foreground: '#5f636a'
+    accent: '#eeeff2'
+    accent-foreground: '#101319'
+    destructive: '#d43a4a'
+    border: '#cacbcd'
+    input: '#cacbcd'
+    ring: '#5f636a'
+    chart-1: '#c6ef6a'
+    chart-2: '#3d63d1'
+    chart-3: '#138a5a'
+    chart-4: '#b26a00'
+    chart-5: '#d43a4a'
+    sidebar: '#f6f6f9'
+    sidebar-foreground: '#101319'
+    sidebar-primary: '#c6ef6a'
+    sidebar-primary-foreground: '#13160c'
+    sidebar-accent: '#eeeff2'
+    sidebar-accent-foreground: '#101319'
+    sidebar-border: '#e4e4e7'
+    sidebar-ring: '#5f636a'
+    inset: '#eeeff2'
+    raised: '#f3f4f7'
+    field: '#ffffff'
+    line: '#e4e4e7'
+    hover: '#eeeff2'
+    faint: '#9a9da3'
+    brand: '#c6ef6a'
+    brand-edge: '#cacbcd'
+    track: '#eeeff2'
+    knob: '#ffffff'
+    info: '#3d63d1'
+    warn: '#b26a00'
+    up: '#138a5a'
+    brand-tint: '#c6ef6a1a'
+    inverse: '#ffffff'
+    inverse-foreground: '#101319'
+    inverse-brand: '#13160c'
+    info-tint: '#3d63d11a'
+    warn-tint: '#b26a001a'
+    destructive-tint: '#d43a4a1a'
+    up-tint: '#138a5a1a'
+    down-tint: '#d43a4a1a'
   dark:
-    background: "#16191f"
-    foreground: "#eeeff1"
-    card: "#1f2228"
-    card-foreground: "#eeeff1"
-    popover: "#1f2228"
-    popover-foreground: "#eeeff1"
-    primary: "#c4ec6a"
-    primary-foreground: "#13160c"
-    secondary: "#33353b"
-    secondary-foreground: "#eeeff1"
-    muted: "#2a2d33"
-    muted-foreground: "#9a9ea5"
-    accent: "#2a2d33"
-    accent-foreground: "#eeeff1"
-    destructive: "#ff6170"
-    border: "#31343a"
-    input: "#31343a"
-    ring: "#9a9ea5"
-    chart-1: "#c4ec6a"
-    chart-2: "#7ea8ff"
-    chart-3: "#45d49a"
-    chart-4: "#ffb547"
-    chart-5: "#ff6170"
-    sidebar: "#16191f"
-    sidebar-foreground: "#eeeff1"
-    sidebar-primary: "#c4ec6a"
-    sidebar-primary-foreground: "#13160c"
-    sidebar-accent: "#2a2d33"
-    sidebar-accent-foreground: "#eeeff1"
-    sidebar-border: "#2d3036"
-    sidebar-ring: "#9a9ea5"
-    inset: "#2a2d33"
-    raised: "#33353b"
-    field: "#1f2228"
-    line: "#2d3036"
-    hover: "#2a2d33"
-    faint: "#6b6f76"
-    brand: "#c4ec6a"
-    brand-edge: "#31343a"
-    track: "#2a2d33"
-    knob: "#eeeff1"
-    info: "#7ea8ff"
-    warn: "#ffb547"
-    up: "#45d49a"
-    brand-tint: "#c4ec6a1a"
-    inverse: "#1f2228"
-    inverse-foreground: "#eeeff1"
-    inverse-brand: "#13160c"
-    info-tint: "#7ea8ff1a"
-    warn-tint: "#ffb5471a"
-    destructive-tint: "#ff61701a"
-    up-tint: "#45d49a1a"
-    down-tint: "#ff61701a"
+    background: '#16191f'
+    foreground: '#eeeff1'
+    card: '#1f2228'
+    card-foreground: '#eeeff1'
+    popover: '#1f2228'
+    popover-foreground: '#eeeff1'
+    primary: '#c4ec6a'
+    primary-foreground: '#13160c'
+    secondary: '#33353b'
+    secondary-foreground: '#eeeff1'
+    muted: '#2a2d33'
+    muted-foreground: '#9a9ea5'
+    accent: '#2a2d33'
+    accent-foreground: '#eeeff1'
+    destructive: '#ff6170'
+    border: '#31343a'
+    input: '#31343a'
+    ring: '#9a9ea5'
+    chart-1: '#c4ec6a'
+    chart-2: '#7ea8ff'
+    chart-3: '#45d49a'
+    chart-4: '#ffb547'
+    chart-5: '#ff6170'
+    sidebar: '#16191f'
+    sidebar-foreground: '#eeeff1'
+    sidebar-primary: '#c4ec6a'
+    sidebar-primary-foreground: '#13160c'
+    sidebar-accent: '#2a2d33'
+    sidebar-accent-foreground: '#eeeff1'
+    sidebar-border: '#2d3036'
+    sidebar-ring: '#9a9ea5'
+    inset: '#2a2d33'
+    raised: '#33353b'
+    field: '#1f2228'
+    line: '#2d3036'
+    hover: '#2a2d33'
+    faint: '#6b6f76'
+    brand: '#c4ec6a'
+    brand-edge: '#31343a'
+    track: '#2a2d33'
+    knob: '#eeeff1'
+    info: '#7ea8ff'
+    warn: '#ffb547'
+    up: '#45d49a'
+    brand-tint: '#c4ec6a1a'
+    inverse: '#1f2228'
+    inverse-foreground: '#eeeff1'
+    inverse-brand: '#13160c'
+    info-tint: '#7ea8ff1a'
+    warn-tint: '#ffb5471a'
+    destructive-tint: '#ff61701a'
+    up-tint: '#45d49a1a'
+    down-tint: '#ff61701a'
 typography:
   caption:
     fontSize: 11px
@@ -184,99 +184,99 @@ motion:
   enter:
     duration: 420ms
     delay: 0ms
-    timingFunction: "cubic-bezier(0.333333, 1, 0.666667, 1)"
+    timingFunction: 'cubic-bezier(0.333333, 1, 0.666667, 1)'
   state:
     duration: 120ms
     delay: 0ms
-    timingFunction: "cubic-bezier(0.333333, 1, 0.666667, 1)"
+    timingFunction: 'cubic-bezier(0.333333, 1, 0.666667, 1)'
 components:
   button-primary:
-    backgroundColor: "{colors.light.primary}"
-    textColor: "{colors.light.primary-foreground}"
-    typography: "{typography.label}"
-    rounded: "{rounded.control}"
-    height: "{spacing.height.md}"
-    padding: "{spacing.density.gap}"
+    backgroundColor: '{colors.light.primary}'
+    textColor: '{colors.light.primary-foreground}'
+    typography: '{typography.label}'
+    rounded: '{rounded.control}'
+    height: '{spacing.height.md}'
+    padding: '{spacing.density.gap}'
   button-secondary:
-    backgroundColor: "{colors.light.raised}"
-    textColor: "{colors.light.foreground}"
-    typography: "{typography.label}"
-    rounded: "{rounded.control}"
-    height: "{spacing.height.md}"
-    padding: "{spacing.density.gap}"
+    backgroundColor: '{colors.light.raised}'
+    textColor: '{colors.light.foreground}'
+    typography: '{typography.label}'
+    rounded: '{rounded.control}'
+    height: '{spacing.height.md}'
+    padding: '{spacing.density.gap}'
   button-secondary-hover:
-    backgroundColor: "{colors.light.popover}"
+    backgroundColor: '{colors.light.popover}'
   button-secondary-pressed:
-    backgroundColor: "{colors.light.muted}"
+    backgroundColor: '{colors.light.muted}'
   card:
-    backgroundColor: "{colors.light.card}"
-    textColor: "{colors.light.card-foreground}"
-    typography: "{typography.body}"
-    rounded: "{rounded.container}"
-    padding: "{spacing.density.pad}"
+    backgroundColor: '{colors.light.card}'
+    textColor: '{colors.light.card-foreground}'
+    typography: '{typography.body}'
+    rounded: '{rounded.container}'
+    padding: '{spacing.density.pad}'
   card-inset:
-    backgroundColor: "{colors.light.inset}"
-    textColor: "{colors.light.foreground}"
-    rounded: "{rounded.control}"
-    padding: "{spacing.control.padding}"
+    backgroundColor: '{colors.light.inset}'
+    textColor: '{colors.light.foreground}'
+    rounded: '{rounded.control}'
+    padding: '{spacing.control.padding}'
   input-field:
-    backgroundColor: "{colors.light.inset}"
-    textColor: "{colors.light.foreground}"
-    typography: "{typography.label}"
-    rounded: "{rounded.control}"
-    height: "{spacing.height.md}"
-    padding: "{spacing.control.padding}"
+    backgroundColor: '{colors.light.inset}'
+    textColor: '{colors.light.foreground}'
+    typography: '{typography.label}'
+    rounded: '{rounded.control}'
+    height: '{spacing.height.md}'
+    padding: '{spacing.control.padding}'
   badge-chip:
-    backgroundColor: "{colors.light.secondary}"
-    textColor: "{colors.light.secondary-foreground}"
-    typography: "{typography.caption}"
-    rounded: "{rounded.control}"
+    backgroundColor: '{colors.light.secondary}'
+    textColor: '{colors.light.secondary-foreground}'
+    typography: '{typography.caption}'
+    rounded: '{rounded.control}'
   menu-popover:
-    backgroundColor: "{colors.light.popover}"
-    textColor: "{colors.light.popover-foreground}"
-    typography: "{typography.body}"
-    rounded: "{rounded.container}"
-    padding: "{spacing.control.padding}"
+    backgroundColor: '{colors.light.popover}'
+    textColor: '{colors.light.popover-foreground}'
+    typography: '{typography.body}'
+    rounded: '{rounded.container}'
+    padding: '{spacing.control.padding}'
   dialog:
-    backgroundColor: "{colors.light.card}"
-    textColor: "{colors.light.card-foreground}"
-    typography: "{typography.body}"
-    rounded: "{rounded.modal}"
-    padding: "{spacing.density.pad}"
+    backgroundColor: '{colors.light.card}'
+    textColor: '{colors.light.card-foreground}'
+    typography: '{typography.body}'
+    rounded: '{rounded.modal}'
+    padding: '{spacing.density.pad}'
   tooltip:
-    backgroundColor: "{colors.light.inverse}"
-    textColor: "{colors.light.inverse-foreground}"
-    typography: "{typography.detail}"
-    rounded: "{rounded.container}"
+    backgroundColor: '{colors.light.inverse}'
+    textColor: '{colors.light.inverse-foreground}'
+    typography: '{typography.detail}'
+    rounded: '{rounded.container}'
   toast-inverse:
-    backgroundColor: "{colors.light.inverse}"
-    textColor: "{colors.light.inverse-foreground}"
-    typography: "{typography.body}"
-    rounded: "{rounded.container}"
+    backgroundColor: '{colors.light.inverse}'
+    textColor: '{colors.light.inverse-foreground}'
+    typography: '{typography.body}'
+    rounded: '{rounded.container}'
   switch-track:
-    backgroundColor: "{colors.light.inset}"
-    rounded: "{rounded.control}"
+    backgroundColor: '{colors.light.inset}'
+    rounded: '{rounded.control}'
   switch-track-on:
-    backgroundColor: "{colors.light.primary}"
+    backgroundColor: '{colors.light.primary}'
   switch-knob:
-    backgroundColor: "#ffffff"
+    backgroundColor: '#ffffff'
   switch-knob-checked:
-    backgroundColor: "#ffffff"
+    backgroundColor: '#ffffff'
   slider-handle:
-    backgroundColor: "#ffffff"
+    backgroundColor: '#ffffff'
   tabs-thumb:
-    backgroundColor: "{colors.light.raised}"
-    textColor: "{colors.light.foreground}"
-    typography: "{typography.label}"
-    rounded: "{rounded.control}"
+    backgroundColor: '{colors.light.raised}'
+    textColor: '{colors.light.foreground}'
+    typography: '{typography.label}'
+    rounded: '{rounded.control}'
   toggle-on:
-    backgroundColor: "{colors.light.primary}"
-    textColor: "{colors.light.primary-foreground}"
-    rounded: "{rounded.control}"
+    backgroundColor: '{colors.light.primary}'
+    textColor: '{colors.light.primary-foreground}'
+    rounded: '{rounded.control}'
   glass-overlay:
-    backgroundColor: "#ffffffcc"
-    textColor: "{colors.light.popover-foreground}"
-    rounded: "{rounded.container}"
+    backgroundColor: '#ffffffcc'
+    textColor: '{colors.light.popover-foreground}'
+    rounded: '{rounded.container}'
 ---
 
 # NSH Gallery UI
@@ -417,6 +417,7 @@ Semantic corner radius roles by layer, referencing base dimension.radius.* token
 - **`modal`** (14px): Corner radius for modal surfaces: dialogs, sheets, and drawers.
 
 **Control dimensions** (no DESIGN.md field; they decide how a control's own parts are drawn): Control dimensions: the four behaviour-named axes a theme decides for its controls (field, choice, track, handle). Themes override only the axes that differ.
+
 - **`field`**: `box`
 - **`choice`**: `well`
 - **`track`**: `sunk`

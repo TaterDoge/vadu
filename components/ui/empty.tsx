@@ -1,13 +1,20 @@
 // An empty state: a centered block that says there is nothing here yet, and what to do about it.
 
-import { colors, rounded, TERMINAL_ROW, terminal, font, shape } from "../../lib/ui/theme";
-import type { TextProps, TextStyle, ViewProps, ViewStyle } from "nsh";
-import { split, Text, token, View } from "nsh";
+import type { TextProps, TextStyle, ViewProps, ViewStyle } from 'nsh';
+import { split, Text, token, View } from 'nsh';
 
-import { density } from "../../lib/ui/surface";
+import { density } from '../../lib/ui/surface';
+import {
+  colors,
+  font,
+  rounded,
+  shape,
+  terminal,
+  TERMINAL_ROW,
+} from '../../lib/ui/theme';
 
 /** An empty state's media: `default`, the app's own art or icon as it is; `icon`, a tinted square behind it. */
-export type EmptyMediaVariant = "default" | "icon";
+export type EmptyMediaVariant = 'default' | 'icon';
 
 /** An empty state's parts as the styles they wear: spread each one. */
 export interface EmptyLook {
@@ -40,11 +47,11 @@ const column = 384;
 
 /** The words and the actions: a column centered in the block, no wider than `column`. */
 const centered = (step: number): ViewStyle => ({
-  flexDirection: "column",
-  alignItems: "center",
+  flexDirection: 'column',
+  alignItems: 'center',
   gap: step,
   maxWidth: column,
-  width: "100%",
+  width: '100%',
 });
 
 /**
@@ -58,42 +65,42 @@ const centered = (step: number): ViewStyle => ({
 export function emptyLook(): EmptyLook {
   return {
     root: (): ViewStyle => ({
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
       gap: terminal ? TERMINAL_ROW : gap,
       padding: terminal ? 0 : pad,
       flexGrow: 1,
       minWidth: 0,
-      width: "100%",
+      width: '100%',
     }),
     header: (): ViewStyle => centered(8),
     media: (variant: EmptyMediaVariant): ViewStyle => ({
       marginBottom: 8,
-      alignItems: "center",
-      justifyContent: "center",
-      ...(variant === "icon"
+      alignItems: 'center',
+      justifyContent: 'center',
+      ...(variant === 'icon'
         ? {
             width: mediaSide,
             height: mediaSide,
             ...rounded(shape.control),
-            backgroundColor: token("muted"),
+            backgroundColor: token('muted'),
           }
         : {}),
     }),
     title: (): TextStyle => ({
       // No type role has this size: the body size plus 2.
       fontSize: density.body + 2,
-      fontWeight: font.weight("label"),
+      fontWeight: font.weight('label'),
       color: colors.foreground,
-      textAlign: "center",
+      textAlign: 'center',
     }),
     description: (): TextStyle => ({
       fontSize: density.body,
       // A description reads as prose: 1.5 times its size, which `body.line` (19 / 21, a dialog's) is not.
       lineHeight: Math.round(density.body * 1.5),
       color: colors.mutedForeground,
-      textAlign: "center",
+      textAlign: 'center',
     }),
     content: (): ViewStyle => centered(gap),
   };
@@ -127,7 +134,7 @@ export type EmptyContentProps = ViewProps;
  * about it. In the terminal the block is its lines: no padding, and one Cell row between them.
  */
 export function Empty(props: EmptyProps) {
-  const [, rest] = split(props, ["style"]);
+  const [, rest] = split(props, ['style']);
   return (
     <View {...rest} style={[emptyLook().root(), props.style ?? null]}>
       {props.children}
@@ -137,7 +144,7 @@ export function Empty(props: EmptyProps) {
 
 /** The media and the words under it, a column centered in the block. */
 export function EmptyHeader(props: EmptyHeaderProps) {
-  const [, rest] = split(props, ["style"]);
+  const [, rest] = split(props, ['style']);
   return (
     <View {...rest} style={[emptyLook().header(), props.style ?? null]}>
       {props.children}
@@ -150,9 +157,15 @@ export function EmptyHeader(props: EmptyHeaderProps) {
  * `variant="icon"` for a square of the muted fill with an `EMPTY_ICON` icon in it.
  */
 export function EmptyMedia(props: EmptyMediaProps) {
-  const [, rest] = split(props, ["variant", "style"]);
+  const [, rest] = split(props, ['variant', 'style']);
   return (
-    <View {...rest} style={[emptyLook().media(props.variant ?? "default"), props.style ?? null]}>
+    <View
+      {...rest}
+      style={[
+        emptyLook().media(props.variant ?? 'default'),
+        props.style ?? null,
+      ]}
+    >
       {props.children}
     </View>
   );
@@ -160,7 +173,7 @@ export function EmptyMedia(props: EmptyMediaProps) {
 
 /** The line that says there is nothing here: medium, a step above the body's size. */
 export function EmptyTitle(props: EmptyTitleProps) {
-  const [, rest] = split(props, ["style"]);
+  const [, rest] = split(props, ['style']);
   return (
     <Text {...rest} style={[emptyLook().title(), props.style ?? null]}>
       {props.children}
@@ -170,7 +183,7 @@ export function EmptyTitle(props: EmptyTitleProps) {
 
 /** The line under the title: the body's size, in the muted ink, centered. */
 export function EmptyDescription(props: EmptyDescriptionProps) {
-  const [, rest] = split(props, ["style"]);
+  const [, rest] = split(props, ['style']);
   return (
     <Text {...rest} style={[emptyLook().description(), props.style ?? null]}>
       {props.children}
@@ -180,7 +193,7 @@ export function EmptyDescription(props: EmptyDescriptionProps) {
 
 /** What the reader can do about it: a button or two, a field, a link, a gap of 16 apart. */
 export function EmptyContent(props: EmptyContentProps) {
-  const [, rest] = split(props, ["style"]);
+  const [, rest] = split(props, ['style']);
   return (
     <View {...rest} style={[emptyLook().content(), props.style ?? null]}>
       {props.children}

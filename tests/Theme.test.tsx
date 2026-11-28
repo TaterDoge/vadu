@@ -189,7 +189,8 @@ test('外观单选组支持方向键，翻译窗口打开期间共享主题且�
   const app = await open('./fixtures/Theme.tsx', viewport);
   for (let index = 0; index < 3; index++) await app.keyboard.press('tab');
   await app.keyboard.press('enter');
-  for (let index = 0; index < 3; index++) await app.keyboard.press('tab');
+  // 越过剩余两个分类及侧栏折叠按钮，聚焦显示模式。
+  for (let index = 0; index < 4; index++) await app.keyboard.press('tab');
   await app.keyboard.press('right');
   expect(status(app).mode).toBe('light');
   await app.keyboard.press('right');

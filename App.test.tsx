@@ -107,6 +107,68 @@ test('快捷键分类挂载独立页面，切换后不残留内容', async () =>
   expect(app.count('id:settings-shortcuts-page')).toBe(1);
 });
 
+test('窄窗口侧栏只显示居中图标，底部按钮可展开和折叠', async () => {
+  const app = await open('./App.tsx', {
+    width: 560,
+    height: 800,
+    platform: 'macos',
+  });
+  const collapsedWidth = 64;
+  const expandedWidth = 216;
+  const assertCollapsed = () => {
+    const sidebar = app.layout('id:settings-sidebar')!;
+    expect(sidebar.width).toBe(collapsedWidth);
+    expect(app.count('text:vadu')).toBe(0);
+    expect(app.count('text:管理面板')).toBe(0);
+    const center = sidebar.x + sidebar.width / 2;
+    for (const [id, label] of [
+      ['general', '通用'],
+      ['providers', '服务商'],
+      ['appearance', '外观'],
+      ['shortcuts', '快捷键'],
+      ['backup', '备份恢复'],
+    ]) {
+      const selector = `id:settings-${id}`;
+      expect(app.count(`${selector} >> text:${label}`)).toBe(0);
+      expect(app.shows(`label:${label}`)).toBe(true);
+      const row = app.layout(selector)!;
+      expect(row.clipped).toBe(false);
+      expect(row.width).toBe(row.height);
+      expect(Math.abs(row.x + row.width / 2 - center)).toBeLessThanOrEqual(1);
+    }
+    for (const selector of ['text:v', 'label:展开侧栏']) {
+      const item = app.layout(selector)!;
+      expect(item.clipped).toBe(false);
+      expect(Math.abs(item.x + item.width / 2 - center)).toBeLessThanOrEqual(1);
+    }
+  };
+
+  await app.setViewport(560, 800);
+  await app.waitFor('label:展开侧栏');
+  assertCollapsed();
+  await app.press('label:展开侧栏');
+  expect(app.layout('id:settings-sidebar')!.width).toBe(expandedWidth);
+  expect(app.shows('text:vadu')).toBe(true);
+  expect(app.shows('id:settings-general >> text:通用')).toBe(true);
+  await app.setViewport(700, 800);
+  expect(app.layout('id:settings-sidebar')!.width).toBe(expandedWidth);
+
+  await app.press('label:折叠侧栏');
+  assertCollapsed();
+  await app.press('id:settings-backup');
+  expect(app.count('label:备份恢复')).toBe(2);
+
+  await app.setViewport(768, 800);
+  await app.waitFor('label:折叠侧栏');
+  expect(app.layout('id:settings-sidebar')!.width).toBe(expandedWidth);
+  expect(app.shows('text:vadu')).toBe(true);
+  expect(app.count('label:备份恢复')).toBe(2);
+  await app.setViewport(767, 800);
+  await app.waitFor('label:展开侧栏');
+  assertCollapsed();
+  expect(app.count('label:备份恢复')).toBe(2);
+});
+
 test('侧栏支持 Tab 移焦、Enter 与 Space 激活', async () => {
   const app = await open('./App.tsx', {
     width: 1200,

@@ -5,7 +5,7 @@ import {
   Server,
   Settings as SettingsIcon,
 } from 'lucide';
-import { Scroll, Text, View, windowSize } from 'nsh';
+import { effect, Scroll, signal, Text, View, windowSize } from 'nsh';
 import { currentWindow } from 'nsh/desktop';
 
 import { Card } from '@/components/ui/card';
@@ -13,11 +13,14 @@ import { createNavStack, NavPage, NavStack } from '@/components/ui/nav-stack';
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarMenu,
   SidebarMenuButton,
   sidebarMenuButtonLook,
   SidebarMenuItem,
   SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/toast';
 import { Icon } from '@/lib/ui/icons';
@@ -69,15 +72,89 @@ const settingsPages = [
 
 type SettingsRoute = (typeof settingsPages)[number];
 
+const SETTINGS_SIDEBAR_BREAKPOINT = 768;
+const SETTINGS_SIDEBAR_WIDTH = 216;
+const SETTINGS_SIDEBAR_COLLAPSED_WIDTH = 64;
+const SETTINGS_SIDEBAR_COLLAPSED_ICON_SIZE = 20;
+
+function SidebarFooterActions() {
+  const sidebar = useSidebar();
+  return (
+    <SidebarFooter
+      style={{ alignItems: sidebar.open ? 'flex-start' : 'center' }}
+    >
+      <SidebarTrigger
+        accessibilityLabel={
+          sidebar.state === 'expanded' ? '折叠侧栏' : '展开侧栏'
+        }
+      />
+    </SidebarFooter>
+  );
+}
+
+function SettingsSidebarMenu(props: {
+  activeNav: () => SettingsRoute;
+  onSelect: (page: SettingsRoute) => void;
+}) {
+  const sidebar = useSidebar();
+  return (
+    <View role="navigation" accessibilityLabel="设置分类" class="px-3">
+      <SidebarMenu>
+        {settingsPages.map((page) => {
+          const active = () => props.activeNav().id === page.id;
+          const look = sidebarMenuButtonLook({ size: 'lg', active });
+          return (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                testID={`settings-${page.id}`}
+                role="link"
+                size="lg"
+                accessibilityLabel={page.label}
+                isActive={active()}
+                onPress={() => {
+                  if (!active()) props.onSelect(page);
+                }}
+              >
+                <Icon
+                  icon={page.icon}
+                  size={
+                    sidebar.state === 'expanded'
+                      ? look.glyph.size
+                      : SETTINGS_SIDEBAR_COLLAPSED_ICON_SIZE
+                  }
+                  tint={look.glyph.tint}
+                />
+                <If when={sidebar.state === 'expanded'}>
+                  <Text style={look.label}>{page.label}</Text>
+                </If>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          );
+        })}
+      </SidebarMenu>
+    </View>
+  );
+}
+
 export function SettingsWindow() {
   setupTray(currentWindow());
   setupTheme();
   setupShortcuts(Settings.read());
   const nav = createNavStack<SettingsRoute>([settingsPages[0]]);
   const activeNav = () => nav.routes()[nav.routes().length - 1];
+  const sidebarOpen = signal(windowSize().width >= SETTINGS_SIDEBAR_BREAKPOINT);
+  let isNarrow = windowSize().width < SETTINGS_SIDEBAR_BREAKPOINT;
+  effect(() => {
+    const nextIsNarrow = windowSize().width < SETTINGS_SIDEBAR_BREAKPOINT;
+    if (nextIsNarrow === isNarrow) return;
+    isNarrow = nextIsNarrow;
+    sidebarOpen.set(!nextIsNarrow);
+  });
 
   return (
     <SidebarProvider
+      open={sidebarOpen()}
+      onOpenChange={({ open }) => sidebarOpen.set(open)}
       testID="settings-center"
       role="region"
       accessibilityLabel="设置中心"
@@ -90,42 +167,19 @@ export function SettingsWindow() {
     >
       <Sidebar
         testID="settings-sidebar"
-        collapsible="none"
-        width={windowSize().width < 768 ? 192 : 240}
+        collapsible="icon"
+        width={SETTINGS_SIDEBAR_WIDTH}
+        collapsedWidth={SETTINGS_SIDEBAR_COLLAPSED_WIDTH}
         desktop={{ windowDrag: true }}
       >
         <SidebarContent testID="settings-sidebar-scroll">
           <Logo />
-          <View role="navigation" accessibilityLabel="设置分类" class="px-3">
-            <SidebarMenu>
-              {settingsPages.map((page) => {
-                const active = () => activeNav().id === page.id;
-                const look = sidebarMenuButtonLook({ size: 'lg', active });
-                return (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      testID={`settings-${page.id}`}
-                      role="link"
-                      size="lg"
-                      accessibilityLabel={page.label}
-                      isActive={active()}
-                      onPress={() => {
-                        if (!active()) nav.replace(page);
-                      }}
-                    >
-                      <Icon
-                        icon={page.icon}
-                        size={look.glyph.size}
-                        tint={look.glyph.tint}
-                      />
-                      <Text style={look.label}>{page.label}</Text>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </View>
+          <SettingsSidebarMenu
+            activeNav={activeNav}
+            onSelect={(page) => nav.replace(page)}
+          />
         </SidebarContent>
+        <SidebarFooterActions />
       </Sidebar>
       <View
         class="m-4 min-w-0 flex-1 overflow-hidden"

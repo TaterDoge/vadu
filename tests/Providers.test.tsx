@@ -10,6 +10,15 @@ const model = 'id:provider-model';
 const modelList = 'id:provider-model-list';
 const modelSearch = 'label:搜索模型';
 const modelRefresh = 'label:刷新模型列表';
+const modelDrawer = 'label:管理模型';
+const modelDone = 'label:完成选择';
+const modelCheck = 'id:provider-health-check';
+const checkDialog = 'id:provider-health-dialog';
+const checkSelect = 'id:provider-health-model';
+const startCheck = `${checkDialog} >> label:开始`;
+const cancelCheck = `${checkDialog} >> label:取消`;
+const manualModel = 'label:手动输入模型 ID';
+const addModel = 'label:添加模型';
 const keyInput = 'id:provider-api-key';
 const toast = 'id:provider-toast';
 const filter = 'label:按启用状态筛选';
@@ -18,6 +27,7 @@ const temperature = 'label:温度';
 const providerOptions = 'label:服务商选项';
 const headers = 'label:请求头';
 const category = 'id:settings-providers';
+const compactViewportWidth = 500;
 const seeded = providerStorage(provider('1', 'test'), provider('2', 'aaa'));
 
 async function openProviders(options: OpenOptions = {}) {
@@ -28,6 +38,7 @@ async function openProviders(options: OpenOptions = {}) {
     storage: seeded,
     ...options,
   });
+  await app.setViewport(options.width ?? 960, options.height ?? 620);
   await app.press(category);
   return app;
 }
@@ -147,7 +158,7 @@ test('已保存的 API Key 以实际值切换遮罩，切换服务商或隐藏�
   await app.press('label:test，已启用');
   await app.waitUntil(() => app.enabled(showKey));
   await app.press(showKey);
-  await app.window('main').pressClose();
+  await app.host.send('hide-settings');
   await app.host.send('open-settings');
   await app.waitUntil(() => app.enabled(showKey));
   expect(app.value(keyInput)).toBe(key);
@@ -182,7 +193,9 @@ test('编辑接口地址后，迟到的旧凭据不能填回输入框', async ()
   await app.host.send('release-key');
   expect(app.value(keyInput)).toBe('');
   expect(app.enabled('label:显示密钥')).toBe(false);
-  expect(app.enabled(modelList)).toBe(false);
+  await app.press(modelList);
+  expect(app.enabled(modelRefresh)).toBe(false);
+  expect(app.requests()).toEqual([]);
 });
 
 for (const action of ['查询模型', '保存配置'] as const) {
@@ -235,7 +248,9 @@ test('首次保存允许空模型，地址需确认，启停与删除写入配�
   await app.press('label:新增翻译服务商');
   await app.press('label:保存');
   expect(app.shows('text:请填写名称和接口地址。')).toBe(true);
-  expect(app.enabled(modelList)).toBe(false);
+  await app.press(modelList);
+  expect(app.enabled(modelRefresh)).toBe(false);
+  await app.press(modelDone);
 
   await app.type(name, ' 新服务商 ');
   await app.type(keyInput, key);
@@ -250,7 +265,7 @@ test('首次保存允许空模型，地址需确认，启停与删除写入配�
   await app.press('label:确认地址并保存');
   expect(app.value(keyInput)).toBe(key);
   expect(app.value(name)).toBe('新服务商');
-  expect(app.value(model)).toBe('');
+  expect(app.shows(`${model} >> text:未选择模型`)).toBe(true);
   expect(app.enabled(modelList)).toBe(true);
   expect(app.shows(`${list} >> label:新服务商，已启用`)).toBe(true);
 
@@ -294,16 +309,18 @@ test('未保存的服务商可先用输入的地址和密钥获取模型', async
     storage: {},
     network: {
       'https://draft.example/v1/models': {
-        body: { data: [{ id: 'draft-model' }] },
+        body: { data: [{ id: 'draft-model' }, { id: 'other-model' }] },
       },
     },
   });
   const initialStorage = app.storage();
   await app.press('label:新增翻译服务商');
   await app.type(address, 'https://draft.example/v1');
-  expect(app.enabled(modelList)).toBe(false);
+  await app.press(modelList);
+  expect(app.enabled(modelRefresh)).toBe(false);
+  expect(app.requests()).toEqual([]);
+  await app.press(modelDone);
   await app.type(keyInput, key);
-  expect(app.enabled(modelList)).toBe(true);
 
   await app.press(modelList);
   const dialog = 'id:provider-confirm-dialog';
@@ -311,10 +328,17 @@ test('未保存的服务商可先用输入的地址和密钥获取模型', async
   expect(app.texts().join(' ')).toContain('https://draft.example/v1');
   expect(app.requests()).toEqual([]);
   await app.press('label:确认地址并获取模型');
-  await app.waitUntil(() => app.shows(`${toast} >> text:已获取 1 个模型。`));
-  await app.press(modelList);
+  await app.waitFor(`${toast} >> text:已获取 2 个模型。`);
+  await app.waitFor('label:draft-model');
   await app.press('label:draft-model');
-  expect(app.value(model)).toBe('draft-model');
+  expect(app.shows(modelDrawer)).toBe(true);
+  expect(app.shows('text:完成(已选1个)')).toBe(true);
+  await app.press('label:other-model');
+  expect(app.shows('text:完成(已选2个)')).toBe(true);
+  await app.press(modelDone);
+  expect(app.shows(modelDrawer)).toBe(false);
+  expect(app.shows(`${model} >> text:draft-model`)).toBe(true);
+  expect(app.shows(`${model} >> text:other-model`)).toBe(true);
   // 获取模型不写入配置或凭据。
   expect(app.storage()).toEqual(initialStorage);
   expect(app.requests()).toHaveLength(1);
@@ -330,12 +354,85 @@ test('未保存的服务商可先用输入的地址和密钥获取模型', async
   const [{ id, model: savedModel }] = JSON.parse(
     app.storage()['vadu.config'],
   ).profiles;
-  expect(savedModel).toBe('draft-model');
+  expect(savedModel).toEqual(['draft-model', 'other-model']);
   expect(JSON.parse(app.storage()[`vadu.secret.${id}`])).toEqual({
     base_url: 'https://draft.example/v1',
     key,
   });
   expect(app.storage()['vadu.config']).not.toContain(key);
+});
+
+test('右侧模型抽屉支持多选、取消勾选和手动添加，保存后恢复', async () => {
+  const network = {
+    'https://example.com/v1/models': {
+      body: { data: [{ id: 'model-a' }, { id: 'model-b' }] },
+    },
+  };
+  const app = await openProviders({
+    storage: providerStorage(provider('one', '测试', { model: [] })),
+    network,
+  });
+  await app.press(modelList);
+  await app.waitFor('label:model-b');
+  const search = app.layout(modelSearch)!;
+  expect(search.x).toBeGreaterThan(480);
+  expect(app.shows(modelDone)).toBe(true);
+  await app.press('label:model-a');
+  await app.press('label:model-b');
+  expect(app.accessibility('label:model-a')?.checked).toBe('true');
+  expect(app.accessibility('label:model-b')?.checked).toBe('true');
+  await app.press('label:model-a');
+  expect(app.accessibility('label:model-a')?.checked).not.toBe('true');
+  await app.type(manualModel, 'custom-model');
+  await app.press(addModel);
+  expect(app.accessibility('label:custom-model')?.checked).toBe('true');
+  await app.type(manualModel, 'custom-model');
+  expect(app.enabled(addModel)).toBe(false);
+  await app.press(modelDone);
+  expect(app.shows(`${model} >> text:model-b`)).toBe(true);
+  expect(app.shows(`${model} >> text:custom-model`)).toBe(true);
+  await app.press('label:保存');
+  const storage = app.storage();
+  expect(JSON.parse(storage['vadu.config']).profiles[0].model).toEqual([
+    'model-b',
+    'custom-model',
+  ]);
+
+  const reopened = await openProviders({ storage, network });
+  await reopened.press(modelList);
+  await reopened.waitFor('label:model-b');
+  expect(reopened.accessibility('label:model-b')?.checked).toBe('true');
+  expect(reopened.accessibility('label:custom-model')?.checked).toBe('true');
+  await reopened.setViewport(600, 400);
+  expect(reopened.shows(modelSearch)).toBe(true);
+  expect(reopened.shows(modelDone)).toBe(true);
+  await reopened.press(modelDone);
+  expect(reopened.shows(`${model} >> text:model-b`)).toBe(true);
+  expect(reopened.shows(`${model} >> text:custom-model`)).toBe(true);
+});
+
+test('已选模型可逐项移除，保存后写入配置', async () => {
+  const storage = providerStorage(
+    provider('1', 'test', { model: ['model-a', 'model-b'] }),
+  );
+  const app = await openProviders({ height: 800, storage });
+  const first = `${model} >> text:model-a`;
+  const second = `${model} >> text:model-b`;
+  const removeFirst = `${model} >> label:移除模型 model-a`;
+  expect(app.layout(removeFirst)!.x).toBeGreaterThan(app.layout(first)!.x);
+  expect(app.layout(second)!.y).toBeGreaterThan(app.layout(first)!.y);
+  await app.press(removeFirst);
+  expect(app.shows(first)).toBe(false);
+  expect(app.shows(second)).toBe(true);
+  expect(app.storage()).toEqual(storage);
+
+  await app.press('label:保存');
+  expect(JSON.parse(app.storage()['vadu.config']).profiles[0].model).toEqual([
+    'model-b',
+  ]);
+  await app.press(`${model} >> label:移除模型 model-b`);
+  expect(app.shows(`${model} >> text:未选择模型`)).toBe(true);
+  expect(app.enabled(modelCheck)).toBe(true);
 });
 
 test('先填的草稿密钥可用于首次确认的地址，改址后须重新输入', async () => {
@@ -355,10 +452,13 @@ test('先填的草稿密钥可用于首次确认的地址，改址后须重新�
   expect(app.requests()[0].headers.authorization).toBe(
     'Bearer fake-unbound-key',
   );
+  await app.press(modelDone);
   await app.clear(address);
   await app.type(address, 'https://other.example/v1');
   expect(app.value(keyInput)).toBe('');
-  expect(app.enabled(modelList)).toBe(false);
+  await app.press(modelList);
+  expect(app.enabled(modelRefresh)).toBe(false);
+  await app.press(modelDone);
   expect(app.requests()).toHaveLength(1);
   expect(app.storage()).toEqual(initialStorage);
 });
@@ -371,7 +471,10 @@ test('API 协议可切换并随服务商保存，未接入协议不发请求', a
   ).toBe(true);
   await app.press(selector);
   await app.press('text:Responses (/responses)');
-  expect(app.enabled(modelList)).toBe(false);
+  await app.press(modelList);
+  expect(app.enabled(modelRefresh)).toBe(false);
+  await app.press(modelDone);
+  expect(app.requests()).toEqual([]);
   await app.press('label:保存');
   expect(JSON.parse(app.storage()['vadu.config']).profiles[0].protocol).toBe(
     'responses',
@@ -385,16 +488,15 @@ test('API 协议可切换并随服务商保存，未接入协议不发请求', a
     reopened.shows(`${selector} >> text:Anthropic Messages (/v1/messages)`),
   ).toBe(true);
   expect(reopened.shows('text:该 API 协议尚未接入，可保存配置。')).toBe(true);
-  expect(reopened.enabled('label:健康检测')).toBe(false);
-  expect(reopened.enabled(modelList)).toBe(false);
+  expect(reopened.enabled(modelCheck)).toBe(false);
+  await reopened.press(modelList);
+  expect(reopened.enabled(modelRefresh)).toBe(false);
+  expect(reopened.requests()).toEqual([]);
 });
 
-test('健康检测当前模型，模型列表和密钥只使用已保存的 Profile', async () => {
+test('检测弹窗可选择未启用的已获取模型并使用已保存的连接和密钥', async () => {
   const baseUrl = 'https://example.com/proxy/v1';
   const key = 'fake-test-key';
-  const checking = 'label:正在检测模型';
-  const check = 'label:健康检测';
-  let checkingDuringRequest = false;
   let checks = 0;
   let lists = 0;
   const app = await openProviders({
@@ -409,12 +511,10 @@ test('健康检测当前模型，模型列表和密钥只使用已保存的 Prof
       }),
     ),
     network: {
-      [`POST ${baseUrl}/chat/completions`]: () => {
-        checkingDuringRequest = app.shows(checking);
-        return ++checks === 1
-          ? { body: { choices: [{ message: { content: 'OK' } }] } }
-          : { status: 503, body: 'fake upstream details' };
-      },
+      [`POST ${baseUrl}/chat/completions`]: () =>
+        ++checks === 1
+          ? { delay: 1000, body: { choices: [{ message: { content: 'OK' } }] } }
+          : { status: 503, body: 'fake upstream details' },
       [`${baseUrl}/models`]: () => {
         ++lists;
         if (lists === 2) return { error: 'fake upstream details' };
@@ -430,53 +530,71 @@ test('健康检测当前模型，模型列表和密钥只使用已保存的 Prof
   expect(app.value(keyInput)).toBe(key);
   expect(app.storage()['vadu.config']).not.toContain(key);
 
-  await app.press(check);
-  expect(checkingDuringRequest).toBe(true);
-  await app.waitFor(check);
-  expect(app.enabled(check)).toBe(true);
-  expect(app.shows(checking)).toBe(false);
-  expect(app.shows(`${toast} >> text:模型 demo-model 可以正常对话。`)).toBe(
-    true,
-  );
+  await app.clear(keyInput);
+  await app.type(keyInput, 'fake-unsaved-key');
+  await app.press(modelCheck);
+  expect(app.shows(checkDialog)).toBe(true);
+  await app.waitUntil(() => app.enabled(checkSelect));
+  expect(app.requests()).toHaveLength(1);
   expect(app.requests()[0]).toMatchObject({
+    method: 'GET',
+    url: `${baseUrl}/models`,
+    headers: { authorization: `Bearer ${key}`, 'x-profile': 'test' },
+  });
+  expect(app.shows(`${checkSelect} >> text:demo-model`)).toBe(true);
+  await app.press(checkSelect);
+  await app.press('text:model-b');
+  await app.press(startCheck);
+  await app.waitFor(`${checkDialog} >> text:正在检测：model-b`);
+  expect(app.enabled(checkSelect)).toBe(false);
+  expect(app.enabled(cancelCheck)).toBe(true);
+  await app.waitFor(`${checkDialog} >> text:模型 model-b 可以正常对话。`);
+  expect(app.enabled(startCheck)).toBe(true);
+  expect(app.requests()[1]).toMatchObject({
     method: 'POST',
     url: `${baseUrl}/chat/completions`,
     headers: { authorization: `Bearer ${key}`, 'x-profile': 'test' },
   });
-  expect(JSON.parse(app.requests()[0].body!)).toEqual({
-    model: 'demo-model',
+  expect(JSON.parse(app.requests()[1].body!)).toEqual({
+    model: 'model-b',
     temperature: 0.3,
     max_tokens: 1,
     stream: false,
     messages: [{ role: 'user', content: 'Reply with OK.' }],
   });
 
-  expect(app.shows(modelSearch)).toBe(false);
+  await app.press(cancelCheck);
+  expect(app.shows(checkDialog)).toBe(false);
+  expect(app.shows(`${model} >> text:demo-model`)).toBe(true);
+  expect(app.shows(`${model} >> text:model-b`)).toBe(false);
+  await app.clear(keyInput);
   await app.press(modelList);
   await app.waitFor('label:model-b');
-  expect(app.shows(`${toast} >> text:已获取 2 个模型。`)).toBe(true);
-  expect(app.requests()[1]).toMatchObject({
-    method: 'GET',
-    url: `${baseUrl}/models`,
-    headers: { authorization: `Bearer ${key}`, 'x-profile': 'test' },
-  });
+  expect(lists).toBe(1);
+  await app.press('label:demo-model');
   await app.type(modelSearch, 'MODEL-B');
   expect(app.shows('label:model-a')).toBe(false);
   await app.keyboard.press('enter');
+  expect(app.shows(modelSearch)).toBe(true);
+  await app.press(modelDone);
   expect(app.shows(modelSearch)).toBe(false);
-  expect(app.value(model)).toBe('model-b');
-  await app.press(check);
-  await app.waitFor(`${toast} >> text:服务商暂时不可用，请稍后重试。`);
-  expect(app.shows(checking)).toBe(false);
-  expect(app.enabled(check)).toBe(true);
+  expect(app.shows(`${model} >> text:model-b`)).toBe(true);
+  await app.press(modelCheck);
+  expect(app.shows(`${checkSelect} >> text:model-b`)).toBe(true);
+  await app.press(startCheck);
+  await app.waitFor(`${checkDialog} >> text:服务商暂时不可用，请稍后重试。`);
+  expect(app.texts().join(' ')).not.toContain('fake upstream details');
+  expect(app.enabled(startCheck)).toBe(true);
   expect(JSON.parse(app.requests()[2].body!).model).toBe('model-b');
-  expect(JSON.parse(app.storage()['vadu.config']).profiles[0].model).toBe(
+  await app.press('label:关闭模型检测');
+  expect(app.shows(checkDialog)).toBe(false);
+  expect(JSON.parse(app.storage()['vadu.config']).profiles[0].model).toEqual([
     'demo-model',
-  );
+  ]);
   await app.press('label:保存');
-  expect(JSON.parse(app.storage()['vadu.config']).profiles[0].model).toBe(
+  expect(JSON.parse(app.storage()['vadu.config']).profiles[0].model).toEqual([
     'model-b',
-  );
+  ]);
 
   await app.press(modelList);
   expect(app.shows('label:model-b')).toBe(true);
@@ -487,20 +605,49 @@ test('健康检测当前模型，模型列表和密钥只使用已保存的 Prof
   expect(app.shows('label:model-b')).toBe(true);
   await app.press(modelRefresh);
   await app.waitFor('label:model-c');
-  expect(app.shows('label:model-b')).toBe(false);
+  // 上游不再返回的已选模型也能继续管理。
+  expect(app.shows('label:model-b')).toBe(true);
   await app.keyboard.press('escape');
   expect(app.shows(modelSearch)).toBe(false);
-  expect(app.value(model)).toBe('model-b');
+  expect(app.shows(`${model} >> text:model-b`)).toBe(true);
 
   await app.clear(address);
   await app.type(address, 'https://different.example/v1');
   expect(app.enabled(keyInput)).toBe(true);
-  expect(app.enabled(modelList)).toBe(false);
+  await app.press(modelList);
+  expect(app.enabled(modelRefresh)).toBe(false);
   expect(lists).toBe(3);
   expect(JSON.parse(app.storage()['vadu.secret.1'])).toEqual({
     base_url: baseUrl,
     key,
   });
+});
+
+test('未启用模型时也能检测选中的单个模型', async () => {
+  const storage = providerStorage(provider('1', 'test', { model: [] }));
+  const baseUrl = 'https://example.com/v1';
+  const app = await openProviders({
+    storage,
+    height: 400,
+    network: {
+      [`${baseUrl}/models`]: {
+        body: { data: [{ id: 'model-a' }, { id: 'model-b' }] },
+      },
+      [`POST ${baseUrl}/chat/completions`]: { body: { choices: [{}] } },
+    },
+  });
+  await app.press(modelCheck);
+  await app.waitUntil(() => app.enabled(startCheck));
+  expect(app.shows(`${checkDialog} >> label:检测所有模型`)).toBe(false);
+  await app.press(checkSelect);
+  await app.press('text:model-b');
+  await app.press(startCheck);
+  await app.waitFor(`${checkDialog} >> text:模型 model-b 可以正常对话。`);
+  expect(app.requests()).toHaveLength(2);
+  expect(JSON.parse(app.requests()[1].body!).model).toBe('model-b');
+  await app.keyboard.press('escape');
+  expect(app.shows(checkDialog)).toBe(false);
+  expect(app.storage()).toEqual(storage);
 });
 
 test('模型查询不发送旧地址密钥，并限制响应大小和等待时间', async () => {
@@ -511,7 +658,7 @@ test('模型查询不发送旧地址密钥，并限制响应大小和等待时�
     height: 900,
     clock: {},
     storage: {
-      ...providerStorage(provider('1', 'test', { baseUrl })),
+      ...providerStorage(provider('1', 'test', { baseUrl, model: [] })),
       'vadu.secret.1': JSON.stringify({
         base_url: 'https://old.example/v1',
         key: 'fake-old-key',
@@ -536,7 +683,7 @@ test('模型查询不发送旧地址密钥，并限制响应大小和等待时�
   expect(app.shows('label:demo-model')).toBe(false);
 });
 
-test('隐藏设置窗口中止模型检测，恢复后可立即重试且旧结果不覆盖提示', async () => {
+test('取消弹窗或隐藏设置窗口中止模型检测，恢复后可立即重试', async () => {
   let attempts = 0;
   const app = await open('./fixtures/Windows.tsx', {
     platform: 'macos',
@@ -546,24 +693,42 @@ test('隐藏设置窗口中止模型检测，恢复后可立即重试且旧结�
     host: {},
     clock: {},
     network: {
+      'https://example.com/v1/models': {
+        body: { data: [{ id: 'demo-model' }, { id: 'other-model' }] },
+      },
       'POST https://example.com/v1/chat/completions': () =>
-        ++attempts === 1
+        ++attempts < 3
           ? { delay: 2000, status: 503 }
           : { body: { choices: [{}] } },
     },
   });
   await app.press(category);
-  await app.press('label:健康检测');
-  await app.waitUntil(() => app.requests().length === 1);
-  await app.window('main').pressClose();
+  await app.press(modelCheck);
+  await app.waitUntil(() => app.enabled(startCheck));
+  await app.press(startCheck);
+  await app.waitUntil(() => attempts === 1);
+  await app.press(cancelCheck);
+  expect(app.shows(checkDialog)).toBe(false);
+  await app.waitUntil(() => app.enabled(modelCheck), { timeout: 500 });
+
+  await app.press(modelCheck);
+  await app.press(startCheck);
+  await app.waitUntil(() => attempts === 2);
+  const main = app.window('main');
+  await app.host.send('hide-settings');
+  expect(main.state()).toMatchObject({ visible: false });
   await app.host.send('open-settings');
-  await app.waitFor('label:健康检测', { timeout: 500 });
-  await app.press('label:健康检测');
-  const success = `${toast} >> text:模型 demo-model 可以正常对话。`;
+  expect(main.state()).toMatchObject({ visible: true });
+  await app.waitFor(modelCheck, { timeout: 500 });
+  expect(app.shows(checkDialog)).toBe(false);
+  expect(app.enabled(modelCheck)).toBe(true);
+  await app.press(modelCheck);
+  await app.press(startCheck);
+  const success = `${checkDialog} >> text:模型 demo-model 可以正常对话。`;
   await app.waitFor(success);
   await app.wait(2000);
   expect(app.shows(success)).toBe(true);
-  expect(app.requests()).toHaveLength(2);
+  expect(app.requests()).toHaveLength(4);
 });
 
 test('凭据写入失败时保存普通配置并提示重新输入密钥', async () => {
@@ -591,7 +756,10 @@ test('凭据写入失败时保存普通配置并提示重新输入密钥', async
     ),
   ).toBe(true);
   expect(app.value(keyInput)).toBe('');
-  expect(app.shows(toast)).toBe(false);
+  await app.waitFor(
+    `${toast} >> text:服务商配置已保存，API Key 保存失败。无法写入本地存储，请重试。`,
+  );
+  expect(app.shows('text:服务商已保存。')).toBe(false);
   expect(JSON.parse(saved).profiles[0].name).toBe('test 已修改');
   expect(saved).not.toContain(key);
 });
@@ -617,9 +785,7 @@ test('高级选项可折叠，保存后随服务商恢复', async () => {
   for (const field of [temperature, providerOptions, headers]) {
     expect(app.shows(field)).toBe(false);
   }
-  await app.type(model, '');
-  await app.keyboard.press('tab');
-  await app.keyboard.press('space');
+  await app.press(advanced);
   expect(app.texts()).toContain(optionsJson);
   expect(app.texts()).toContain(headersJson);
   expect(app.value(temperature)).toBe('0.3');
@@ -708,7 +874,7 @@ test('Tab 逐行聚焦服务商，Enter 和 Space 选择整行', async () => {
 
 test('服务商列表与详情的滚动区为焦点环留白，宽窄布局保持对齐', async () => {
   const app = await openProviders();
-  for (const width of [960, 600]) {
+  for (const width of [960, 600, compactViewportWidth]) {
     await app.setViewport(width, 620);
     const row = app.layout('id:provider-row-1')!;
     const search = app.layout('label:服务商搜索与筛选')!;
@@ -724,8 +890,8 @@ test('服务商列表与详情的滚动区为焦点环留白，宽窄布局保�
       expect(control.x - scroll.x).toBe(4);
       expect(scroll.x + scroll.width - (control.x + control.width)).toBe(4);
     }
-    if (width === 960) expect(field.x - (row.x + row.width)).toBe(16);
-    else expect(field.x).toBe(row.x);
+    if (width === compactViewportWidth) expect(field.x).toBe(row.x);
+    else expect(field.x - (row.x + row.width)).toBe(16);
   }
 });
 
@@ -780,7 +946,7 @@ test('服务商深浅配色可读，缩小窗口后列表滚动不影响搜索�
     expect(app.shows(`${list} >> ${control}`)).toBe(false);
   }
 
-  await app.setViewport(600, 300);
+  await app.setViewport(compactViewportWidth, 300);
   await app.scroll(list, 500);
   await app.type(search, 'aaa');
   expect(app.shows(`${list} >> id:provider-row-2`)).toBe(true);

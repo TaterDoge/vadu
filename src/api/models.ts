@@ -1,5 +1,6 @@
 import {
   isValidApiKey,
+  isValidModelId,
   normalizeBaseUrl,
 } from '../feature/settings/providers/config';
 import {
@@ -16,10 +17,6 @@ import {
   request,
 } from './request';
 
-function validModel(model: string) {
-  return !!model.trim() && [...model].length <= 300 && !/\p{Cc}/u.test(model);
-}
-
 async function models(connection: Connection, signal?: AbortSignal) {
   const body = await request({
     ...providerEndpoint(connection, 'models'),
@@ -30,7 +27,7 @@ async function models(connection: Connection, signal?: AbortSignal) {
   for (const model of body.data) {
     if (!isRecord(model) || typeof model.id !== 'string')
       throw invalidResponse();
-    if (validModel(model.id)) ids.add(model.id);
+    if (isValidModelId(model.id)) ids.add(model.id.trim());
   }
   return [...ids].sort().slice(0, 500);
 }
@@ -62,7 +59,7 @@ export async function checkModel(
   signal?: AbortSignal,
 ) {
   model = model.trim();
-  if (!validModel(model)) {
+  if (!isValidModelId(model)) {
     throw new ProviderRequestError('INVALID_CONFIG', '请选择有效的模型 ID。');
   }
   const profile = await savedConnection(profileId, signal);

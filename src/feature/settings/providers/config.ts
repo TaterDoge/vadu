@@ -5,7 +5,7 @@ export type ProviderProfile = {
   name: string;
   protocol: 'chat-completions' | 'responses' | 'anthropic-messages';
   baseUrl: string;
-  model: string;
+  model: string[];
   enabled: boolean;
   temperature: number;
   providerOptions: string;
@@ -39,7 +39,7 @@ export const defaultProfileFields: Omit<ProviderProfile, 'id'> = {
   name: '',
   protocol: 'chat-completions',
   baseUrl: '',
-  model: '',
+  model: [],
   enabled: true,
   temperature: 0.3,
   providerOptions: '',
@@ -118,6 +118,29 @@ const managedHeaders = new Set([
   'accept-encoding',
 ]);
 
+export function isValidModelId(model: string) {
+  return !!model.trim() && [...model].length <= 300 && !/\p{Cc}/u.test(model);
+}
+
+function normalizeModels(value: unknown) {
+  if (typeof value === 'string') {
+    // 旧版单模型配置在下次保存时统一写入数组。
+    if (!value.trim() && [...value].length <= 300) return [];
+    value = [value];
+  }
+  if (!Array.isArray(value)) throw invalidConfig('模型配置格式无效。');
+  const models = new Set<string>();
+  for (const id of value) {
+    if (typeof id !== 'string' || !isValidModelId(id)) {
+      throw invalidConfig('模型 ID 无效或过长。');
+    }
+    const model = id.trim();
+    if (models.has(model)) throw invalidConfig('模型 ID 重复。');
+    models.add(model);
+  }
+  return [...models];
+}
+
 function checkHeaders(text: string) {
   const seen = new Set<string>();
   const fields = jsonObject(text, '请求头须为有效的 JSON 对象。');
@@ -161,7 +184,6 @@ export function checkProfile(value: unknown) {
       protocol !== 'responses' &&
       protocol !== 'anthropic-messages') ||
     typeof baseUrl !== 'string' ||
-    typeof model !== 'string' ||
     typeof enabled !== 'boolean' ||
     typeof providerOptions !== 'string' ||
     typeof headers !== 'string'
@@ -172,9 +194,10 @@ export function checkProfile(value: unknown) {
   if (/^\p{White_Space}*$/u.test(name) || !baseUrl) {
     throw invalidConfig('请填写名称和接口地址。');
   }
-  if ([...name].length > 100 || [...model].length > 300) {
-    throw invalidConfig('名称或模型 ID 过长。');
+  if ([...name].length > 100) {
+    throw invalidConfig('名称过长。');
   }
+  const models = normalizeModels(model);
   const url = normalizeBaseUrl(baseUrl);
   // 旧输入框保存十进制文本，只转换原格式允许的值。
   const temperature =
@@ -213,7 +236,7 @@ export function checkProfile(value: unknown) {
     name,
     protocol,
     baseUrl: url.href,
-    model,
+    model: models,
     enabled,
     temperature,
     providerOptions,

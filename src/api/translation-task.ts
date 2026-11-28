@@ -6,6 +6,7 @@ import { streamTranslation } from './translation';
 type TranslateInput = {
   requestId: string;
   profileId: string;
+  model: string;
   text: string;
   target: string;
 };
@@ -24,7 +25,7 @@ function start(
   input: TranslateInput,
   onEvent: (event: TranslateEvent) => void,
 ): ApiError | null {
-  const { requestId, profileId, text, target } = input;
+  const { requestId, profileId, model, text, target } = input;
   const language = translationLanguages.find(({ value }) => value === target);
   if (!language) {
     return new ProviderRequestError(
@@ -57,6 +58,7 @@ function start(
     try {
       await streamTranslation(
         profileId,
+        model,
         text,
         language.promptName,
         controller.signal,

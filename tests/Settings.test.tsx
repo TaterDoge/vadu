@@ -33,7 +33,7 @@ test('接口地址规范化并拒绝歧义或含凭据的地址', () => {
 });
 
 test('Profile 校验允许空模型，拒绝托管请求头、重复请求头和嵌套凭据', () => {
-  const base = provider('one', '测试', { model: '' });
+  const base = provider('one', '测试', { model: [] });
   expect(checkProfile(base).profile).toEqual(base);
   for (const [patch, message] of [
     [{ headers: '{"Host":"other.example"}' }, '请求头不能覆盖连接或消息格式。'],
@@ -45,6 +45,31 @@ test('Profile 校验允许空模型，拒绝托管请求头、重复请求头和
     ],
   ] as const) {
     expect(() => checkProfile({ ...base, ...patch })).toThrow(message);
+  }
+});
+
+test('模型列表保留选择顺序，兼容旧单模型配置并拒绝非法项', () => {
+  const base = provider('one', '测试');
+  for (const [model, expected] of [
+    ['old-model', ['old-model']],
+    ['', []],
+    [
+      ['model-b', 'model-a'],
+      ['model-b', 'model-a'],
+    ],
+  ]) {
+    expect(checkProfile({ ...base, model }).profile.model).toEqual(expected);
+  }
+  for (const model of [
+    null,
+    1,
+    [7],
+    [''],
+    ['model-a', 'model-a'],
+    ['x'.repeat(301)],
+    ['bad\nmodel'],
+  ]) {
+    expect(() => checkProfile({ ...base, model })).toThrow();
   }
 });
 

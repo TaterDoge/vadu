@@ -1,6 +1,5 @@
 import { cleanup, computed, signal, Text, View } from 'nsh';
 
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -58,7 +57,6 @@ export function ProviderEditor(props: {
     Settings.current()?.profiles.find((p) => p.id === props.profileId),
   );
   const draft = signal<Draft>(saved() ?? defaultProfileFields);
-  const error = signal('');
   const draftKey = signal<{ value: string; baseUrl: string } | null>(null);
   const keyVisible = signal(false);
   const confirmation = signal<Confirmation | null>(null);
@@ -75,6 +73,9 @@ export function ProviderEditor(props: {
   const toastId = 'provider-toast';
   function showToast(message: string) {
     if (mounted) toast(message, { id: toastId, duration: 3000 });
+  }
+  function showError(message: string) {
+    if (mounted) toast.error(message, { id: toastId, duration: 5000 });
   }
   let mounted = true;
   cleanup(() => {
@@ -108,11 +109,11 @@ export function ProviderEditor(props: {
   ) {
     if (busy()) return;
     busy.set(true);
-    if (!onError) error.set('');
+    if (!onError) toast.dismiss(toastId);
     try {
       await action();
     } catch (cause) {
-      if (mounted) (onError ?? error.set)(errorMessage(cause));
+      if (mounted) (onError ?? showError)(errorMessage(cause));
     } finally {
       busy.set(false);
     }
@@ -152,7 +153,6 @@ export function ProviderEditor(props: {
       resetModels();
     }
     draft.set({ ...value, ...patch });
-    error.set('');
   }
 
   function requestSave() {
@@ -165,7 +165,7 @@ export function ProviderEditor(props: {
         name: value.name.trim(),
         protocol: value.protocol,
         baseUrl: value.baseUrl.trim(),
-        model: value.model.trim(),
+        model: value.model,
         enabled: value.enabled,
         temperature: value.temperature ?? defaultProfileFields.temperature,
         providerOptions: value.providerOptions.trim(),
@@ -180,7 +180,7 @@ export function ProviderEditor(props: {
         if (create) props.onCreated();
         draft.set(profile);
         if (keyError) {
-          error.set(`服务商配置已保存，API Key 保存失败。${keyError}`);
+          showError(`服务商配置已保存，API Key 保存失败。${keyError}`);
           return;
         }
         if (key) resetModels();
@@ -192,7 +192,7 @@ export function ProviderEditor(props: {
         void run(action);
       }
     } catch (cause) {
-      error.set(errorMessage(cause));
+      showError(errorMessage(cause));
     }
   }
 
@@ -219,11 +219,6 @@ export function ProviderEditor(props: {
 
   return (
     <View class="gap-2.5">
-      <If when={error() !== ''}>
-        <Alert variant="destructive">
-          <AlertDescription>{error()}</AlertDescription>
-        </Alert>
-      </If>
       <View class="gap-1.5">
         <View class="flex-row items-center justify-between gap-2">
           <Text class={providerHeadingClass}>名称</Text>

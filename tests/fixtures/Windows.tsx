@@ -8,6 +8,7 @@ import { openTranslateWindow } from '../../src/windows/translate/TranslateWindow
 
 function Windows() {
   host.on('open-settings', () => Window.get('main')?.focus());
+  host.on('hide-settings', () => Window.get('main')?.hide());
   host.on('minimize-settings', () => Window.get('main')?.minimize());
   host.on('open-translate', openTranslateWindow);
   host.on('hide-translate', () => Window.get('translate')?.hide());

@@ -11,7 +11,7 @@ export function provider(
     name,
     protocol: 'chat-completions',
     baseUrl: 'https://example.com/v1',
-    model: 'demo-model',
+    model: ['demo-model'],
     enabled: true,
     temperature: 0.3,
     providerOptions: '',

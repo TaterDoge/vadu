@@ -40,19 +40,26 @@ export function TranslateWindow() {
   const window = currentWindow();
   const source = signal('');
   const target = signal(translationLanguages[0].value);
-  const profileId = signal<string | null>(null);
+  const selection = signal<string | null>(null);
   const { result, error, cancelled, pending, submit, cancel } =
     createTranslationSession();
   const configError = signal('');
-  const profiles = computed(
-    () =>
-      Settings.current()?.profiles.filter(
-        ({ enabled, model, protocol }) =>
-          enabled && model.trim() && protocol === 'chat-completions',
-      ) ?? [],
+  const modelChoices = computed(() =>
+    (Settings.current()?.profiles ?? [])
+      .filter(
+        ({ enabled, protocol }) => enabled && protocol === 'chat-completions',
+      )
+      .flatMap(({ id, name, model }) =>
+        model.map((modelId) => ({
+          value: JSON.stringify([id, modelId]),
+          title: `${name} · ${modelId}`,
+          profileId: id,
+          model: modelId,
+        })),
+      ),
   );
   const chosen = computed(() =>
-    profiles().find(({ id }) => id === profileId()),
+    modelChoices().find(({ value }) => value === selection()),
   );
   let mounted = true;
 
@@ -138,11 +145,11 @@ export function TranslateWindow() {
             <SelectContent items={translationLanguages} cover={false} />
           </Select>
           <Select
-            value={chosen()?.id ?? null}
-            onChange={({ value }) => profileId.set(value)}
+            value={chosen()?.value ?? null}
+            onChange={({ value }) => selection.set(value)}
             disabled={
               !providerConnectionsSupported ||
-              profiles().length === 0 ||
+              modelChoices().length === 0 ||
               pending()
             }
             placeholder="选择服务商"
@@ -152,13 +159,7 @@ export function TranslateWindow() {
               accessibilityLabel="翻译服务商"
               style={{ flex: 1, minWidth: 0 }}
             />
-            <SelectContent
-              items={profiles().map(({ id, name, model }) => ({
-                value: id,
-                title: `${name} · ${model}`,
-              }))}
-              cover={false}
-            />
+            <SelectContent items={modelChoices()} cover={false} />
           </Select>
           <Button
             testID="translation-submit"
@@ -168,9 +169,10 @@ export function TranslateWindow() {
             }
             accessibilityLabel={pending() ? '取消翻译' : '翻译'}
             onPress={() => {
-              const profile = chosen();
+              const choice = chosen();
               if (pending()) cancel();
-              else if (profile) submit(profile.id, target(), source());
+              else if (choice)
+                submit(choice.profileId, choice.model, target(), source());
             }}
             style={{ width: 96, flexShrink: 0 }}
           >
@@ -203,7 +205,7 @@ export function TranslateWindow() {
           <If
             when={
               !providerConnectionsSupported ||
-              (!profiles().length && !configError())
+              (!modelChoices().length && !configError())
             }
           >
             <Text class="text-xs text-muted-foreground">

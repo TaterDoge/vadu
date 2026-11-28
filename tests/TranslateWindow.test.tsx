@@ -41,7 +41,7 @@ test('浮窗仅列出已启用、已设模型且协议已接入的配置，必�
     storage: providerStorage(
       provider('ready', '本轮服务'),
       provider('disabled', '停用配置', { enabled: false }),
-      provider('no-model', '还没选模型', { model: '' }),
+      provider('no-model', '还没选模型', { model: [] }),
       provider('future', 'Responses 配置', { protocol: 'responses' }),
     ),
   });
@@ -53,6 +53,31 @@ test('浮窗仅列出已启用、已设模型且协议已接入的配置，必�
   ]);
   await app.press('text:本轮服务 · demo-model');
   expect(app.enabled('id:translation-submit')).toBe(true);
+});
+
+test('同一服务商的多个模型可分别选择，实际请求使用选中的模型 ID', async () => {
+  const storage = providerStorage(
+    provider('ready', '本轮服务', {
+      model: ['model-a', 'model-b'],
+    }),
+  );
+  const app = await open('./fixtures/Translate.tsx', {
+    ...viewport,
+    storage,
+    network: {
+      'POST https://example.com/v1/chat/completions': {
+        headers: { 'content-type': 'text/event-stream' },
+        body: 'data: {"choices":[{"delta":{"content":"译文"}}]}\n\ndata: [DONE]\n\n',
+      },
+    },
+  });
+  await app.type('id:translation-source-input', '示例');
+  await app.press('id:translation-provider');
+  expect(app.shows('text:本轮服务 · model-a')).toBe(true);
+  await app.press('text:本轮服务 · model-b');
+  await app.press('label:翻译');
+  await app.waitFor('id:translation-result >> text:译文');
+  expect(JSON.parse(app.requests()[0].body!).model).toBe('model-b');
 });
 
 const readyProfile = provider('ready', '本轮服务', {

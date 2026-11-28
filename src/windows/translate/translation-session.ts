@@ -10,7 +10,12 @@ export function createTranslationSession() {
   const error = signal('');
   const cancelled = signal(false);
 
-  function submit(profileId: string, target: string, text: string) {
+  function submit(
+    profileId: string,
+    model: string,
+    target: string,
+    text: string,
+  ) {
     const id = randomUUID();
     requestId.set(id);
     result.set('');
@@ -18,7 +23,7 @@ export function createTranslationSession() {
     cancelled.set(false);
     try {
       const failure = Translation.start(
-        { requestId: id, profileId, target, text },
+        { requestId: id, profileId, model, target, text },
         (event) => {
           if (event.requestId !== requestId()) return;
           if (event.type === 'delta') {

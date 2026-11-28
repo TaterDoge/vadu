@@ -19,7 +19,13 @@ function TranslationTasks() {
   host.on('open-translate', openTranslateWindow);
   host.on<string>('start', (id) => {
     const failure = Translation.start(
-      { requestId: id, profileId: 'ready', text: '示例', target: 'ja' },
+      {
+        requestId: id,
+        profileId: 'ready',
+        model: 'demo-model',
+        text: '示例',
+        target: 'ja',
+      },
       () => {},
     );
     if (failure) record(`${id}:${failure.code}`);

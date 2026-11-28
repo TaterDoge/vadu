@@ -13,20 +13,21 @@ import { stream } from './stream';
 
 export async function streamTranslation(
   profileId: string,
+  model: string,
   text: string,
   target: string,
   signal: AbortSignal,
   emit: (delta: string) => void,
 ) {
   const profile = await savedConnection(profileId, signal);
-  if (!profile.enabled || !profile.model.trim()) {
+  if (!profile.enabled || !profile.model.includes(model)) {
     throw new ProviderRequestError(
       'INVALID_CONFIG',
       '请选择已启用且已设置模型的服务商。',
     );
   }
   const payload = completion(profile, {
-    model: profile.model,
+    model,
     stream: true,
     messages: [
       {

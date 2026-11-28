@@ -37,7 +37,7 @@ src/api/translation-task.ts              # 翻译事件、请求生命周期与�
 
 设置侧栏使用 shadcn-nsh 的固定 Sidebar，内容由 NavStack / NavPage 承载。通用、服务商、外观、快捷键、备份恢复五个一级分类通过 `replace` 切换，默认通用。键盘用 Tab 移动焦点，Enter 或 Space 激活。全局快捷键调用 `openTranslateWindow()` 聚焦独立翻译窗。侧栏滚动、缩放与键盘导航由 `App.test.tsx` 覆盖。
 
-组件源码由 CLI 写入项目，registry 固定在 v0.10.0。新增通用控件前先查现有组件，按需运行 `npx shadcn-nsh@0.10.0 add <组件名>`。复制组件的来源与许可见 [NOTICE](./NOTICE)、[shadcn-nsh MIT](./assets/licenses/shadcn-nsh-LICENSE.txt)、[NSH Apache-2.0](./assets/licenses/NSH-LICENSE-APACHE.txt)。
+组件源码由 CLI 写入项目，registry 固定在 v0.11.0。新增通用控件前先查现有组件，按需运行 `bunx --bun shadcn-nsh@0.11.0 add <组件名>`。复制组件的来源与许可见 [NOTICE](./NOTICE)、[shadcn-nsh MIT](./assets/licenses/shadcn-nsh-LICENSE.txt)、[NSH Apache-2.0](./assets/licenses/NSH-LICENSE-APACHE.txt)。
 
 ## 菜单栏托盘
 
@@ -49,7 +49,7 @@ src/api/translation-task.ts              # 翻译事件、请求生命周期与�
 
 设置 → 外观可选择浅色、深色或跟随系统，支持默认色、蓝色、翠绿、琥珀、玫红、紫色六种强调色，以及 Nova / Lyra 两种风格。默认跟随系统、使用预设的黄绿色和 Nova。切换即时作用于设置与翻译窗口，启动时从 `vadu.config` 恢复已保存的选择。
 
-- 构建预设为 shadcn-nsh v0.10.0 的 NSH Gallery UI，由 `init --theme default` 生成，`nsh-ui.json` 中记录为 `"theme": "theme"`。切换预设时同步更新 `theme.json` 的配色和 `lib/ui/semantics.json` 的控件尺寸和交互样式。外观设置通过 `selectTheme` 应用强调色和字体，通过 `setColorScheme` 应用显示模式。琥珀色使用深色前景。
+- NSH Gallery 预设来自 shadcn-nsh v0.11.0 的 `init --theme nsh-gallery`。`lib/ui/preset.ts` 导出 Theme v5 预设，`theme.json` 提供构建时配色与应用自定义 token。外观设置通过 `defineTheme` 和 `selectTheme` 应用强调色和字体，通过 `setColorScheme` 应用显示模式。琥珀色使用深色前景。
 - Nova 使用 Geist Mono，Lyra 使用 JetBrains Mono。两种字体随应用打包，来源与 OFL 许可证见 `assets/fonts/`。键帽修饰键符号使用 Lucida Grande。
 - 组件采用 Gallery 的圆角、渐变和阴影，按钮的键盘焦点沿用 Gallery 预设，使用 `ring` 色边框和 3 点半透明光环。普通输入框的焦点边框使用当前强调色。滚动条沿用 NSH 原生实现，窗口拖拽使用 `desktop.windowDrag`。
 
@@ -57,8 +57,8 @@ src/api/translation-task.ts              # 翻译事件、请求生命周期与�
 
 1. 在**设置 → 服务商 → 翻译**中新增服务商。选择 **Chat Completions**，填写名称和含版本路径的 Base URL（如 `https://api.openai.com/v1`）。**Responses** 和 **Anthropic Messages** 可选择和保存，接入状态显示在协议下方。
 2. 服务需要认证时填入 API Key。点击输入框右侧的眼睛可查看已保存的密钥或切换新输入值的显示。隐藏已保存的密钥后可输入替换值，留空保存会保留已存凭据。点击**保存**并确认新地址，应用将 API Key 写入 NSH Storage 的独立键（`vadu.secret.<profileId>`），绑定该服务商的接口地址。密钥以明文保存在本地 `storage.json` 中。
-3. 点击「模型」标签右侧的**选择模型**，在弹层中搜索和选择模型。填写地址后，新输入的 API Key 可直接用于获取模型，无需先保存；首次请求该地址前需确认。展开时自动加载模型列表，右上角可刷新。也可直接输入模型 ID。保存模型并启用服务商。同一行的**健康检测**使用当前模型发起一次 Chat Completions 对话，确认模型能够正常回复，结果通过浮层通知显示。
-4. 首次使用时，在**设置 → 快捷键 → 唤起翻译浮窗**点击键帽，录入一个全局组合键。按该组合打开浮窗，选择服务商与目标语言，输入原文后点击**翻译**。点击**取消翻译**或隐藏、关闭浮窗会取消请求，并保留已显示的译文。
+3. 点击**选择模型**打开右侧抽屉，在列表中搜索、勾选或取消勾选多个模型，也可手动添加模型 ID。具备连接条件时自动加载模型列表，右上角可刷新。未保存的地址可用本次输入的 API Key 获取列表，首次请求前需确认地址。点击完成后，已选模型逐行显示，可点击行末的减号逐项移除。随后保存并启用服务商。点击**测试**打开模型检测弹窗，从已获取或已选的模型中选一个进行检测。请求使用已保存的服务商配置和 API Key，进度和结果显示在弹窗内。
+4. 首次使用时，在**设置 → 快捷键 → 唤起翻译浮窗**点击键帽，录入一个全局组合键。按该组合打开浮窗，选择服务商及其具体模型与目标语言，输入原文后点击**翻译**。点击**取消翻译**或隐藏、关闭浮窗会取消请求，并保留已显示的译文。
 
 模型列表、健康检测和 SSE 翻译使用 NSH `fetch`，代理与连接由平台网络栈管理。网络行为与取消语义见[平台 API](./docs/nsh/native-api.md)。
 

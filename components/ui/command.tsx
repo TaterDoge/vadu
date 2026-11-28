@@ -13,7 +13,6 @@ import {
   type CommandRef,
 } from 'nsh/base';
 
-import { joinClass } from '../../lib/ui/class-names';
 import { Icon } from '../../lib/ui/icons';
 import {
   itemRadius,
@@ -22,7 +21,8 @@ import {
   rowVerticalPad,
 } from '../../lib/ui/popup';
 import { controlSize } from '../../lib/ui/surface';
-import { colors, font, rounded, terminal } from '../../lib/ui/theme';
+import { colors, control, font, rounded, terminal } from '../../lib/ui/theme';
+import { joinClass } from '../../lib/ui/utils';
 import { Kbd } from './kbd';
 
 const desktop = platform.desktop;
@@ -63,11 +63,14 @@ export const commandClasses = {
   group: 'pt-2.5 pb-1',
   /** Between two sections: its sides are `commandStyles.separator`'s. */
   separator: 'my-1 h-px bg-border',
-  /** A row: quiet until hovered, tinted in the brand while highlighted, dimmed while disabled; its
+  /** A row: quiet until hovered, focused per `list.item.highlight`, dimmed while disabled; its
    * corners are `commandStyles.item`'s. */
-  item:
-    'group transition-colors duration-100 motion-reduce:transition-none ' +
-    'hover:bg-hover focus:bg-brand-tint active:opacity-70 disabled:opacity-50',
+  get item(): string {
+    return (
+      'group transition-colors duration-100 motion-reduce:transition-none ' +
+      `hover:bg-accent ${control('list').highlightClass(false)} active:opacity-70 disabled:opacity-50`
+    );
+  },
 };
 
 /**

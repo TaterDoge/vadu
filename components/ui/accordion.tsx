@@ -18,7 +18,6 @@ import {
   type AccordionTriggerProps as BaseAccordionTriggerProps,
 } from 'nsh/base';
 
-import { joinClass } from '../../lib/ui/class-names';
 import { Icon } from '../../lib/ui/icons';
 import {
   controlSize,
@@ -27,6 +26,7 @@ import {
   RowLabel,
 } from '../../lib/ui/surface';
 import { colors } from '../../lib/ui/theme';
+import { joinClass } from '../../lib/ui/utils';
 
 /** Options of `disclosureTriggerLook`: a row's (`listRow`). */
 export type DisclosureTriggerOptions = ListRowOptions;

@@ -2,7 +2,7 @@ import { colorScheme, mount, Text, token, View } from 'nsh';
 import { Window } from 'nsh/desktop';
 
 import { Button } from '@/components/ui/button';
-import { currentTheme, focusRing, press } from '@/lib/ui/theme';
+import { currentTheme, focusRing, press, surface } from '@/lib/ui/theme';
 
 import { themePreferences } from '../../src/feature/settings/appearance/theme';
 import { SettingsWindow } from '../../src/windows/settings/SettingsWindow';
@@ -35,10 +35,9 @@ function ThemeFixture() {
             primary: token('primary'),
             brand: token('brand'),
             primaryForeground: token('primary-foreground'),
-            sidebarPrimary: token('sidebar-primary'),
-            sidebarForeground: token('sidebar-primary-foreground'),
+            accentSurface: surface('accent').style.backgroundColor,
             border: token('border'),
-            mutedForeground: token('muted-foreground'),
+            ring: token('ring'),
             focus: focusRing(),
             neutral: token('accent-neutral'),
             blue: token('accent-blue'),

@@ -9,14 +9,14 @@ import {
   type TooltipProps as BaseTooltipProps,
 } from 'nsh/base';
 
-import { AsText } from '../../lib/ui/as-text';
 import {
   createOpenState,
   createSlot,
   type OpenState,
   type Slot,
-} from '../../lib/ui/open-state';
-import { finish } from '../../lib/ui/theme';
+} from '../../lib/ui/state';
+import { surface, surfaceBorderWidth } from '../../lib/ui/theme';
+import { AsText } from '../../lib/ui/utils';
 import { Button, type ButtonVariant } from './button';
 
 /** Options of `tooltipLook`. */
@@ -27,39 +27,54 @@ export interface TooltipLookOptions {
 
 /**
  * A tooltip's bubble (`class` and `style`, on the view inside `nsh/base`'s `Tooltip`):
- * the theme's tooltip finish (`finish.inverse`: today the `popover` surface with the border's
- * edge, so it reads as the menus and popovers do in both appearances). One line: a row 8 points apart, 8 by 4 points of padding,
- * the theme's control corners (`radius-control`); `rich`: a column, 10 points of
- * padding, the theme's base corners (`radius`).
- * Its text takes `tooltipText`, a shortcut or a note `tooltipNote`.
+ * the theme's inverse surface (`surface("inverse")`), its face, shadow, edge and backdrop blur.
+ * One line: a row 8 points apart, 8 by 4 points of padding,
+ * the theme's control corners (`radius-control`); `rich`: a column, 10 points of padding, the
+ * theme's container corners (`radius-container`).
+ * Its text takes `tooltipTextStyle()`, a shortcut or a note `tooltipNote()`.
  */
 export function tooltipLook(o?: TooltipLookOptions) {
   return {
     class: o?.rich
-      ? 'gap-2 rounded-(--radius-container) border p-2.5'
-      : 'flex-row items-center gap-2 rounded-(--radius-control) border px-2 py-1',
+      ? 'gap-2 rounded-(--radius-container) p-2.5'
+      : 'flex-row items-center gap-2 rounded-(--radius-control) px-2 py-1',
     style: {
       get backgroundColor() {
-        return finish.inverse.backgroundColor;
+        return surface('inverse').style.backgroundColor;
       },
       get boxShadow() {
-        return finish.inverse.boxShadow;
+        return surface('inverse').style.boxShadow ?? 'none';
       },
       get borderColor() {
-        return finish.inverse.borderColor;
+        return surface('inverse').style.borderColor;
+      },
+      get borderWidth() {
+        const edge = surface('inverse').style.borderColor;
+        return surfaceBorderWidth(typeof edge === 'string' ? edge : undefined);
+      },
+      get backdropFilter() {
+        return (surface('inverse').style as { backdropFilter?: string })
+          .backdropFilter;
       },
     } satisfies ViewStyle,
   };
 }
 
-/** A tooltip's text (`class`): 12 points in the inverse foreground (`inverse-foreground`). */
-export const tooltipText = 'text-xs text-inverse-foreground';
+/** Class name for tooltip sizing where only a class prop is used; prefer `tooltipTextStyle()` for color. */
+export const tooltipText = 'text-xs';
 
-/** A tooltip's quieter text (`style`): a shortcut's keys, a time, 12 points over 16 in the inverse finish's ink. */
+/** A tooltip's text style: 12 points over 16 in the theme's `tooltip.ink`. */
+export const tooltipTextStyle = (): TextStyle => ({
+  fontSize: 12,
+  lineHeight: 16,
+  color: surface('inverse').ink,
+});
+
+/** A tooltip's quieter text (`style`): a shortcut's keys, a time, 12 points over 16 in the tooltip's ink. */
 export const tooltipNote = (): TextStyle => ({
   fontSize: 12,
   lineHeight: 16,
-  color: finish.inverse.foreground,
+  color: surface('inverse').ink,
 });
 
 /** Why a tooltip closed (`onOpenChange`'s `reason`): `nsh/base`'s `OpenChangeReason`, under this part's name. */
@@ -147,17 +162,18 @@ function useTooltip() {
   return ctx;
 }
 
-/** The bubble itself: `tooltipLook`'s classes, a string child in `tooltipText`. */
+/** The bubble itself: `tooltipLook`'s classes, a string child in `tooltipTextStyle()`. */
 function Bubble(props: TooltipContentProps) {
   const [, rest] = split(props, ['children', 'rich', 'class']);
   const look = tooltipLook({ rich: props.rich });
   return (
     <BaseTooltip
+      {...surface('inverse').platformProps}
       {...rest}
       class={props.class ? `${look.class} ${props.class}` : look.class}
       style={[look.style, props.style ?? null]}
     >
-      <AsText class={tooltipText}>{props.children}</AsText>
+      <AsText style={tooltipTextStyle()}>{props.children}</AsText>
     </BaseTooltip>
   );
 }

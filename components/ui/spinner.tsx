@@ -3,7 +3,6 @@
 
 import { reduceMotion, View } from 'nsh';
 
-import { trackLook } from '../../lib/ui/look';
 import { alpha, control, iconSize } from '../../lib/ui/theme';
 
 /** A spinner's size, on the theme's icon tiers: the ring's side is `iconSize`'s `sm`, `md` or
@@ -27,25 +26,24 @@ export interface SpinnerProps {
   size?: SpinnerSize;
   /** The ring's side in points, for a place that needs an exact size over the scale's. */
   side?: number;
-  /** The moving arc's color (the theme's text, a tone); the rest of the ring follows the theme's
-   * `track` form: sunk, a groove behind the arc at the recipe's opacity — `tint` and `hairline` draw
-   * none, and the arc stands alone. */
+  /** The moving arc's color (the theme's text, a tone); the ring behind it follows the `spinner`
+   * recipe's `trackOpacity`: an arc at that much of the tone where the theme states one, and an arc
+   * alone where it states `0`. */
   tint: string;
 }
 
-/** The color of the ring behind the arc: `tint` at the recipe's opacity when the theme's `track`
- * form draws a groove, transparent when it does not. */
+/** The color of the ring behind the arc: the tone at the `spinner` recipe's `trackOpacity`,
+ * transparent where the theme draws no ring. */
 function grooveColor(tint: string): string {
-  const groove = trackLook(control().track).spinner;
-  const opacity = groove.groove ? groove.opacity : null;
-  return opacity === null ? 'transparent' : alpha(tint, opacity);
+  const opacity = control('spinner').trackOpacity;
+  return opacity <= 0 ? 'transparent' : alpha(tint, opacity);
 }
 
 /**
  * A ring turning with its top arc in `tint`: work going on. Its side is `side` when given,
  * else the theme's icon tier named by `size`; the stroke is that side over `STROKE_SHARE`, no
- * thinner than `MIN_STROKE`; whether a groove shows behind the arc is the theme's `track` form to
- * say (`control().track`). It stands still when the user asks for less motion.
+ * thinner than `MIN_STROKE`; whether a ring shows behind the arc is the `spinner` recipe's
+ * `trackOpacity` to say. It stands still when the user asks for less motion.
  */
 export function Spinner(props: SpinnerProps) {
   const side = () =>

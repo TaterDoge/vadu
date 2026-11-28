@@ -2,12 +2,14 @@
 // none of them. From the NSH design guides; yours to change.
 import type { BackdropMaterial, WindowsBackdropMaterial } from 'nsh';
 
-/**
- * The materials a finish can ask for: the platform's own glass or acrylic. `null` in
- * `Finish.material` asks nothing of the platform — the layer draws only itself — which is every
- * layer of the themes that imitate no platform.
- */
-export type FinishMaterial = 'glass' | 'acrylic';
+import type {
+  ColorExpr,
+  FinishMaterial,
+  MaterialSpec,
+  SurfaceMaterial,
+} from './schema';
+
+export type { FinishMaterial };
 
 /**
  * What one material asks of NSH, and what it guarantees a platform that has none of it.
@@ -63,3 +65,66 @@ export const materials: Record<FinishMaterial, MaterialRecipe> = {
     fallback: { blur: 30, minOpacity: 0.85 },
   },
 };
+
+/**
+ * A material after its preset or spec has been resolved: platform props, the blur every other
+ * platform draws, and the opacity floor the layer's own fill must meet.
+ */
+export interface ResolvedMaterial {
+  /** Liquid Glass style, only when the recipe is the system's glass. */
+  readonly glassEffect?: 'regular' | 'clear';
+  /** Platform props `surface()` spreads onto the view (`ios` / `windows`). */
+  readonly props: MaterialRecipe['props'];
+  /** Backdrop blur in points. */
+  readonly blur: number;
+  /** Least opacity of the layer's own fill. */
+  readonly minOpacity: number;
+  /** Backdrop saturation multiplier (`1.8` is `saturate(180%)`), when the spec states one. */
+  readonly saturate?: number;
+  /** Specular hairline color, when the spec states one. */
+  readonly specular?: ColorExpr | null;
+}
+
+const BLUR_FALLBACK = { blur: 16, minOpacity: 0.68 } as const;
+
+function withOptics(
+  spec: MaterialSpec,
+  resolved: ResolvedMaterial,
+): ResolvedMaterial {
+  return {
+    ...resolved,
+    ...(spec.saturate !== undefined ? { saturate: spec.saturate } : {}),
+    ...(spec.specular !== undefined ? { specular: spec.specular } : {}),
+  };
+}
+
+/** Resolve a preset name or a `MaterialSpec` into one recipe a surface can paint. */
+export function resolveMaterial(material: SurfaceMaterial): ResolvedMaterial {
+  if (typeof material === 'string') {
+    const recipe = materials[material];
+    return {
+      ...(recipe.glassEffect !== undefined
+        ? { glassEffect: recipe.glassEffect }
+        : {}),
+      props: recipe.props,
+      blur: recipe.fallback.blur,
+      minOpacity: recipe.fallback.minOpacity,
+    };
+  }
+  if (material.kind === 'blur') {
+    return withOptics(material, {
+      props: {},
+      blur: material.blur ?? BLUR_FALLBACK.blur,
+      minOpacity: material.minOpacity ?? BLUR_FALLBACK.minOpacity,
+    });
+  }
+  const recipe = materials[material.kind];
+  return withOptics(material, {
+    ...(recipe.glassEffect !== undefined
+      ? { glassEffect: recipe.glassEffect }
+      : {}),
+    props: recipe.props,
+    blur: material.blur ?? recipe.fallback.blur,
+    minOpacity: material.minOpacity ?? recipe.fallback.minOpacity,
+  });
+}

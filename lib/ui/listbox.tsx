@@ -6,6 +6,7 @@ import type { JSX, ViewStyle } from 'nsh';
 import { platform, Text, View } from 'nsh';
 import type { SelectEntry, SelectGroup } from 'nsh/base';
 
+import { fieldCorners, fieldEdgeWidths, fieldRestEdge } from './field-look';
 import { Icon } from './icons';
 import {
   backdrop,
@@ -13,17 +14,19 @@ import {
   itemSpacing,
   listPadding,
   popInStyles,
+  popupSurface,
   rowVerticalPad,
 } from './popup';
 import { controlSize } from './surface';
 import {
   colors,
+  control,
   cornerCurve,
-  finish,
   font,
   rounded,
   shape,
   stroke,
+  surface,
   terminal,
 } from './theme';
 
@@ -53,10 +56,8 @@ const SHEET_FOOT = 34;
 export function listboxPopup(o?: ListboxPopupOptions): ViewStyle {
   return pointer
     ? {
-        ...rounded(shape.container),
-        borderWidth: stroke.hairline,
+        ...popupSurface(),
         ...(o?.padding === undefined ? listPadding() : { padding: o.padding }),
-        ...finish.overlay,
         ...(o?.minWidth ? { minWidth: o.minWidth } : {}),
         ...popInStyles().style,
       }
@@ -79,13 +80,16 @@ export function listboxPopupStarting(): ViewStyle | undefined {
 /**
  * A row of the list, its look on the row (`itemClass`; its corners are
  * `listboxProps`'s `itemStyle`, concentric with the popup's): lit in the brand
- * tint while highlighted (`focus:`, the keys or the pointer on it), the fill
- * fading between rows as the highlight moves, dimmed while disabled. Every
- * state is the row's class (`group`), so the list draws a row's content once
- * per item and the highlight moves without drawing.
+ * tint while highlighted (`focus:`, the keys or the pointer on it) with a brand
+ * edge, the fill and edge fading between rows as the highlight moves, dimmed
+ * while disabled. Every state is the row's class (`group`), so the list draws a
+ * row's content once per item and the highlight moves without drawing.
  */
-export const optionClass =
-  'group transition-colors duration-100 motion-reduce:transition-none focus:bg-brand-tint active:opacity-70 disabled:opacity-50';
+const OPTION_BASE =
+  'group border border-transparent transition-colors duration-100 motion-reduce:transition-none active:opacity-70 disabled:opacity-50';
+
+/** Default option row class (brand tint with brand edge); `listboxProps()` picks the theme's variant from `control("list").highlightClass()`, read where the list is drawn, which a class fixed at import cannot. */
+export const optionClass = `${OPTION_BASE} focus:border-brand/30 focus:bg-brand/15`;
 
 /**
  * What a select's or combobox's list takes besides its items (spread it):
@@ -105,7 +109,9 @@ export function listboxProps(o?: ListboxPopupOptions) {
     get backdropStyle() {
       return backdrop();
     },
-    itemClass: optionClass,
+    get itemClass(): string {
+      return `${OPTION_BASE} ${control('list').highlightClass(true)}`;
+    },
     get itemStyle(): ViewStyle {
       return rounded(itemRadius());
     },
@@ -166,7 +172,7 @@ export interface ClearButtonOptions {
 export function clearButtonLook(o?: ClearButtonOptions) {
   return {
     clearButtonClass:
-      'items-center justify-center rounded-full enabled:hover:bg-foreground/8 active:bg-track',
+      'items-center justify-center rounded-full enabled:hover:bg-foreground/8 active:bg-surface',
     get clearButtonStyle(): ViewStyle | undefined {
       return terminal
         ? undefined
@@ -335,15 +341,18 @@ export function listboxSearch() {
   return {
     searchClass: `${pointer ? 'text-sm' : 'text-base'} text-foreground placeholder:text-muted-foreground`,
     get searchStyle(): ViewStyle {
+      // The field's own well: its fill, its edge (the theme decides how many sides it draws and in
+      // which colour) and its corners, so a list's search reads as the field it is.
+      const field = control('field');
       return {
         height: pointer ? 32 : 40,
         paddingHorizontal: itemSpacing.pad,
         marginBottom: 6,
-        ...rounded(shape.control),
-        borderWidth: stroke.hairline,
-        backgroundColor: colors.field,
-        ...finish.inset,
-        borderColor: colors.input,
+        backgroundColor: field.ground,
+        ...fieldEdgeWidths(field),
+        ...fieldRestEdge(field),
+        ...fieldCorners(field),
+        boxShadow: surface('inset').style.boxShadow,
       };
     },
   };

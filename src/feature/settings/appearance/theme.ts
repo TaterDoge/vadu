@@ -3,8 +3,9 @@ import { computed, effect, setColorScheme } from 'nsh';
 import GeistMono from '@/assets/fonts/geist-mono/GeistMono.ttf';
 import JetBrainsMono from '@/assets/fonts/jetbrains-mono/JetBrainsMono.ttf';
 import { Scrollbar } from '@/components/ui/scrollbar';
-import semantics from '@/lib/ui/semantics.json';
-import { selectTheme, type Semantics } from '@/lib/ui/theme';
+import { presetTheme } from '@/lib/ui/preset';
+import { defineTheme } from '@/lib/ui/schema';
+import { selectTheme } from '@/lib/ui/theme';
 import baseTheme from '@/theme.json';
 
 import { currentSettings } from '../store';
@@ -25,36 +26,39 @@ function applyTheme(next: AppearanceSettings) {
   const font = next.style === 'lyra' ? JetBrainsMono : GeistMono;
   const palette = (scheme: 'light' | 'dark') => {
     const base = baseTheme.cssVars[scheme];
-    if (next.accent === 'neutral') return base;
+    if (next.accent === 'neutral') return { brand: base.brand };
     return {
-      ...base,
-      // 切换强调色后，默认色样仍显示预设颜色。
-      'accent-neutral': base.primary,
-      'brand-tint': 'color-mix(in srgb, var(--brand) 14%, transparent)',
-      primary: `var(--accent-${next.accent})`,
+      brand: base.brand,
+      primary: base[`accent-${next.accent}`],
       'primary-foreground':
         next.accent === 'amber'
-          ? 'var(--accent-amber-foreground)'
-          : 'var(--accent-color-foreground)',
+          ? baseTheme.cssVars.theme['accent-amber-foreground']
+          : base['accent-color-foreground'],
     };
   };
 
+  const selected = defineTheme({
+    id: presetTheme.id,
+    label: presetTheme.label,
+    extends: presetTheme.spec,
+    tokens: {
+      font: { sans: font, mono: font },
+      light: palette('light'),
+      dark: palette('dark'),
+    },
+  });
+  const { cssVars } = selected.theme;
   selectTheme({
-    id: 'default',
-    label: baseTheme.name,
+    ...selected,
     theme: {
-      ...baseTheme,
+      ...selected.theme,
+      // Theme v5 只导出语义 token，应用的色样和键帽字体从构建主题补回。
       cssVars: {
-        theme: {
-          ...baseTheme.cssVars.theme,
-          'font-sans': font,
-          'font-mono': font,
-        },
-        light: palette('light'),
-        dark: palette('dark'),
+        theme: { ...baseTheme.cssVars.theme, ...cssVars.theme },
+        light: { ...baseTheme.cssVars.light, ...cssVars.light },
+        dark: { ...baseTheme.cssVars.dark, ...cssVars.dark },
       },
     },
-    semantics: semantics as Semantics,
   });
   setColorScheme(next.mode);
 }

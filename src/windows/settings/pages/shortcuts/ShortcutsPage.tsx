@@ -270,7 +270,7 @@ export function ShortcutsPage() {
                             {
                               paddingHorizontal: 4,
                               backgroundColor: showPrompt()
-                                ? colors.sidebarAccent
+                                ? colors.muted
                                 : undefined,
                             },
                           ]}

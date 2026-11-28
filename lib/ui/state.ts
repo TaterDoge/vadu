@@ -1,7 +1,7 @@
-// The state a composition root keeps and hands to its parts: the open flag it controls or owns,
-// the slot a Trigger fills before Content reads it, and the items the `…Item` parts register.
+// Reactive composition state shared across controls: controlled/uncontrolled open state, part
+// slots, registered list items, and timed clipboard copy confirmation.
 
-import { type Signal, signal } from 'nsh';
+import { cleanup, type Signal, signal } from 'nsh';
 
 /** Controlled/uncontrolled open flag shared by composition roots. */
 export type OpenState = {
@@ -102,6 +102,35 @@ export function createItemRegistry<T extends RegisteredItem>(
         next.splice(at, 1);
         return next;
       });
+    },
+  };
+}
+
+/** How long a copy's confirmation stays up, in milliseconds. */
+export const COPIED_FOR = 2000;
+
+/** What `useCopied` hands a copy button. */
+export interface Copied {
+  /** Whether the copy just happened: the label and the glyph read it. */
+  readonly copied: () => boolean;
+  /** The text is on the clipboard: show the confirmation for `COPIED_FOR`, then take it back. */
+  readonly mark: () => void;
+}
+
+/**
+ * A copy's confirmation. `mark()` flips it on and schedules it off; a second mark restarts the
+ * wait. The timer is cleared with the component, so a mark never lands after it is gone.
+ */
+export function useCopied(): Copied {
+  const copied = signal(false);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  cleanup(() => clearTimeout(timer));
+  return {
+    copied,
+    mark: () => {
+      copied.set(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => copied.set(false), COPIED_FOR);
     },
   };
 }

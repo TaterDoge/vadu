@@ -3,14 +3,7 @@
 // it, on `nsh`'s own View and Text.
 
 import { PanelLeft } from 'lucide';
-import type {
-  AndroidProps,
-  JSX,
-  StyleProp,
-  TextStyle,
-  ViewProps,
-  ViewStyle,
-} from 'nsh';
+import type { JSX, StyleProp, TextStyle, ViewProps, ViewStyle } from 'nsh';
 import {
   context,
   effect,
@@ -30,33 +23,23 @@ import {
   type ButtonProps as BaseButtonProps,
 } from 'nsh/base';
 
-import { AsText } from '../../lib/ui/as-text';
 import { IconLabel } from '../../lib/ui/icons';
-import { type Live, read } from '../../lib/ui/live-value';
-import {
-  pressHostProps,
-  pressRipple,
-  pressSink,
-  pressTransition,
-} from '../../lib/ui/press';
+import { pressSink, pressTransition } from '../../lib/ui/motion';
 import { controlSize, narrowWindow } from '../../lib/ui/surface';
 import {
   alpha,
   colors,
   controlHeight,
-  dimmed,
-  finish,
-  focusRing,
+  feedback,
   font,
-  hovered,
   iconSize,
   rounded,
   shape,
-  stateLayer,
   stroke,
-  style as themeStyle,
+  surface,
   terminal,
 } from '../../lib/ui/theme';
+import { AsText, type Live, read } from '../../lib/ui/utils';
 import { IconButton, iconButtonGlyph, type IconButtonProps } from './button';
 import { Input, type InputProps } from './input';
 import { Separator, type SeparatorProps } from './separator';
@@ -261,6 +244,10 @@ const folded = (o?: SidebarFoldOptions) =>
 export interface SidebarLookOptions extends SidebarFoldOptions {
   /** How it meets the page (default `sidebar`). */
   variant?: Live<SidebarVariant>;
+  /** Width while expanded. */
+  width?: Live<number | undefined>;
+  /** Width while folded to icons. */
+  collapsedWidth?: Live<number | undefined>;
 }
 
 /** The frame's parts as the styles they wear: spread each one on the view it names. */
@@ -299,17 +286,20 @@ export interface SidebarLook {
 const frameRoom = (variant: SidebarVariant) =>
   variant === 'sidebar' ? 0 : sidebarSize.frame;
 
-/** The width a column takes: open, folded to its icons, or off the window — with the room a
- * floating or an inset column keeps around its card, so the card itself stays `sidebarSize.width`
- * across. A `none` column never closes, so it keeps its width whatever the open state says. */
+/** The width a column takes: open, folded to its icons, or off the window. */
 const columnWidth = (
   open: boolean,
   collapsible: SidebarCollapsible,
   variant: SidebarVariant,
+  width: number | undefined,
+  collapsedWidth: number | undefined,
 ) => {
   const room = 2 * frameRoom(variant);
-  if (collapsible === 'none' || open) return sidebarSize.width + room;
-  return collapsible === 'icon' ? sidebarSize.icon + room : 0;
+  if (collapsible === 'none' || open)
+    return (width ?? sidebarSize.width) + room;
+  return collapsible === 'icon'
+    ? (collapsedWidth ?? sidebarSize.icon) + room
+    : 0;
 };
 
 // The fold takes the room away at once: the platform transitions colors, opacity, transforms and
@@ -329,6 +319,8 @@ export function sidebarLook(o?: SidebarLookOptions): SidebarLook {
   const collapsible = () => read(o?.collapsible) ?? 'offcanvas';
   const open = () => !!read(o?.open);
   const mobile = () => !!read(o?.isMobile);
+  const width = () => read(o?.width);
+  const collapsedWidth = () => read(o?.collapsedWidth);
   const aside = () => variant() !== 'sidebar';
   const card = () => variant() === 'inset' && !mobile();
   /** Off the window: closed, with the offcanvas collapsible. */
@@ -341,7 +333,9 @@ export function sidebarLook(o?: SidebarLookOptions): SidebarLook {
         flexDirection: side() === 'right' ? 'row-reverse' : 'row',
         alignItems: 'stretch',
         backgroundColor:
-          card() || variant() === 'inset' ? colors.sidebar : colors.background,
+          card() || variant() === 'inset'
+            ? colors.background
+            : colors.background,
       };
     },
     get frame(): ViewStyle {
@@ -349,7 +343,13 @@ export function sidebarLook(o?: SidebarLookOptions): SidebarLook {
         boxSizing: 'border-box',
         position: 'relative',
         flexShrink: 0,
-        width: columnWidth(open() || mobile(), collapsible(), variant()),
+        width: columnWidth(
+          open() || mobile(),
+          collapsible(),
+          variant(),
+          width(),
+          collapsedWidth(),
+        ),
         padding: off() ? 0 : frameRoom(variant()),
       };
     },
@@ -361,8 +361,8 @@ export function sidebarLook(o?: SidebarLookOptions): SidebarLook {
         height: '100%',
         flexDirection: 'column',
         overflow: 'hidden',
-        backgroundColor: colors.sidebar,
-        borderColor: colors.sidebarBorder,
+        backgroundColor: colors.background,
+        borderColor: colors.line,
         ...(flat
           ? // physical: the column's side is the window edge it stands on; the edge that faces the page keeps the hairline in either direction.
             side() === 'left'
@@ -371,7 +371,7 @@ export function sidebarLook(o?: SidebarLookOptions): SidebarLook {
           : {
               borderWidth: stroke.hairline,
               ...rounded(shape.container),
-              boxShadow: finish.card.boxShadow,
+              boxShadow: surface('card').style.boxShadow,
             }),
       };
     },
@@ -390,7 +390,7 @@ export function sidebarLook(o?: SidebarLookOptions): SidebarLook {
               borderWidth: stroke.hairline,
               borderColor: colors.line,
               ...rounded(shape.container),
-              boxShadow: finish.card.boxShadow,
+              boxShadow: surface('card').style.boxShadow,
               overflow: 'hidden',
             }
           : {}),
@@ -414,7 +414,7 @@ export function sidebarLook(o?: SidebarLookOptions): SidebarLook {
         width: RAIL_LINE,
         height: '100%',
         borderRadius: 1,
-        backgroundColor: colors.sidebarBorder,
+        backgroundColor: colors.line,
         ...(reduceMotion()
           ? {}
           : { transitionProperty: 'opacity', transitionDuration: 150 }),
@@ -446,7 +446,7 @@ export function sidebarLook(o?: SidebarLookOptions): SidebarLook {
       return {
         marginHorizontal: sidebarSize.padding,
         width: 'auto',
-        backgroundColor: colors.sidebarBorder,
+        backgroundColor: colors.line,
       };
     },
   };
@@ -506,7 +506,7 @@ export function sidebarGroupLook(o?: SidebarFoldOptions) {
       };
     },
     get actionHover(): ViewStyle {
-      return { backgroundColor: colors.sidebarAccent };
+      return { backgroundColor: colors.accent };
     },
     get content(): ViewStyle {
       return { width: '100%', flexDirection: 'column' };
@@ -547,50 +547,47 @@ export function sidebarMenuButtonLook(o?: SidebarMenuButtonLookOptions) {
         boxSizing: 'border-box',
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'flex-start',
-        gap: sidebarSize.gap,
+        alignSelf: 'center',
+        justifyContent: isFolded ? 'center' : 'flex-start',
+        gap: isFolded ? 0 : sidebarSize.gap,
         ...(isFolded
           ? { width: sidebarSize.folded, height: sidebarSize.folded }
           : { width: '100%', height: rowHeight[size()] }),
         overflow: 'hidden',
         ...rounded(shape.control),
-        ...(isFolded
-          ? { paddingHorizontal: size() === 'lg' ? 0 : sidebarSize.padding }
-          : {
-              paddingHorizontal: sidebarSize.padding,
-              paddingEnd: trailingRoom(read(o?.trailing)),
-            }),
+        paddingHorizontal: isFolded ? 0 : sidebarSize.padding,
+        paddingEnd: isFolded ? 0 : trailingRoom(read(o?.trailing)),
         ...(read(o?.variant) === 'outline'
           ? {
               backgroundColor: colors.background,
               borderWidth: stroke.hairline,
-              borderColor: colors.sidebarBorder,
+              borderColor: colors.line,
             }
           : {}),
         // The selected row's fill.
-        ...(active() ? { backgroundColor: colors.sidebarAccent } : {}),
+        ...(active() ? { backgroundColor: colors.accent } : {}),
         ...pressTransition('background-color'),
       };
     },
     get hoverStyle(): ViewStyle | undefined {
       if (disabled() || active()) return undefined;
-      return hovered();
+      return feedback.hoverStyle();
     },
     get activeStyle(): ViewStyle | undefined {
       if (disabled()) return undefined;
-      if (themeStyle().state.overlay.pressed > 0) {
-        return { ...stateLayer('pressed'), ...pressSink(0.98).activeStyle };
+      if (feedback.pressOverlay > 0) {
+        return {
+          ...feedback.press('surface').activeStyle,
+          ...pressSink(0.98).activeStyle,
+        };
       }
       return pressSink(0.98).activeStyle;
     },
     get focusVisibleStyle(): ViewStyle {
-      return focusRing();
+      return feedback.focusRing();
     },
     get disabledStyle(): ViewStyle {
-      return { opacity: dimmed.disabled };
-    },
-    get android(): AndroidProps | undefined {
-      return pressRipple('foreground', o?.disabled);
+      return { opacity: feedback.disabled.contentOpacity };
     },
     /** Its name: `rowLabel`'s size, medium on the page the app is on, one line, the text clipped
      * when the column is folded. */
@@ -644,13 +641,10 @@ export function sidebarMenuActionLook(o?: SidebarMenuActionLookOptions) {
       };
     },
     get hoverStyle(): ViewStyle {
-      return { backgroundColor: colors.sidebarAccent };
+      return { backgroundColor: colors.accent };
     },
     get focusVisibleStyle(): ViewStyle {
-      return focusRing();
-    },
-    get android(): AndroidProps | undefined {
-      return pressRipple('foreground');
+      return feedback.focusRing();
     },
     /** Its glyph: 16 points in the muted ink. */
     get glyph(): { size: number; tint: string } {
@@ -704,7 +698,7 @@ export function sidebarMenuSubLook(o?: SidebarFoldOptions) {
       return {
         marginStart: sidebarSize.sub,
         borderStartWidth: stroke.hairline,
-        borderColor: colors.sidebarBorder,
+        borderColor: colors.line,
         paddingStart: sidebarSize.subPadding,
         paddingVertical: 2,
         gap: sidebarSize.menuGap,
@@ -751,29 +745,29 @@ export function sidebarMenuSubButtonLook(o?: SidebarMenuSubButtonLookOptions) {
         paddingHorizontal: sidebarSize.padding,
         overflow: 'hidden',
         ...rounded(shape.control),
-        ...(active() ? { backgroundColor: colors.sidebarAccent } : {}),
+        ...(active() ? { backgroundColor: colors.accent } : {}),
         ...pressTransition('background-color'),
       };
     },
     get hoverStyle(): ViewStyle | undefined {
       if (disabled() || active()) return undefined;
-      return hovered();
+      return feedback.hoverStyle();
     },
     get activeStyle(): ViewStyle | undefined {
       if (disabled()) return undefined;
-      if (themeStyle().state.overlay.pressed > 0) {
-        return { ...stateLayer('pressed'), ...pressSink(0.98).activeStyle };
+      if (feedback.pressOverlay > 0) {
+        return {
+          ...feedback.press('surface').activeStyle,
+          ...pressSink(0.98).activeStyle,
+        };
       }
       return pressSink(0.98).activeStyle;
     },
     get focusVisibleStyle(): ViewStyle {
-      return focusRing();
+      return feedback.focusRing();
     },
     get disabledStyle(): ViewStyle {
-      return { opacity: dimmed.disabled };
-    },
-    get android(): AndroidProps | undefined {
-      return pressRipple('foreground', o?.disabled);
+      return { opacity: feedback.disabled.contentOpacity };
     },
     /** Its name: `subRowLabel`'s size, one line, the text clipped by a tight row. */
     get label(): TextStyle {
@@ -979,9 +973,10 @@ function useLookOptions(): SidebarLookOptions {
   };
 }
 
-/** Whether the window shows a sheet rather than the column: a touch screen, or a narrow window
- * (a terminal keeps the column: it draws no icons to fold to). */
-const showsSheet = () => !terminal && (!platform.desktop || narrowWindow());
+/** Icon sidebars keep their column on desktop, including narrow windows. */
+const showsSheet = (collapsible: SidebarCollapsible) =>
+  !terminal &&
+  (!platform.desktop || (collapsible !== 'icon' && narrowWindow()));
 
 /** What a phone's sheet leaves showing of the page beside it: 48 points. */
 const sheetMargin = 48;
@@ -1005,8 +1000,8 @@ export type SidebarProviderProps = ViewProps & {
 /**
  * A sidebar and the page beside it, after shadcn/ui's: the provider lays the two out side by side,
  * owns the open state ⌘B / Ctrl+B and the trigger ask for, and gives every part `useSidebar()`. On
- * a phone (a touch screen, or a window narrower than 600 points) the column is a sheet, and the same
- * trigger opens that instead.
+ * a touch screen, or a narrow desktop window with an offcanvas sidebar, the column is a sheet.
+ * Desktop icon sidebars always keep their column.
  */
 export function SidebarProvider(props: SidebarProviderProps) {
   const [, rest] = split(props, [
@@ -1019,6 +1014,7 @@ export function SidebarProvider(props: SidebarProviderProps) {
   const own = signal(props.defaultOpen ?? true);
   const sheet = signal(false);
   const axes = signal<SidebarAxes>(noAxes);
+  const isMobile = () => showsSheet(axes().collapsible);
   const open = () => (props.open !== undefined ? props.open : own());
   const setOpen = (
     next: boolean,
@@ -1029,7 +1025,7 @@ export function SidebarProvider(props: SidebarProviderProps) {
   };
   const setOpenMobile = (next: boolean) => sheet.set(next);
   const toggle = (reason: SidebarOpenChangeReason = 'triggerPress') => {
-    if (showsSheet()) sheet.set(!sheet());
+    if (isMobile()) sheet.set(!sheet());
     else setOpen(!open(), reason);
   };
   // The ground the column and the page stand on (the sidebar's fill for an inset column, which is
@@ -1054,7 +1050,7 @@ export function SidebarProvider(props: SidebarProviderProps) {
         setOpen,
         openMobile: () => sheet(),
         setOpenMobile,
-        isMobile: showsSheet,
+        isMobile,
         toggle,
         state: () => (open() ? 'expanded' : 'collapsed'),
       }}
@@ -1078,16 +1074,17 @@ export type SidebarProps = ViewProps & {
   variant?: SidebarVariant;
   /** What it does when it closes (default `offcanvas`). */
   collapsible?: SidebarCollapsible;
-  /** 固定侧栏的宽度。 */
+  /** Expanded width. */
   width?: number;
+  /** Folded icon-only width. */
+  collapsedWidth?: number;
 };
 
 /**
  * The column: a header, its groups and a footer in a box as wide as the sidebar, on the sidebar's
  * fill. Closing it takes the room away — a width of none, or of the strip its icons need, at once:
- * the platform transitions colors, opacity and transforms, not layout. On a phone, and in a narrow
- * window, it is a sheet instead, opened by `SidebarTrigger` or the app; a `collapsible="none"`
- * column never closes and is never a sheet.
+ * the platform transitions colors, opacity and transforms, not layout. On a phone, or in a narrow
+ * desktop window with `offcanvas`, it is a sheet. A `collapsible="none"` column stays open.
  *
  * Its `style` and other view props reach the column's box — the sheet's column on a phone.
  */
@@ -1098,6 +1095,7 @@ export function Sidebar(props: SidebarProps) {
     'variant',
     'collapsible',
     'width',
+    'collapsedWidth',
     'style',
     'children',
   ]);
@@ -1120,15 +1118,14 @@ export function Sidebar(props: SidebarProps) {
     }
     ctx.setAxes(next);
   });
-  const look = sidebarLook(useLookOptions());
+  const look = sidebarLook({
+    ...useLookOptions(),
+    width: () => props.width,
+    collapsedWidth: () => props.collapsedWidth,
+  });
   const fixed = () => props.collapsible === 'none';
   const column = () => (
-    <View
-      style={[
-        look.frame,
-        fixed() && props.width !== undefined ? { width: props.width } : null,
-      ]}
-    >
+    <View style={look.frame}>
       <View {...rest} style={[look.column, props.style ?? null]}>
         {props.children}
       </View>
@@ -1158,8 +1155,8 @@ export function Sidebar(props: SidebarProps) {
               borderTopRightRadius: 0,
               borderBottomLeftRadius: 0,
               borderBottomRightRadius: 0,
-              backgroundColor: colors.sidebar,
-              borderColor: colors.sidebarBorder,
+              backgroundColor: colors.background,
+              borderColor: colors.line,
             },
           ]}
         >
@@ -1301,9 +1298,12 @@ export function SidebarGroupAction(props: SidebarGroupActionProps) {
         style={[look.action, props.style ?? null]}
         hoverStyle={[look.actionHover, props.hoverStyle ?? null]}
         activeStyle={props.activeStyle ?? null}
-        focusVisibleStyle={[focusRing(), props.focusVisibleStyle ?? null]}
+        focusVisibleStyle={[
+          feedback.focusRing(),
+          props.focusVisibleStyle ?? null,
+        ]}
         disabledStyle={[
-          { opacity: dimmed.disabled },
+          { opacity: feedback.disabled.contentOpacity },
           props.disabledStyle ?? null,
         ]}
       >
@@ -1473,7 +1473,6 @@ export function SidebarMenuButton(props: SidebarMenuButtonProps) {
       {...rest}
       disabled={props.disabled}
       selected={props.isActive}
-      {...pressHostProps(() => look.android)}
       accessibilityLabel={
         props.accessibilityLabel !== undefined
           ? props.accessibilityLabel
@@ -1542,7 +1541,6 @@ export function SidebarMenuAction(props: SidebarMenuActionProps) {
       <BaseButton
         {...rest}
         disabled={props.disabled}
-        {...pressHostProps(() => look.android)}
         style={[look.style, props.style ?? null]}
         hoverStyle={[look.hoverStyle, props.hoverStyle ?? null]}
         activeStyle={props.activeStyle ?? null}
@@ -1551,7 +1549,7 @@ export function SidebarMenuAction(props: SidebarMenuActionProps) {
           props.focusVisibleStyle ?? null,
         ]}
         disabledStyle={[
-          { opacity: dimmed.disabled },
+          { opacity: feedback.disabled.contentOpacity },
           props.disabledStyle ?? null,
         ]}
       >
@@ -1693,7 +1691,6 @@ export function SidebarMenuSubButton(props: SidebarMenuSubButtonProps) {
     <BaseButton
       {...rest}
       disabled={props.disabled}
-      {...pressHostProps(() => look.android)}
       style={[look.style, props.style ?? null]}
       hoverStyle={[look.hoverStyle ?? null, props.hoverStyle ?? null]}
       activeStyle={[look.activeStyle ?? null, props.activeStyle ?? null]}

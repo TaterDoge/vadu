@@ -1,9 +1,9 @@
 // A toggle: the look (`toggleLook` and its companions), the `Toggle` that wears it, and
-// `ToggleGroup`, a row or column of them on the inset track (`toolbarTrack` in `lib/tool.ts`).
+// `ToggleGroup`, a row or column of them on the inset track (`toolbarTrack` in `lib/surface.tsx`).
 // Derived from NSH examples/nsh-gallery-ui (Apache-2.0, © Longbridge); modified. See NOTICE.
 
-import type { AndroidProps, JSX, TextStyle, ViewStyle } from 'nsh';
-import { split, Text } from 'nsh';
+import type { JSX, TextStyle, ViewStyle } from 'nsh';
+import { platform, split, Text } from 'nsh';
 import {
   Toggle as BaseToggle,
   ToggleGroup as BaseToggleGroup,
@@ -11,32 +11,21 @@ import {
   type ToggleProps as BaseToggleProps,
 } from 'nsh/base';
 
-import { type Live, read } from '../../lib/ui/live-value';
+import { pressSink, pressTransition, touchSlop } from '../../lib/ui/motion';
+import { toolbarTrack } from '../../lib/ui/surface';
 import {
-  pressHostProps,
-  pressRipple,
-  pressSink,
-  pressTransition,
-  touchSlop,
-} from '../../lib/ui/press';
-import {
+  buttonCorner,
   colors,
+  control,
   controlHeight,
-  dimmed,
-  finish,
-  focusRing,
+  feedback,
   font,
-  hovered,
   iconSize,
   rounded,
-  shape,
-  stateLayer,
   stroke,
-  style as themeStyle,
   terminal,
-  tier,
 } from '../../lib/ui/theme';
-import { toolbarTrack } from '../../lib/ui/tool';
+import { type Live, read } from '../../lib/ui/utils';
 
 /** A toggle's size: the theme's three heights, `default` the middle (`sm` and `lg` the steps under
  * and over it). */
@@ -74,8 +63,13 @@ export interface ToggleDimensions {
   pad: number;
 }
 
+/** The ground a toggle wears while on (`button.selected.face`), as the style that paints it. */
+function onFill(): ViewStyle {
+  return { borderColor: 'transparent', ...control('button').selected.style };
+}
+
 /** The tier the theme measures at: a pointer's compact padding, a touch screen's roomier one. */
-const pointer = tier === 'pointer';
+const pointer = platform.desktop;
 
 /**
  * A toggle's sides, icon and label sizes and paddings, by size: compact with a pointer, roomier on
@@ -142,10 +136,11 @@ const dimensions = (o?: ToggleLookOptions) =>
  * steps under and over), padded at its sides when it carries
  * text, its corners a quarter of its side; a hit slop makes a touch target
  * 44 points. Off, a default toggle is bare and an `outline` sits on a
- * field's edge; on (`pressedStyle`), it takes `finish.accent`, a fill that stands off
- * its surface in both appearances, further than the hover's whisper of the
- * text color. Pressed it sinks to 92% (none with reduced motion). Keyboard
- * focus: `focusRing(1)`. Disabled: 50%, no hover or press. Pair it with
+ * field's edge; on (`pressedStyle`), it takes the chosen ground
+ * (`control("button").selected.style`, the accent unless a theme says otherwise) and its ink
+ * (`control("button").selected.ink`), a fill that stands off its surface in both appearances,
+ * further than the hover's whisper of the text color. Pressed it sinks to 92% (none with reduced motion). Keyboard
+ * focus: `feedback.focusRing(1)`. Disabled: dimmed, no hover or press. Pair it with
  * `toggleLabel` for a label and `toggleGlyph` for an icon: muted while
  * off, the text's color while on.
  */
@@ -156,7 +151,8 @@ export function toggleLook(o?: ToggleLookOptions) {
       const dims = dimensions(o);
       const on = !!read(o?.on);
       const disabled = !!read(o?.disabled);
-      const split = disabled && themeStyle().state.disabled.fill;
+      const off = disabled ? feedback.disabled : null;
+      const split = off !== null && off.replaceFace;
       return {
         // The terminal sizes it to its label, which it never breaks: a
         // track too narrow for its tools wraps them instead.
@@ -168,19 +164,25 @@ export function toggleLook(o?: ToggleLookOptions) {
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
-        ...rounded(shape.button),
+        ...rounded(buttonCorner(read(o?.size) ?? 'default')),
         borderWidth: stroke.control,
         ...(outline
-          ? { borderColor: colors.input, backgroundColor: colors.field }
+          ? {
+              borderColor: control('button').outlineEdge,
+              backgroundColor: 'transparent',
+            }
           : { borderColor: 'transparent' }),
-        ...(on && !split ? finish.accent : {}),
-        ...(split
+        ...(on && !split ? onFill() : {}),
+        ...(off !== null && split
           ? on
-            ? finish.disabled
+            ? off.style
             : outline
               ? {
                   backgroundColor: 'transparent',
-                  borderColor: finish.disabled.borderColor ?? colors.border,
+                  borderColor:
+                    typeof off.style.borderColor === 'string'
+                      ? off.style.borderColor
+                      : colors.border,
                   boxShadow: 'none',
                 }
               : {
@@ -194,43 +196,37 @@ export function toggleLook(o?: ToggleLookOptions) {
       };
     },
     get pressedStyle(): ViewStyle {
-      return { ...finish.accent };
+      return onFill();
     },
     get hoverStyle(): ViewStyle | undefined {
       if (read(o?.disabled)) return undefined;
-      if (themeStyle().state.overlay.hover > 0) {
-        return read(o?.on) ? hovered('accent-foreground') : hovered();
+      if (feedback.hoverOverlay > 0) {
+        return read(o?.on)
+          ? feedback.hoverStyle('primary-foreground')
+          : feedback.hoverStyle();
       }
-      return read(o?.on) ? undefined : hovered();
+      return read(o?.on) ? undefined : feedback.hoverStyle();
     },
     get activeStyle(): ViewStyle | undefined {
       if (read(o?.disabled)) return undefined;
-      if (themeStyle().state.overlay.pressed > 0) {
-        return {
-          ...(read(o?.on)
-            ? stateLayer('pressed', 'accent-foreground')
-            : stateLayer('pressed', 'foreground')),
-          ...sink(0.92),
-        };
+      if (feedback.pressOverlay > 0) {
+        return feedback.press(read(o?.on) ? 'accent' : 'surface', {
+          scale: 0.92,
+          ink: read(o?.on) ? 'primary-foreground' : 'foreground',
+        }).activeStyle;
       }
       return sink(0.92);
     },
     get focusVisibleStyle(): ViewStyle {
-      return focusRing(1);
+      return feedback.focusRing(1);
     },
     get disabledStyle(): ViewStyle {
-      return themeStyle().state.disabled.fill
+      return feedback.disabled.replaceFace
         ? {}
-        : { opacity: dimmed.disabled };
+        : { opacity: feedback.disabled.contentOpacity };
     },
     get hitSlop(): number | undefined {
       return touchSlop(dimensions(o).side);
-    },
-    get android(): AndroidProps | undefined {
-      return pressRipple(
-        read(o?.on) ? 'accent-foreground' : 'foreground',
-        o?.disabled,
-      );
     },
   };
 }
@@ -240,9 +236,10 @@ const ink = (
   pressed: Live<boolean | undefined>,
   disabled?: Live<boolean | undefined>,
 ) => {
-  if (read(disabled) && themeStyle().state.disabled.fill)
-    return finish.disabled.foreground;
-  return read(pressed) ? finish.accent.foreground : colors.mutedForeground;
+  if (read(disabled)) return feedback.disabled.ink;
+  return read(pressed)
+    ? control('button').selected.ink || colors.foreground
+    : colors.mutedForeground;
 };
 
 /** The label of a `toggleLook` of the same options: the theme's `body` type role (`sm` `detail`, `lg` `label`), medium weight, muted while off. */
@@ -329,7 +326,6 @@ export function Toggle(props: ToggleProps) {
     <BaseToggle
       {...rest}
       hitSlop={props.hitSlop ?? look.hitSlop}
-      {...pressHostProps(() => look.android)}
       style={[look.style, props.style ?? null]}
       hoverStyle={[look.hoverStyle ?? null, props.hoverStyle ?? null]}
       activeStyle={[look.activeStyle ?? null, props.activeStyle ?? null]}

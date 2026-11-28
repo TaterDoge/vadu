@@ -8,7 +8,7 @@ import { density, sectionSurface } from '../../lib/ui/surface';
 import {
   colors,
   font,
-  platformMaterial,
+  surface,
   terminal,
   TERMINAL_GAP,
 } from '../../lib/ui/theme';
@@ -41,9 +41,10 @@ export interface CardLook {
 
 /**
  * A card's look, after shadcn/ui's secondary card and the gallery's `Card`
- * (`sectionSurface`): a flat surface the colour of a card, one hairline edge
- * and the density's corners (10 with a pointer, 16 on a touch screen), no
- * shadow; a column of parts a `gap` apart, padded `density.pad` (14 / 16) at
+ * (`sectionSurface`): the theme's card finish — its ground, its edge where the
+ * finish draws one, its shadow where one is stated — and the density's corners
+ * (10 with a pointer, 16 on a touch screen); a column of parts a `gap` apart,
+ * padded `density.pad` (14 / 16) at
  * the top and the bottom, each part padded by it on the sides. The header is
  * a grid of two columns: the title over the description in the first, the
  * action at the trailing edge spanning both. The title is `density.body + 2`
@@ -57,9 +58,8 @@ export function cardLook(): CardLook {
       return {
         ...sectionSurface(),
         ...(terminal
-          ? {}
+          ? { gap: TERMINAL_GAP }
           : { paddingVertical: pad(), overflow: 'hidden', gap: gap() }),
-        ...(terminal ? { gap: TERMINAL_GAP } : {}),
         flexDirection: 'column',
       };
     },
@@ -158,7 +158,7 @@ export function Card(props: CardProps) {
   return (
     <View
       {...rest}
-      {...platformMaterial('card')}
+      {...surface('card').platformProps}
       style={[look.card, props.style ?? null]}
       hoverStyle={props.hoverStyle}
     >

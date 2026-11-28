@@ -5,16 +5,17 @@ import { Plus, X } from 'lucide';
 import type { ViewProps, ViewStyle } from 'nsh';
 import { signal, split, View } from 'nsh';
 import {
+  currentWindow,
   isAvailable,
   type ResizeEdge,
   titleBar,
   type WindowControl,
-  windowState,
+  type WindowRef,
 } from 'nsh/desktop';
 
 import { Icon } from '../../lib/ui/icons';
-import { type Live, read } from '../../lib/ui/live-value';
-import { alpha, colors, stroke, tints } from '../../lib/ui/theme';
+import { alpha, colors, stroke, surface, tints } from '../../lib/ui/theme';
+import { type Live, read } from '../../lib/ui/utils';
 
 /** How tall a title bar is when the window reports no height of its own. */
 export const TITLE_BAR_HEIGHT = 40;
@@ -122,6 +123,16 @@ export interface TitleBarLook {
   resize(edge: ResizeEdge): ViewStyle;
 }
 
+/** Read the enclosing window handle synchronously during component setup, or `null` outside one. */
+function activeWindow(): WindowRef | null {
+  if (!isAvailable) return null;
+  try {
+    return currentWindow();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * A title bar's look, from the platform: macOS's traffic lights in the system's hues on the bar of
  * an inset fill, or Windows' and Linux's caption cells at the trailing end, the glyphs' ink over
@@ -131,21 +142,33 @@ export interface TitleBarLook {
  *
  * `titleBar()` is the area the system's window buttons take: it is zero while the system's title
  * bar shows and in a frameless window, so a bar of `TITLE_BAR_HEIGHT` (40 points) is drawn there.
+ * Pass `win` captured during setup so reactive styles do not call `currentWindow()` inside effects.
  */
-export function titleBarLook(): TitleBarLook {
+export function titleBarLook(win?: WindowRef | null): TitleBarLook {
+  const bar = () => {
+    if (win) return win.titleBar();
+    try {
+      return titleBar();
+    } catch {
+      return { height: 0, left: 0, right: 0 };
+    }
+  };
   return {
-    root: (): ViewStyle => ({
-      height: titleBar().height || TITLE_BAR_HEIGHT,
-      flexShrink: 0,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      paddingStart: titleBar().left + barPad,
-      paddingEnd: titleBar().right + barPad,
-      backgroundColor: colors.inset,
-      borderBottomWidth: stroke.hairline,
-      borderBottomColor: colors.line,
-    }),
+    root: (): ViewStyle => {
+      const area = bar();
+      return {
+        height: area.height || TITLE_BAR_HEIGHT,
+        flexShrink: 0,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingStart: area.left + barPad,
+        paddingEnd: area.right + barPad,
+        backgroundColor: surface('inset').style.backgroundColor,
+        borderBottomWidth: stroke.hairline,
+        borderBottomColor: colors.line,
+      };
+    },
     controls: (variant: WindowControlsVariant): ViewStyle =>
       variant === 'caption'
         ? { flexDirection: 'row', alignSelf: 'stretch' }
@@ -203,11 +226,12 @@ export function TitleBar(props: TitleBarProps) {
   // No window, no bar: this is chrome for a window the app draws itself.
   if (!isAvailable) return null;
   const [, rest] = split(props, ['style']);
+  const win = activeWindow();
   return (
     <View
       {...rest}
       desktop={{ windowDrag: true }}
-      style={[titleBarLook().root(), props.style ?? null]}
+      style={[titleBarLook(win).root(), props.style ?? null]}
     >
       {props.children}
     </View>
@@ -298,12 +322,15 @@ export function WindowResizeEdges() {
  * over the lights. */
 function Light(props: { control: WindowControl; shown: Live<boolean> }) {
   const look = titleBarLook();
+  const win = activeWindow();
   return (
     <View
       desktop={{ windowControl: props.control }}
       role="button"
       accessibilityLabel={lightLabel[props.control]}
-      style={[look.light(props.control, windowState()?.focused ?? true)]}
+      style={[
+        look.light(props.control, win ? (win.state()?.focused ?? true) : true),
+      ]}
     >
       <View style={[look.glyph(read(props.shown) === true)]}>
         {lightGlyph(props.control)}

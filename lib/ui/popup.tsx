@@ -3,21 +3,20 @@
 // Derived from NSH examples/nsh-gallery-ui (Apache-2.0, © Longbridge); modified. See NOTICE.
 
 import type { JSX, MotionSpec, StyleProp, ViewStyle } from 'nsh';
-import { createMotion, Easing, reduceMotion, token, View } from 'nsh';
+import { createMotion, reduceMotion, View } from 'nsh';
 
 import { CheckMark } from './icons';
 import {
-  finish,
-  type ItemSpacing,
-  platformMaterial,
-  reactive,
+  colors,
+  control,
+  metrics,
+  motion,
   rounded,
-  shape,
   stroke,
-  style,
+  surface,
+  surfaceBorderWidth,
   terminal,
   TERMINAL_COLUMN,
-  tier,
 } from './theme';
 
 /**
@@ -26,18 +25,13 @@ import {
  * it as the overlay's `backdropStyle`.
  */
 export function backdrop(): ViewStyle {
-  return { backgroundColor: token('scrim') };
+  return { backgroundColor: colors.scrim };
 }
 
 /** The side of its trigger a popup is on. */
 export type PopupSide = 'top' | 'bottom' | 'left' | 'right';
 
-/** How long a popup takes to come in, and how far it moves: shadcn/ui's popups' 150 ms and its
- * `zoom-in-95` (it starts at 96 % of its size). */
-const ENTER_MS = 150;
-const ENTER_SCALE = 0.96;
-
-/** How far a popup slides out of its trigger's edge as it comes in, in points. */
+/** How far a popup slides out of its trigger's edge as it comes in when the theme preset specifies no offset. */
 const ENTER_DISTANCE = 4;
 
 /** The dot of a choice in a menu, and the corners that make it round: 6 points across. */
@@ -45,26 +39,29 @@ const DOT = 6;
 
 /**
  * The surface every anchored popup shares (menus, popovers, a select's
- * list): the floating tier, one edge, a soft shadow, the theme's `radius`
- * corners and 4 points around its rows (Design Guides, "Surfaces and
- * elevation"). A terminal shows it by its line alone: a box there is its
- * line or its fill.
+ * list): the floating tier, one edge, a soft shadow, the theme's `popup.corner`
+ * (its `radius` unless it says otherwise) and 4 points around its rows (Design
+ * Guides, "Surfaces and elevation"). A terminal shows it by its line alone: a
+ * box there is its line or its fill.
  */
 export function popupSurface(): ViewStyle {
+  const overlay = surface('overlay');
   return (
     // A terminal draws a popup as its line alone, over no fill of its own.
     terminal
       ? {
-          ...rounded(shape.container),
+          ...rounded(control('popup').corner),
           borderWidth: stroke.hairline,
           padding: POPUP_PAD,
-          borderColor: finish.overlay.borderColor,
+          borderColor: overlay.style.borderColor as string | undefined,
         }
       : {
-          ...rounded(shape.container),
-          borderWidth: stroke.hairline,
+          ...rounded(control('popup').corner),
+          borderWidth: surfaceBorderWidth(
+            overlay.style.borderColor as string | undefined,
+          ),
           padding: POPUP_PAD,
-          ...finish.overlay,
+          ...overlay.style,
         }
   );
 }
@@ -76,11 +73,14 @@ export function popupSurface(): ViewStyle {
  * their text one Cell in. A trigger whose chosen row lies over it (a select's)
  * sets its text `inset + pad` in, so title lies on title.
  */
-export const itemSpacing = reactive<ItemSpacing>(['inset', 'pad'], () =>
-  terminal
-    ? { inset: 0, pad: TERMINAL_COLUMN }
-    : style().dimension.size.item[tier],
-);
+export const itemSpacing = {
+  get inset(): number {
+    return terminal ? 0 : metrics.item.inset;
+  },
+  get pad(): number {
+    return terminal ? TERMINAL_COLUMN : metrics.item.pad;
+  },
+};
 
 /** The room above and below a full-bleed list's rows (inset 0), so the first and last clear the
  * container's corners: Material 3's `DropdownMenuVerticalPadding`. */
@@ -115,9 +115,8 @@ export function listPadding(): ViewStyle {
  * at least 2), square when the container is or the row is full-bleed. */
 export function itemRadius(): number {
   const { inset } = itemSpacing;
-  return inset === 0 || shape.container === 0
-    ? 0
-    : Math.max(2, shape.container - inset);
+  const corner = control('popup').corner;
+  return inset === 0 || corner === 0 ? 0 : Math.max(2, corner - inset);
 }
 
 /**
@@ -134,40 +133,32 @@ const origins: Record<PopupSide, string> = {
 };
 
 /**
- * How a popup comes in, as shadcn/ui's popups do (`fade-in-0 zoom-in-95
- * slide-in-from-*`): it fades up from nothing, grows from 96 % and slides
- * the last `distance` points out of its trigger's edge, decelerating into
- * place. Reduced motion lands it at once.
+ * How a popup comes in, driven by the active theme's `popoverEnter` preset (duration, easing,
+ * optional spring, and scale) while sliding `distance` points out of its trigger's edge. Reduced
+ * motion lands it at once.
  */
-function popIn(
-  side: PopupSide = 'bottom',
-  distance = ENTER_DISTANCE,
-): MotionSpec {
-  const away = side === 'top' || side === 'left' ? distance : -distance;
-  const axis =
-    side === 'top' || side === 'bottom' ? 'translateY' : 'translateX';
-  return {
-    duration: ENTER_MS,
-    easing: Easing.bezier(0.16, 1, 0.3, 1),
-    keyframes: { opacity: [0, 1], scale: [ENTER_SCALE, 1], [axis]: [away, 0] },
-  };
+function popIn(side: PopupSide = 'bottom', distance?: number): MotionSpec {
+  const preset = motion.preset('popoverEnter');
+  const resolved =
+    distance ?? (preset.fromY !== 0 ? Math.abs(preset.fromY) : ENTER_DISTANCE);
+  return motion.enterSpec('popoverEnter', { side, distance: resolved });
 }
 
 /**
- * `popIn` on a popup's own box, which `nsh/base` makes on each opening (a
- * `Menu`'s and its submenus', whose surface is that box so it stays put
- * around the items scrolling in it): `style` the transition and the edge
- * it grows from, `starting` its first frame's look (the popup's
- * `popupStartingStyle`), from which it fades up, grows from 96 % and
- * slides `distance` points out of the trigger's edge in 150 ms. Reduced
- * motion, and a terminal, land it at once: no transition, no first look.
+ * `popIn` on a popup's own box, which `nsh/base` makes on each opening (a `Menu`'s and its
+ * submenus', whose surface is that box so it stays put around the items scrolling in it): `style`
+ * the theme's `popoverEnter` transition and edge origin, `starting` its first frame's look from
+ * the theme's `fromScale` and `distance`. Reduced motion, and a terminal, land it at once.
  */
 export function popInStyles(
   side: PopupSide = 'bottom',
-  distance = ENTER_DISTANCE,
+  distance?: number,
 ): { style: ViewStyle; starting?: ViewStyle } {
   if (terminal || reduceMotion()) return { style: {} };
-  const away = side === 'top' || side === 'left' ? distance : -distance;
+  const preset = motion.preset('popoverEnter');
+  const resolved =
+    distance ?? (preset.fromY !== 0 ? Math.abs(preset.fromY) : ENTER_DISTANCE);
+  const away = side === 'top' || side === 'left' ? resolved : -resolved;
   const slide =
     side === 'top' || side === 'bottom'
       ? { translateY: away }
@@ -175,11 +166,9 @@ export function popInStyles(
   return {
     style: {
       transformOrigin: origins[side],
-      transitionProperty: 'opacity, transform',
-      transitionDuration: ENTER_MS,
-      transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
+      ...motion.transition('opacity, transform', preset.role),
     },
-    starting: { opacity: 0, transform: [{ scale: ENTER_SCALE }, slide] },
+    starting: { opacity: 0, transform: [{ scale: preset.fromScale }, slide] },
   };
 }
 
@@ -198,7 +187,7 @@ export function PopIn(props: {
   const m = createMotion({ enter: popIn(props.side) });
   return (
     <View
-      {...platformMaterial('overlay')}
+      {...surface('overlay').platformProps}
       class={props.class}
       style={[
         props.style ?? null,

@@ -14,7 +14,7 @@ import {
   createSlot,
   type OpenState,
   type Slot,
-} from '../../lib/ui/open-state';
+} from '../../lib/ui/state';
 import { RowDivider, RowLabel } from '../../lib/ui/surface';
 import {
   DisclosureChevron,

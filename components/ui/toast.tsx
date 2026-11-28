@@ -9,17 +9,8 @@ import {
   TriangleAlert,
   X,
 } from 'lucide';
-import type { AndroidProps, JSX, TextStyle, ViewStyle } from 'nsh';
-import {
-  Overlay,
-  platform,
-  safeArea,
-  signal,
-  split,
-  Text,
-  View,
-  windowSize,
-} from 'nsh';
+import type { JSX, TextStyle, ViewStyle } from 'nsh';
+import { Overlay, platform, safeArea, signal, split, Text, View } from 'nsh';
 import {
   Toast as BaseToast,
   type ToastEntry,
@@ -29,20 +20,17 @@ import {
 } from 'nsh/base';
 
 import { Icon } from '../../lib/ui/icons';
-import { pressRipple, pressSink, pressTransition } from '../../lib/ui/press';
+import { pressSink, pressTransition } from '../../lib/ui/motion';
 import {
   alpha,
   colors,
-  finish,
-  focusRing,
+  control,
+  feedback,
   font,
-  hovered,
-  platformMaterial,
   rounded,
   shape,
-  stateLayer,
-  stroke,
-  style as themeStyle,
+  surface,
+  surfaceBorderWidth,
   terminal,
 } from '../../lib/ui/theme';
 import {
@@ -56,21 +44,25 @@ import { Spinner } from './spinner';
 const pointer = platform.desktop;
 
 /**
- * A toast (`nsh/base`'s `Toast`'s `style`): a row 12 points apart on the inverse finish (`finish.inverse`: the
- * floating pane every popup wears today, not the raised one, a control's, which a theme may make a tint over the page),
- * 12-point corners (`shape.container`), 12 by 14 points of padding. Its title takes `toastTitle`,
+ * A toast (`nsh/base`'s `Toast`'s `style`): a row 12 points apart on the inverse surface
+ * (`surface("inverse")`), the theme's `popup.corner`, edge width following the surface's border (zero
+ * where transparent), 12 by 14 points of padding. Its title takes `toastTitle`,
  * its description `toastText`.
  */
 export function toastLook(): ViewStyle {
+  const inverse = surface('inverse').style;
+  const edge = inverse.borderColor;
   return {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    ...rounded(shape.container),
-    borderWidth: stroke.hairline,
-    ...finish.inverse,
+    ...rounded(control('popup').corner),
+    borderWidth: surfaceBorderWidth(
+      typeof edge === 'string' ? edge : undefined,
+    ),
+    ...inverse,
   };
 }
 
@@ -80,16 +72,16 @@ export function toastTitle(): TextStyle {
   return {
     fontSize: 14,
     fontWeight: font.weight('title'),
-    color: finish.inverse.foreground,
+    color: surface('inverse').ink,
   };
 }
 
-/** A toast's description: 13 points in the inverse finish's ink, its figures tabular. */
+/** A toast's description: 13 points in the inverse surface's ink, its figures tabular. */
 export function toastText(): TextStyle {
   // No type role has this size: a toast's description is 13 in both tiers.
   return {
     fontSize: 13,
-    color: finish.inverse.foreground,
+    color: surface('inverse').ink,
     fontVariant: ['tabular-nums'],
   };
 }
@@ -103,8 +95,8 @@ const toastActionSize: ButtonLookOptions = pointer
   : { size: 'sm' };
 
 /**
- * A toast's action (an Undo, a Retry), spread on a `Button` or a pressable view: the main action's
- * citrus button (`buttonLook("default")`). Its label takes `toastActionLabel`.
+ * A toast's action (an Undo, a Retry), spread on a `Button` or a pressable view: the theme's
+ * primary button, its fill and ink from `control("button")`. Its label takes `toastActionLabel`.
  */
 export function toastActionLook() {
   return buttonLook('default', toastActionSize);
@@ -115,7 +107,7 @@ export function toastActionLabel(): TextStyle {
   const label = buttonLabel('default', toastActionSize);
   return {
     get color() {
-      return colors.inverseBrand;
+      return control('button').selected.ink;
     },
     get fontSize() {
       return label.fontSize;
@@ -127,9 +119,9 @@ export function toastActionLabel(): TextStyle {
 }
 
 /** A toast's close button (its cross): a circle 24 points across (the theme's
- * `radius-container` corners, half its side in the default theme), bare until the
+ * `radius-container` corners, half its side in the NSH Gallery theme), bare until the
  * pointer is over it, sinking to 90% while pressed (none with reduced
- * motion); keyboard focus `focusRing()`. */
+ * motion); keyboard focus `feedback.focusRing()`. */
 export function toastCloseLook() {
   return {
     style: {
@@ -141,21 +133,18 @@ export function toastCloseLook() {
       ...pressTransition('background-color'),
     } as ViewStyle,
     get hoverStyle(): ViewStyle {
-      return hovered('inverse-foreground');
+      return feedback.hoverStyle('foreground');
     },
     get activeStyle(): ViewStyle {
       return {
-        ...(themeStyle().state.overlay.pressed > 0
-          ? stateLayer('pressed', 'inverse-foreground')
-          : { backgroundColor: alpha(colors.foreground, 0.1) }),
+        ...(feedback.pressOverlay > 0
+          ? feedback.press('surface', { ink: 'foreground' }).activeStyle
+          : { backgroundColor: alpha(surface('inverse').ink, 0.1) }),
         ...pressSink(0.9).activeStyle,
       };
     },
     get focusVisibleStyle(): ViewStyle {
-      return focusRing();
-    },
-    get android(): AndroidProps | undefined {
-      return pressRipple('inverse-foreground');
+      return feedback.focusRing();
     },
   };
 }
@@ -181,7 +170,7 @@ export function Toast(props: ToastProps) {
   const [, rest] = split(props, ['title', 'description', 'children', 'style']);
   return (
     <BaseToast
-      {...platformMaterial('inverse')}
+      {...surface('inverse').platformProps}
       {...rest}
       style={[toastLook(), props.style ?? null]}
     >
@@ -259,9 +248,9 @@ const kinds: Record<
   Exclude<ToastType, 'loading'>,
   { icon: IconNode; tint: () => string }
 > = {
-  success: { icon: CircleCheck, tint: () => colors.up },
+  success: { icon: CircleCheck, tint: () => colors.success },
   error: { icon: CircleX, tint: () => colors.destructive },
-  warning: { icon: TriangleAlert, tint: () => colors.warn },
+  warning: { icon: TriangleAlert, tint: () => colors.warning },
   info: { icon: Info, tint: () => colors.info },
 };
 
@@ -444,7 +433,7 @@ function closeLabel(value: boolean | string | undefined): string | undefined {
 /** The mark of a type: a spinner while loading, a lucide glyph otherwise. */
 function KindMark(props: { type: ToastType }) {
   if (props.type === 'loading')
-    return <Spinner side={18} tint={finish.inverse.foreground} />;
+    return <Spinner side={18} tint={surface('inverse').ink} />;
   const spec = kinds[props.type];
   return <Icon icon={spec.icon} size={18} tint={spec.tint()} />;
 }
@@ -484,7 +473,7 @@ function ToastItem(props: { entry: ToastEntry }) {
               marginTop: 6,
               borderRadius: 2,
               overflow: 'hidden',
-              backgroundColor: colors.track,
+              backgroundColor: control('progress').grooveColor,
             }}
           >
             <View
@@ -495,7 +484,7 @@ function ToastItem(props: { entry: ToastEntry }) {
                 height: 4,
                 borderRadius: 2,
                 backgroundColor:
-                  type() === 'success' ? colors.up : colors.primary,
+                  type() === 'success' ? colors.success : colors.primary,
                 transform: [
                   { scaleX: Math.max(0, Math.min(1, progress() ?? 0)) },
                 ],
@@ -520,16 +509,15 @@ function ToastItem(props: { entry: ToastEntry }) {
           onPress={() => toast.dismiss(props.entry.id)}
           {...toastCloseLook()}
         >
-          <Icon icon={X} size={14} tint={finish.inverse.foreground} />
+          <Icon icon={X} size={14} tint={surface('inverse').ink} />
         </View>
       </If>
     </Toast>
   );
 }
 
-/** Where the toasts show: the foot of the window, bottom-right when it is at least 700 points wide. */
+/** Where the toasts show: the top of the window, centered. */
 export function Toaster(props: { closeOnEscape?: boolean }) {
-  const wide = () => windowSize().width >= 700;
   const newest = () =>
     shown()
       .filter((entry) => entry.status !== 'ending')
@@ -555,15 +543,15 @@ export function Toaster(props: { closeOnEscape?: boolean }) {
         pointerEvents: 'box-none',
         left: 0,
         right: 0,
-        bottom: 0,
+        top: 0,
         padding: 16,
-        paddingBottom: safeArea().bottom + 16,
-        alignItems: wide() ? 'flex-end' : 'center',
+        paddingTop: safeArea().top + 16,
+        alignItems: 'center',
       }}
     >
       <ToastStack
         closeOnEscape={props.closeOnEscape}
-        placement={wide() ? 'bottomRight' : 'bottomCenter'}
+        placement="topCenter"
         style={{ width: 340, maxWidth: '100%' }}
         onExpandedChange={({ expanded: open }) => {
           expanded.set(open);

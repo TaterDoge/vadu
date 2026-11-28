@@ -3,7 +3,6 @@
 import type { TextProps, TextStyle, ViewProps, ViewStyle } from 'nsh';
 import { context, split, Text, View } from 'nsh';
 
-import { AsText } from '../../lib/ui/as-text';
 import { density } from '../../lib/ui/surface';
 import {
   alpha,
@@ -13,6 +12,7 @@ import {
   shape,
   stroke,
 } from '../../lib/ui/theme';
+import { AsText } from '../../lib/ui/utils';
 
 /** An alert's variants: `default`, the card's surface in the text color; `destructive`, the danger tone's ink. */
 export type AlertVariant = 'default' | 'destructive';

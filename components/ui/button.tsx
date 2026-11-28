@@ -2,15 +2,7 @@
 // Derived from NSH examples/nsh-gallery-ui (Apache-2.0, © Longbridge); modified. See NOTICE.
 
 import type { IconNode } from 'lucide';
-import type {
-  AndroidProps,
-  JSX,
-  StyleProp,
-  TextStyle,
-  Tokens,
-  ViewProps,
-  ViewStyle,
-} from 'nsh';
+import type { JSX, StyleProp, TextStyle, ViewProps, ViewStyle } from 'nsh';
 import {
   context,
   createAnimatedValue,
@@ -27,38 +19,30 @@ import {
   type ButtonProps as BaseButtonProps,
 } from 'nsh/base';
 
-import { AsText } from '../../lib/ui/as-text';
 import { Icon, IconLabel } from '../../lib/ui/icons';
-import { type Live, read } from '../../lib/ui/live-value';
-import {
-  pressHostProps,
-  pressRipple,
-  pressSink,
-  pressTransition,
-  touchSlop,
-} from '../../lib/ui/press';
+import { pressTransition, touchSlop } from '../../lib/ui/motion';
 import {
   alpha,
   animate,
+  buttonCorner,
   colors,
+  control,
   controlHeight,
-  dimmed,
-  finish,
+  feedback,
   focusRing,
   font,
-  hovered,
   iconSize,
   motion,
   rounded,
-  shape,
-  stateLayer,
   stroke,
-  style as themeStyle,
+  surface,
   terminal,
   TERMINAL_COLUMN,
   TERMINAL_ROW,
   tints,
 } from '../../lib/ui/theme';
+import type { AnyColorKey } from '../../lib/ui/theme';
+import { AsText, type Live, read } from '../../lib/ui/utils';
 import { Spinner } from './spinner';
 
 /**
@@ -70,13 +54,15 @@ const ghostFill = () => (terminal ? token('secondary') : 'transparent');
 
 /**
  * `default`: the citrus fill, the one main action of a decision area.
- * `secondary`: a raised neutral, the ordinary visible action. `ghost`: bare
- * until the pointer is over it, a quiet toolbar or inline action.
- * `destructive`: a destructive action, the danger tone's tint, edge and
- * text, as quiet as `secondary`. shadcn's `outline` and `link` are not
- * looks of this library yet, so they are not values here.
+ * `secondary`: a raised neutral, the ordinary visible action. `outline`:
+ * bare with a `border` edge and no shadow, a quiet secondary action.
+ * `ghost`: bare until the pointer is over it, a quiet toolbar or inline
+ * action. `destructive`: a destructive action, the danger tone's tint,
+ * edge and text, as quiet as `secondary`. shadcn's `link` is not a look
+ * of this library yet, so it is not a value here.
  */
-export type ButtonVariant = 'default' | 'secondary' | 'ghost' | 'destructive';
+export type ButtonVariant =
+  'default' | 'secondary' | 'outline' | 'ghost' | 'destructive';
 
 /** A button's size: 24 / 28 / 34 points with a pointer, 36 / 40 / 48 on a touch screen. */
 export type ButtonSize = 'sm' | 'default' | 'lg';
@@ -154,9 +140,6 @@ export const buttonSizes: Record<ButtonSize, ButtonDimensions> = {
  * paint their press instead of dimming it, so the press opacity is not the selected one's). */
 const SELECTED_OPACITY = 0.88;
 
-/** How far a press sinks a button (`activeStyle`): none with reduced motion. */
-const sink = (scale: number): ViewStyle => pressSink(scale).activeStyle;
-
 /** The properties a button's states change, eased over 150 ms: the press's
  * sink (Design Guides, "Motion") and the hover's and press's colors. */
 const transition = pressTransition(
@@ -179,45 +162,40 @@ const dimensions = (o?: ButtonLookOptions) =>
 
 const filled = (variant: ButtonVariant) => variant === 'default';
 
-/** The look a filled control wears while it is held: the accent dimmed to its `pressedOpacity`, or
- * the flat fill and ink the theme paints instead (`finish.accent.pressedBackground` /
- * `pressedForeground`): a theme whose press swaps the accent out paints a plain face, so the accent's
- * gradient and bevels go with it (WinUI's pressed accent: no border of its own). */
-function pressedAccent(): ViewStyle {
-  const pressed = finish.accent.pressedBackground;
-  const accent: ViewStyle = {
-    ...finish.accent,
-    opacity: finish.accent.pressedOpacity,
-  };
-  return pressed === undefined
-    ? accent
-    : {
-        ...accent,
-        backgroundColor: pressed,
-        backgroundImage: 'none',
-        borderColor: 'transparent',
-        borderTopColor: 'transparent',
-        borderBottomColor: 'transparent',
-      };
-}
-
-const buttonInk = (variant: ButtonVariant, selected = false): keyof Tokens =>
+/** A button's label ink, as the token the state layers mix (a theme that swaps fills draws none). */
+const buttonInk = (variant: ButtonVariant, selected = false): AnyColorKey =>
   filled(variant)
     ? 'primary-foreground'
     : variant === 'destructive'
       ? 'destructive'
-      : variant === 'secondary' && selected
-        ? 'accent-foreground'
+      : (variant === 'secondary' || variant === 'outline') && selected
+        ? 'primary-foreground'
         : 'foreground';
 
-/** The fill, edge and shadow of a variant at rest (or selected). A disabled filled button gives up the citrus for the
- * neutral raised fill (or the theme's split disabled container where `state.disabled.fill` is true). */
+/** A secondary button's resting layer: its face, edge, and shade (`none` where flat). */
+function secondaryStyle(): ViewStyle {
+  return control('button').secondary.style;
+}
+
+/** The raised control's hover surface (`control("button").secondary` over `feedback.hoverSurface`). */
+function secondaryHoverStyle(): ViewStyle {
+  return feedback.hoverSurface();
+}
+
+/** Opacity fade for disabled controls in themes without a dedicated disabled surface. */
+const disabledDimmed = (): ViewStyle =>
+  feedback.disabled.replaceFace
+    ? {}
+    : { opacity: feedback.disabled.contentOpacity };
+
+/** The fill, edge and shadow of a variant at rest (or selected). A disabled filled button falls back
+ * to the secondary surface (or the face the theme's `feedback.disabled` states). */
 function restLook(
   variant: ButtonVariant,
   selected: boolean,
   disabled = false,
 ): ViewStyle {
-  if (disabled && themeStyle().state.disabled.fill) {
+  if (disabled && feedback.disabled.replaceFace) {
     if (variant === 'ghost') {
       return {
         backgroundColor: ghostFill(),
@@ -225,29 +203,47 @@ function restLook(
         boxShadow: 'none',
       };
     }
-    return { ...finish.disabled };
+    if (variant === 'outline') {
+      return {
+        backgroundColor: ghostFill(),
+        borderColor: control('button').outlineEdge,
+        boxShadow: 'none',
+      };
+    }
+    return feedback.disabled.style;
   }
-  if (filled(variant) && disabled) return { ...finish.raised };
+  if (filled(variant) && disabled) return secondaryStyle();
   if (filled(variant))
-    return { ...finish.accent, opacity: selected ? SELECTED_OPACITY : 1 };
-  if (variant === 'destructive') {
     return {
-      boxShadow: finish.raised.boxShadow,
-      backgroundColor: selected
-        ? alpha(colors.destructive, 0.2)
-        : tints.destructive,
-      backgroundImage: 'none',
-      borderColor: alpha(colors.destructive, 0.32),
+      ...surface('accent').style,
+      opacity: selected ? SELECTED_OPACITY : 1,
     };
+  if (variant === 'destructive') {
+    const look = control('button').destructive;
+    if (selected)
+      return {
+        boxShadow: look.style.boxShadow,
+        backgroundColor: alpha(colors.destructive, 0.2),
+        backgroundImage: 'none',
+        borderColor: look.edge ?? 'transparent',
+      };
+    return look.style;
   }
+  if (selected) {
+    return control('button').selected.style;
+  }
+  if (variant === 'outline')
+    return {
+      backgroundColor: ghostFill(),
+      borderColor: control('button').outlineEdge,
+      boxShadow: 'none',
+    };
   if (variant === 'ghost')
     return {
-      backgroundColor: selected ? token('accent') : ghostFill(),
+      backgroundColor: ghostFill(),
       borderColor: 'transparent',
     };
-  // Selected stays on: `on`, apart from rest and from hover in both
-  // appearances (a sunk `pressed` is a press's, too faint to hold).
-  return selected ? { ...finish.accent } : { ...finish.raised };
+  return secondaryStyle();
 }
 
 /**
@@ -259,7 +255,7 @@ function restLook(
  * lightens, a ghost gets a whisper of the text color, a filled one a touch
  * of transparency; pressed it sinks to 97% (none with reduced motion) and
  * shades (a raised button's inner shade, a filled one dims). Keyboard
- * focus: `focusRing()`. Disabled: half opacity, no hover or press (a filled one on the raised fill, its label muted). Pair it with
+ * focus: `focusRing()`. Disabled: half opacity, no hover or press (a filled one on the secondary surface, dimmed with its label). Pair it with
  * `buttonLabel` for the label and `buttonGlyph` for an icon.
  */
 export function buttonLook(
@@ -274,7 +270,7 @@ export function buttonLook(
       return {
         height: terminal ? TERMINAL_ROW : dims.height,
         paddingHorizontal: terminal ? TERMINAL_COLUMN : dims.pad,
-        ...rounded(shape.button),
+        ...rounded(buttonCorner(read(o?.size) ?? 'default')),
         borderWidth: stroke.control,
         flexDirection: 'row',
         alignItems: 'center',
@@ -288,43 +284,43 @@ export function buttonLook(
     get hoverStyle(): ViewStyle | undefined {
       if (idle() || read(o?.selected)) return undefined;
       const variant = v();
-      if (themeStyle().state.overlay.hover > 0) {
-        return hovered(buttonInk(variant, !!read(o?.selected)));
+      if (feedback.hoverOverlay > 0) {
+        return feedback.hoverStyle(buttonInk(variant, !!read(o?.selected)));
       }
       if (filled(variant)) return { opacity: 0.94 };
       if (variant === 'destructive')
         return { backgroundColor: alpha(colors.destructive, 0.16) };
-      return variant === 'ghost' ? hovered() : { ...finish.hover };
+      return variant === 'ghost' || variant === 'outline'
+        ? feedback.hoverStyle()
+        : secondaryHoverStyle();
     },
     get activeStyle(): ViewStyle | undefined {
       if (idle()) return undefined;
       const variant = v();
-      const shade: ViewStyle =
-        themeStyle().state.overlay.pressed > 0
-          ? stateLayer('pressed', buttonInk(variant, !!read(o?.selected)))
-          : filled(variant)
-            ? pressedAccent()
-            : variant === 'destructive'
-              ? {
-                  backgroundColor: alpha(colors.destructive, 0.22),
-                  boxShadow: 'none',
-                }
-              : { ...finish.pressed };
-      return { ...shade, ...sink(0.97) };
+      return feedback.press(
+        filled(variant)
+          ? 'accent'
+          : variant === 'destructive'
+            ? 'destructive'
+            : variant === 'outline'
+              ? 'outline'
+              : 'surface',
+        {
+          scale: 0.97,
+          ...(variant === 'outline'
+            ? { outlineBorder: control('button').outlineEdge }
+            : {}),
+        },
+      ).activeStyle;
     },
     get focusVisibleStyle(): ViewStyle {
       return focusRing();
     },
     get disabledStyle(): ViewStyle {
-      return themeStyle().state.disabled.fill
-        ? {}
-        : { opacity: dimmed.disabled };
+      return disabledDimmed();
     },
     get hitSlop(): number | undefined {
       return touchSlop(dimensions(o).height);
-    },
-    get android(): AndroidProps | undefined {
-      return pressRipple(buttonInk(v(), !!read(o?.selected)), idle);
     },
   };
 }
@@ -333,18 +329,15 @@ export function buttonLook(
 function ink(live: Live<ButtonVariant>, o?: ButtonLookOptions) {
   const variant = read(live) ?? 'secondary';
   const disabled = !!read(o?.disabled);
-  if (disabled) {
-    if (themeStyle().state.disabled.fill) return finish.disabled.foreground;
-    if (filled(variant)) return colors.mutedForeground;
-  }
+  if (disabled) return feedback.disabled.ink;
   if (filled(variant))
     return read(o?.pressed)
-      ? (finish.accent.pressedForeground ?? finish.accent.foreground)
-      : finish.accent.foreground;
-  if (variant === 'destructive') return colors.destructive;
-  if (variant === 'secondary' && read(o?.selected))
-    return finish.accent.foreground;
-  if (read(o?.pressed)) return finish.pressed.foreground;
+      ? feedback.pressedInk('accent')
+      : surface('accent').ink;
+  if (variant === 'destructive') return control('button').destructive.ink;
+  if ((variant === 'secondary' || variant === 'outline') && read(o?.selected))
+    return control('button').selected.ink;
+  if (read(o?.pressed)) return feedback.pressedInk('surface');
   return colors.foreground;
 }
 
@@ -381,8 +374,9 @@ export function buttonGlyph(
   };
 }
 
-/** An icon-only button's variants: `ghost` bare until the pointer is over it, `secondary` raised, `destructive` a dangerous action's. */
-export type IconButtonVariant = 'ghost' | 'secondary' | 'destructive';
+/** An icon-only button's variants: `ghost` bare until the pointer is over it, `secondary` raised, `outline` bare with a `border` edge, `destructive` a dangerous action's. */
+export type IconButtonVariant =
+  'ghost' | 'secondary' | 'outline' | 'destructive';
 
 /**
  * An icon-only button's size: `xs` 20, `sm` 24, `default` 28, `lg` 32 points with a pointer, a
@@ -393,9 +387,9 @@ export type IconButtonSize = 'xs' | 'sm' | 'default' | 'lg';
 
 /** Options of `iconButtonLook` and `iconButtonGlyph`. */
 export interface IconButtonLookOptions {
-  /** Chosen (a favorite, a shown sidebar): the accent's tint, the icon in the accent, no hover. */
+  /** Chosen (a favorite, a shown sidebar): the theme's `button.selected.*` ground and ink, no hover. */
   selected?: Live<boolean | undefined>;
-  /** `ghost` (default): bare until the pointer is over it; `secondary`: raised; `destructive`: its icon in the danger tone, the tone's tint under the pointer. */
+  /** `ghost` (default): bare until the pointer is over it; `secondary`: raised; `outline`: bare with a `border` edge; `destructive`: its icon in the danger tone, the tone's tint under the pointer. */
   variant?: IconButtonVariant;
   /** Default `default`: 28 points across with a pointer, 40 on a touch screen (`xs` … `lg` a step either side). */
   size?: Live<IconButtonSize | undefined>;
@@ -425,38 +419,53 @@ export const iconButtonSizes: Record<
 const iconButtonDimensions = (o?: IconButtonLookOptions) =>
   iconButtonSizes[read(o?.size) ?? 'default'];
 
+/** Corner radius of an icon-only button: follows the theme's `button.corner.*` scale (`xs` shares `sm`). */
+const iconButtonCorner = (o?: IconButtonLookOptions) => {
+  const size = read(o?.size);
+  return buttonCorner(size === 'xs' ? 'sm' : (size ?? 'default'));
+};
+
 /**
  * An icon-only button's props (spread them on a `Button` or a `View` with
  * `onPress`): a square of 28 points with a pointer, 40 on a touch screen
- * (a hit slop making 44), `shape.control`; `size` takes `iconButtonSizes`
+ * (a hit slop making 44), `buttonCorner(size)`; `size` takes `iconButtonSizes`
  * (20 / 24 / 32 with a pointer). A ghost by default, raised as
  * `secondary`, the danger tone's under the pointer as `destructive`; `selected`
- * takes the accent's tint. Pressed it sinks to 90% (none with reduced
+ * takes the theme's `button.selected.*` look. Pressed it sinks to 90% (none with reduced
  * motion). The terminal sizes it to its label.
  */
 export function iconButtonLook(o: IconButtonLookOptions = {}) {
   const raised = o.variant === 'secondary';
+  const outline = o.variant === 'outline';
   const destructive = o.variant === 'destructive';
   return {
     get style(): ViewStyle {
       const selected = !!read(o.selected);
       const disabled = !!read(o.disabled);
       const side = iconButtonDimensions(o).side;
-      if (disabled && themeStyle().state.disabled.fill) {
+      if (disabled && feedback.disabled.replaceFace) {
+        const off = feedback.disabled;
+        const outlineStyle = (): ViewStyle => ({
+          borderColor: control('button').outlineEdge,
+          backgroundColor: ghostFill(),
+          boxShadow: 'none',
+        });
         return {
           width: terminal ? undefined : side,
           height: terminal ? undefined : side,
           alignItems: 'center',
           justifyContent: 'center',
-          ...rounded(shape.button),
+          ...rounded(iconButtonCorner(o)),
           borderWidth: stroke.control,
           ...(raised || selected
-            ? finish.disabled
-            : {
-                borderColor: 'transparent',
-                backgroundColor: ghostFill(),
-                boxShadow: 'none',
-              }),
+            ? off.style
+            : outline
+              ? outlineStyle()
+              : {
+                  borderColor: 'transparent',
+                  backgroundColor: ghostFill(),
+                  boxShadow: 'none',
+                }),
           ...transition,
         };
       }
@@ -465,74 +474,105 @@ export function iconButtonLook(o: IconButtonLookOptions = {}) {
         height: terminal ? undefined : side,
         alignItems: 'center',
         justifyContent: 'center',
-        ...rounded(shape.button),
+        ...rounded(iconButtonCorner(o)),
         borderWidth: stroke.control,
-        borderColor: 'transparent',
-        backgroundColor: selected ? tints.brand : ghostFill(),
-        ...(raised && !selected ? finish.raised : {}),
+        borderColor:
+          outline && !selected ? control('button').outlineEdge : 'transparent',
+        backgroundColor: ghostFill(),
+        ...(outline && !selected ? { boxShadow: 'none' } : {}),
+        ...(raised && !selected ? secondaryStyle() : {}),
+        ...(selected
+          ? {
+              borderColor: 'transparent',
+              boxShadow: 'none',
+              ...control('button').selected.style,
+            }
+          : {}),
         ...transition,
       };
     },
     get hoverStyle(): ViewStyle | undefined {
       if (read(o.selected) || read(o.disabled)) return undefined;
-      if (themeStyle().state.overlay.hover > 0) {
-        return hovered(destructive ? 'destructive' : 'foreground');
+      if (feedback.hoverOverlay > 0) {
+        return feedback.hoverStyle(
+          destructive
+            ? 'destructive'
+            : raised
+              ? 'primary-foreground'
+              : 'foreground',
+        );
       }
       return destructive
         ? { backgroundColor: tints.destructive }
         : raised
-          ? { ...finish.hover }
-          : hovered();
+          ? secondaryHoverStyle()
+          : feedback.hoverStyle();
     },
     get activeStyle(): ViewStyle | undefined {
       if (read(o.disabled)) return undefined;
-      const shade: ViewStyle =
-        themeStyle().state.overlay.pressed > 0
-          ? stateLayer('pressed', destructive ? 'destructive' : 'foreground')
-          : raised
-            ? { ...finish.pressed }
-            : { backgroundColor: alpha(colors.foreground, 0.1) };
+      if (feedback.pressOverlay > 0) {
+        return feedback.press(
+          read(o.selected)
+            ? 'accent'
+            : destructive
+              ? 'destructive'
+              : raised
+                ? 'surface'
+                : 'sinkOnly',
+          {
+            scale: 0.9,
+            ink: read(o.selected)
+              ? 'primary-foreground'
+              : destructive
+                ? 'destructive'
+                : raised
+                  ? 'primary-foreground'
+                  : 'foreground',
+          },
+        ).activeStyle;
+      }
+      if (raised) return feedback.press('surface', { scale: 0.9 }).activeStyle;
+      if (outline)
+        return feedback.press('outline', {
+          scale: 0.9,
+          outlineBorder: control('button').outlineEdge,
+        }).activeStyle;
       return {
-        ...shade,
-        ...sink(0.9),
+        backgroundColor: alpha(colors.foreground, 0.1),
+        transform: [{ scale: 0.9 }],
       };
     },
     get focusVisibleStyle(): ViewStyle {
       return focusRing();
     },
     get disabledStyle(): ViewStyle {
-      return themeStyle().state.disabled.fill
-        ? {}
-        : { opacity: dimmed.disabled };
+      return disabledDimmed();
     },
     get hitSlop(): number | undefined {
       return touchSlop(iconButtonDimensions(o).side);
     },
-    get android(): AndroidProps | undefined {
-      return pressRipple(
-        destructive ? 'destructive' : 'foreground',
-        o.disabled,
-      );
-    },
   };
 }
 
-/** The icon of an `iconButtonLook` of the same options: 15 points with a pointer, 18 on a touch screen (`xs` and `lg` a step either side); the accent when `selected`, else the variant's (the danger tone's, the text's raised, muted bare). */
+/** The icon of an `iconButtonLook` of the same options: 15 points with a pointer, 18 on a touch screen (`xs` and `lg` a step either side); `button.selected.ink` when `selected`, else the variant's (the danger tone's, the text's raised, muted bare). */
 export function iconButtonGlyph(o: IconButtonLookOptions = {}) {
   return {
     get size() {
       return iconButtonDimensions(o).glyph;
     },
     get tint() {
-      if (read(o.disabled) && themeStyle().state.disabled.fill)
-        return finish.disabled.foreground;
+      if (read(o.disabled)) {
+        return feedback.disabled.ink;
+      }
       return read(o.selected)
-        ? colors.brand
+        ? control('button').selected.ink
         : o.variant === 'destructive'
           ? colors.destructive
           : o.variant === 'secondary'
             ? colors.foreground
-            : colors.mutedForeground;
+            : o.variant === 'outline'
+              ? colors.foreground
+              : colors.mutedForeground;
     },
   };
 }
@@ -577,50 +617,42 @@ export function roundButtonLook(
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: stroke.control,
-        ...(disabled && themeStyle().state.disabled.fill
-          ? finish.disabled
+        ...(disabled && feedback.disabled.replaceFace
+          ? feedback.disabled.style
           : primary
-            ? finish.accent
-            : finish.raised),
+            ? surface('accent').style
+            : secondaryStyle()),
         ...transition,
       };
     },
     get hoverStyle(): ViewStyle | undefined {
       if (read(o.disabled)) return undefined;
-      if (themeStyle().state.overlay.hover > 0) {
-        return hovered(primary ? 'primary-foreground' : 'foreground');
+      if (feedback.hoverOverlay > 0) {
+        return feedback.hoverStyle(
+          primary ? 'primary-foreground' : 'primary-foreground',
+        );
       }
-      return primary ? { opacity: 0.94 } : { ...finish.hover };
+      return primary ? { opacity: 0.94 } : secondaryHoverStyle();
     },
     get activeStyle(): ViewStyle | undefined {
       if (read(o.disabled)) return undefined;
-      if (themeStyle().state.overlay.pressed > 0) {
-        return {
-          ...stateLayer(
-            'pressed',
-            primary ? 'primary-foreground' : 'foreground',
-          ),
-          ...sink(0.92),
-        };
+      if (feedback.pressOverlay > 0) {
+        return feedback.press(primary ? 'accent' : 'surface', {
+          scale: 0.92,
+          ink: 'primary-foreground',
+        }).activeStyle;
       }
-      return sink(0.92);
+      return feedback.press(primary ? 'accent' : 'surface', { scale: 0.92 })
+        .activeStyle;
     },
     get focusVisibleStyle(): ViewStyle {
       return focusRing();
     },
     get disabledStyle(): ViewStyle {
-      return themeStyle().state.disabled.fill
-        ? {}
-        : { opacity: dimmed.disabled };
+      return disabledDimmed();
     },
     get hitSlop(): number | undefined {
       return touchSlop(roundSide(o));
-    },
-    get android(): AndroidProps | undefined {
-      return pressRipple(
-        primary ? 'primary-foreground' : 'foreground',
-        o.disabled,
-      );
     },
   };
 }
@@ -634,10 +666,13 @@ export function roundButtonGlyph(
   o?: RoundButtonLookOptions,
 ) {
   return {
-    size: roundSide(o) * ROUND_GLYPH_RATIO,
+    get size() {
+      return roundSide(o) * ROUND_GLYPH_RATIO;
+    },
     get tint() {
-      if (read(o?.disabled) && themeStyle().state.disabled.fill)
-        return finish.disabled.foreground;
+      if (read(o?.disabled)) {
+        return feedback.disabled.ink;
+      }
       return variant === 'default'
         ? colors.primaryForeground
         : colors.foreground;
@@ -676,16 +711,18 @@ export function splitButtonLook(
         return {
           flexDirection: 'row',
           alignItems: 'stretch',
-          ...rounded(shape.button),
+          ...rounded(buttonCorner(read(o?.size) ?? 'default')),
           borderWidth: stroke.control,
           overflow: 'hidden',
           ...restLook(read(variant) ?? 'default', false, !!read(o?.disabled)),
+          ...(read(o?.disabled) ? disabledDimmed() : {}),
           ...transition,
           ...read(o?.style),
         };
       },
     },
     segment(s?: SplitSegmentOptions) {
+      const segmentDisabled = () => !!read(o?.disabled) || !!read(s?.disabled);
       return {
         get style(): ViewStyle {
           const dims = dimensions(o);
@@ -702,16 +739,18 @@ export function splitButtonLook(
           };
         },
         get hoverStyle(): ViewStyle | undefined {
-          if (read(s?.disabled) || read(s?.selected)) return undefined;
-          if (themeStyle().state.overlay.hover > 0) {
-            return hovered(buttonInk(read(variant) ?? 'default'));
+          if (segmentDisabled() || read(s?.selected)) return undefined;
+          if (feedback.hoverOverlay > 0) {
+            return feedback.hoverStyle(buttonInk(read(variant) ?? 'default'));
           }
           return { backgroundColor: shade(0.06) };
         },
         get activeStyle(): ViewStyle | undefined {
-          if (read(s?.disabled)) return undefined;
-          if (themeStyle().state.overlay.pressed > 0) {
-            return stateLayer('pressed', buttonInk(read(variant) ?? 'default'));
+          if (segmentDisabled()) return undefined;
+          if (feedback.pressOverlay > 0) {
+            return feedback.press('sinkOnly', {
+              ink: buttonInk(read(variant) ?? 'default'),
+            }).activeStyle;
           }
           return { backgroundColor: shade(0.12) };
         },
@@ -719,20 +758,12 @@ export function splitButtonLook(
           return focusRing(-2);
         },
         get disabledStyle(): ViewStyle {
-          return themeStyle().state.disabled.fill
-            ? {}
-            : { opacity: dimmed.disabled };
+          return read(o?.disabled) ? {} : disabledDimmed();
         },
         // Taller only: the halves touch, so a finger's slop stays off their shared edge.
         get hitSlop() {
           const v = touchSlop(dimensions(o).height);
           return v ? { top: v, bottom: v } : undefined;
-        },
-        get android(): AndroidProps | undefined {
-          return pressRipple(
-            buttonInk(read(variant) ?? 'default'),
-            s?.disabled,
-          );
         },
       };
     },
@@ -834,7 +865,6 @@ export function Button(props: ButtonProps) {
         props.onPressUp?.();
       }}
       hitSlop={props.hitSlop ?? look.hitSlop}
-      {...pressHostProps(() => look.android)}
       style={[look.style, props.style ?? null]}
       hoverStyle={[look.hoverStyle ?? null, props.hoverStyle ?? null]}
       activeStyle={[look.activeStyle ?? null, props.activeStyle ?? null]}
@@ -865,7 +895,7 @@ export type IconButtonProps = Omit<
   BaseButtonProps,
   'children' | 'accessibilityLabel'
 > & {
-  /** Default `ghost`: bare until the pointer is over it; `secondary`: raised; `destructive`: a dangerous action's. */
+  /** Default `ghost`: bare until the pointer is over it; `secondary`: raised; `outline`: bare with a `border` edge; `destructive`: a dangerous action's. */
   variant?: IconButtonVariant;
   /** Default `default`: 28 points across with a pointer, 40 on a touch screen (`xs` 20, `sm` 24, `lg` 32 with a pointer). */
   size?: IconButtonSize;
@@ -875,9 +905,9 @@ export type IconButtonProps = Omit<
    */
   accessibilityLabel: string;
   /**
-   * The icon (a lucide node), in `iconButtonGlyph`'s size and tint: the accent while selected, the
-   * danger tone as `destructive`. In the terminal, which draws no icons, `accessibilityLabel`
-   * is its text.
+   * The icon (a lucide node), in `iconButtonGlyph`'s size and tint: `button.selected.ink` while
+   * selected, the danger tone as `destructive`. In the terminal, which draws no icons,
+   * `accessibilityLabel` is its text.
    */
   icon?: IconNode;
   /** Drawn after `icon`, as given: an icon of your own, a badge. */
@@ -904,7 +934,6 @@ export function IconButton(props: IconButtonProps) {
     <BaseButton
       {...rest}
       hitSlop={props.hitSlop ?? look.hitSlop}
-      {...pressHostProps(() => look.android)}
       style={[look.style, props.style ?? null]}
       hoverStyle={[look.hoverStyle ?? null, props.hoverStyle ?? null]}
       activeStyle={[look.activeStyle ?? null, props.activeStyle ?? null]}
@@ -928,7 +957,8 @@ export function IconButton(props: IconButtonProps) {
 
 /**
  * A round icon button in the look of `roundButtonLook`. Every base prop passes through; the style
- * props go over the look's. Pass an icon as `children`; `roundButtonGlyph` sizes and tints it.
+ * props go over the look's. `icon` draws a lucide node sized and tinted by the look
+ * (`roundButtonGlyph`); pass an icon as `children` for anything custom (such as `fill`).
  */
 export type RoundButtonProps = Omit<
   BaseButtonProps,
@@ -941,10 +971,16 @@ export type RoundButtonProps = Omit<
   /** The diameter in points, over the scale. */
   side?: number;
   /**
+   * The icon (a lucide node), in `roundButtonGlyph`'s size and tint. In the terminal, which draws
+   * no icons, `accessibilityLabel` is its text.
+   */
+  icon?: IconNode;
+  /**
    * What screen readers say. Required: an icon alone has no text to name it, so there is no
    * name to derive.
    */
   accessibilityLabel: string;
+  /** Drawn after `icon`, as given: a filled icon (`<Icon fill ... />`) or custom glyph. */
   children?: JSX.Element;
 };
 
@@ -955,6 +991,7 @@ export function RoundButton(props: RoundButtonProps) {
     'variant',
     'size',
     'side',
+    'icon',
     'children',
   ]);
   const variant = props.variant ?? 'default';
@@ -968,7 +1005,6 @@ export function RoundButton(props: RoundButtonProps) {
     <BaseButton
       {...rest}
       hitSlop={props.hitSlop ?? look.hitSlop}
-      {...pressHostProps(() => look.android)}
       style={[look.style, props.style ?? null]}
       hoverStyle={[look.hoverStyle ?? null, props.hoverStyle ?? null]}
       activeStyle={[look.activeStyle ?? null, props.activeStyle ?? null]}
@@ -978,6 +1014,13 @@ export function RoundButton(props: RoundButtonProps) {
       ]}
       disabledStyle={[look.disabledStyle, props.disabledStyle ?? null]}
     >
+      <If when={props.icon}>
+        <IconLabel
+          icon={props.icon!}
+          label={props.accessibilityLabel}
+          {...roundButtonGlyph(variant, options)}
+        />
+      </If>
       {props.children}
     </BaseButton>
   );
@@ -1044,26 +1087,29 @@ export function SplitButtonSegment(props: SplitButtonSegmentProps) {
   const ctx = useSplit();
   const [, rest] = split(props, [
     ...STYLE_KEYS,
+    'disabled',
     'children',
     'onPressDown',
     'onPressUp',
   ]);
   const pressing = signal(false);
+  const segmentDisabled = () =>
+    !!read(ctx.options.disabled) || !!props.disabled;
   const segmentOptions: ButtonLookOptions = {
     ...ctx.options,
-    disabled: () => !!read(ctx.options.disabled) || !!props.disabled,
+    disabled: segmentDisabled,
     selected: () => props.selected,
     pressed: pressing,
   };
   const segment = ctx.look.segment({
     selected: () => props.selected,
-    disabled: () => props.disabled,
+    disabled: segmentDisabled,
   });
   return (
     <BaseButton
       {...rest}
+      disabled={segmentDisabled()}
       hitSlop={props.hitSlop ?? segment.hitSlop}
-      {...pressHostProps(() => segment.android)}
       onPressDown={() => {
         if (!read(segmentOptions.disabled)) pressing.set(true);
         props.onPressDown?.();

@@ -2,7 +2,7 @@
 // Derived from NSH examples/nsh-gallery-ui (Apache-2.0, © Longbridge); modified. See NOTICE.
 
 import type { JSX, ViewStyle } from 'nsh';
-import { reduceMotion, split, View } from 'nsh';
+import { split, View } from 'nsh';
 import {
   Radio as BaseRadio,
   RadioGroup as BaseRadioGroup,
@@ -10,27 +10,22 @@ import {
   type RadioProps as BaseRadioProps,
 } from 'nsh/base';
 
-import { AsText } from '../../lib/ui/as-text';
-import { joinClass } from '../../lib/ui/class-names';
-import { choiceLook, HIT_TARGET } from '../../lib/ui/look';
-import { cssMotion } from '../../lib/ui/motion';
-import { controlSize } from '../../lib/ui/surface';
 import {
   colors,
-  control,
+  feedback,
   follow,
-  motion,
+  press,
   terminal,
   TERMINAL_ROW,
-  tier,
 } from '../../lib/ui/theme';
+import { AsText, joinClass } from '../../lib/ui/utils';
 import {
   choiceEdge,
   ChoiceLight,
+  choiceLook,
   choiceScales,
   choiceSink,
   type ChoiceSize,
-  ChoiceTarget,
   choiceTileLook,
   choiceWell,
 } from './checkbox';
@@ -38,9 +33,8 @@ import {
 /**
  * A radio's ring, among the `Radio`'s children (give the radio `class="group"`, so the ring
  * responds to row hover/press): outer diameter, dot diameter, stroke, interior well, whether the
- * face turns over or the ring stays a ring, state-layer target, and the dot's hover/press growth (a
- * scale of its box, its own view) all come from the theme's choice recipe
- * (`choiceLook(control().choice)`), read here so the ring follows `selectTheme`.
+ * face turns over or the ring stays a ring, and its mark all come from the theme's choice recipe
+ * (`control("choice")`), read here so the ring follows `selectTheme`.
  */
 export function RadioRing(props: {
   on: boolean;
@@ -48,36 +42,27 @@ export function RadioRing(props: {
   disabled?: boolean;
 }) {
   const scale = props.scale ?? 1;
-  const look = () => choiceLook(control().choice);
-  const size = () => Math.round(look().size[tier] * scale);
+  const look = () => choiceLook();
+  const size = () => Math.round(look().box * scale);
   const height = () => (terminal ? TERMINAL_ROW : size());
-  /** The dot: the control's dot scale, or none where the form states none. */
-  const dot = () =>
-    look().dot === null ? 0 : Math.round(controlSize.dot * scale);
-  const dotHover = () => Math.round((look().dotHover ?? 0) * scale);
-  const dotPressed = () => Math.round((look().dotPressed ?? 0) * scale);
+  /** The dot: the mark the theme draws inside the ring, at this tier. */
+  const dot = () => Math.round(look().mark * scale);
   const border = () => choiceEdge(look());
-  /** A ring form draws its mark as the ring itself, so the ring keeps its edge only while off. */
-  const ringOnly = () => look().checked === null;
+  /** A theme that leaves the box empty draws its mark as the ring itself, and keeps the edge while on. */
+  const ringOnly = () => look().radioCheckedStyle === null;
   const wellStyle = () =>
     choiceWell({ look: look(), disabled: props.disabled });
-  const ringBorderColor = () =>
-    ringOnly() && props.on ? colors.brand : wellStyle().borderColor;
-  const on = follow(() => (props.on ? 1 : 0));
-  /** The dot's growth under hover and press, as a scale of its box, where the recipe states it: the
-   * ring around it is the pointer's, so the classes ride the group's states, paced by the theme's
-   * `motion.fast`. */
-  const grows = () => look().dotHover !== null && look().dotPressed !== null;
-  const dotScale = (): string | undefined => {
-    if (!grows()) return undefined;
-    const of = (diameter: number) => Number((diameter / dot()).toFixed(4));
-    return `group-hover:scale-[${of(dotHover())}] group-active:scale-[${of(dotPressed())}]`;
+  const ringBorderColor = () => {
+    if (props.on && !ringOnly() && !props.disabled) return 'transparent';
+    if (ringOnly() && props.on) return colors.primary;
+    return wellStyle().borderColor ?? colors.border;
   };
+  const on = follow(() => (props.on ? 1 : 0));
   const dotStyle = (): ViewStyle => ({
     width: dot(),
     height: dot(),
     borderRadius: dot() / 2,
-    backgroundColor: ringOnly() ? colors.brand : colors.primaryForeground,
+    backgroundColor: ringOnly() ? colors.primary : colors.primaryForeground,
     opacity: on,
     transform: [
       { scale: on.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) },
@@ -85,7 +70,7 @@ export function RadioRing(props: {
   });
   return (
     <View
-      class={choiceSink}
+      class={press.scale < 1 ? choiceSink : undefined}
       style={{
         width: size(),
         height: height(),
@@ -97,40 +82,15 @@ export function RadioRing(props: {
         borderColor: ringBorderColor(),
       }}
     >
-      {look().target !== null ? (
-        <ChoiceTarget
-          target={Math.round(HIT_TARGET * scale)}
-          innerW={size() - 2 * border()}
-          innerH={height() - 2 * border()}
-          checked={props.on}
-        />
-      ) : null}
-      {look().checked === null ? null : (
+      {look().radioCheckedStyle === null ? null : (
         <ChoiceLight
           on={on}
           radius={size() / 2}
           border={border()}
-          fill={look().checked ?? undefined}
+          fill={look().radioCheckedStyle}
         />
       )}
-      {grows() ? (
-        // Its own view: the checked scale below is an animated value, and a view takes one transform.
-        <View
-          class={dotScale()}
-          style={{
-            width: dot(),
-            height: dot(),
-            alignItems: 'center',
-            justifyContent: 'center',
-            transitionProperty: reduceMotion() ? 'none' : 'transform',
-            ...cssMotion(motion.fast),
-          }}
-        >
-          <View style={dotStyle()} />
-        </View>
-      ) : (
-        <View style={dotStyle()} />
-      )}
+      <View style={dotStyle()} />
     </View>
   );
 }
@@ -198,10 +158,16 @@ export function Radio(props: RadioProps) {
       hoverStyle={[look?.hoverStyle ?? null, props.hoverStyle ?? null]}
       activeStyle={[look?.activeStyle ?? null, props.activeStyle ?? null]}
       focusVisibleStyle={[
-        look?.focusVisibleStyle ?? null,
+        look ? look.focusVisibleStyle : feedback.focusRing(),
         props.focusVisibleStyle ?? null,
       ]}
-      disabledStyle={[look?.disabledStyle ?? null, props.disabledStyle ?? null]}
+      disabledStyle={
+        look
+          ? [look.disabledStyle, props.disabledStyle ?? null]
+          : (props.disabledStyle ?? {
+              opacity: feedback.disabled.contentOpacity,
+            })
+      }
     >
       <If when={props.indicator ?? true}>
         <RadioRing

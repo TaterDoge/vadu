@@ -30,7 +30,7 @@ test('外观保存后重开，在进入外观页前应用已保存的主题', as
   expect(status(reopened)).toMatchObject({
     ...appearance,
     scheme: 'dark',
-    theme: 'default',
+    theme: 'nsh-gallery',
     pressScale: 0.97,
     font: 'JetBrains Mono',
   });
@@ -119,7 +119,7 @@ test('切换强调色时深浅前景可读，焦点保持预设光环，恢复�
     expect(preset.neutral).toBe(preset.primary);
     expect(preset.brand).toBe(preset.primary);
     expect(preset.focus).toMatchObject({
-      borderColor: preset.mutedForeground,
+      borderColor: preset.ring,
       outlineWidth: 3,
       outlineOffset: 0,
     });
@@ -128,8 +128,7 @@ test('切换强调色时深浅前景可读，焦点保持预设光环，恢复�
       const selected = status(app);
       expect(selected.primary).toBe(selected[accent]);
       expect(selected.brand).toBe(selected.primary);
-      expect(selected.sidebarPrimary).toBe(selected.primary);
-      expect(selected.sidebarForeground).toBe(selected.primaryForeground);
+      expect(selected.accentSurface).toBe(selected.primary);
       expect(selected.border).toBe(preset.border);
       expect(selected.focus).toEqual(preset.focus);
       expect(selected.neutral).toBe(preset.primary);
@@ -142,8 +141,7 @@ test('切换强调色时深浅前景可读，焦点保持预设光环，恢复�
       primary: preset.primary,
       primaryForeground: preset.primaryForeground,
       brand: preset.brand,
-      sidebarPrimary: preset.sidebarPrimary,
-      sidebarForeground: preset.sidebarForeground,
+      accentSurface: preset.primary,
     });
   }
 });

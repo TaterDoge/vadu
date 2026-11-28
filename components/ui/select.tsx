@@ -23,14 +23,17 @@ import {
   type SelectProps as BaseSelectProps,
 } from 'nsh/base';
 
-import { Icon } from '../../lib/ui/icons';
 import {
   fieldCorners,
+  fieldDrawn,
   fieldEdgeWidths,
   fieldFocusEdge,
+  fieldFocusTone,
+  fieldHasUniformEdge,
   fieldRestEdge,
   fieldRing,
-} from '../../lib/ui/indicator';
+} from '../../lib/ui/field-look';
+import { Icon } from '../../lib/ui/icons';
 import {
   Chevron,
   clearButtonLook,
@@ -41,8 +44,6 @@ import {
   OptionRow,
   triggerPadding,
 } from '../../lib/ui/listbox';
-import { type Live, read } from '../../lib/ui/live-value';
-import { fieldLook } from '../../lib/ui/look';
 import {
   createItemRegistry,
   createOpenState,
@@ -50,17 +51,21 @@ import {
   type ItemRegistry,
   type OpenState,
   type Slot,
-} from '../../lib/ui/open-state';
+} from '../../lib/ui/state';
 import { controlSize } from '../../lib/ui/surface';
 import {
   colors,
   control,
-  dimmed,
-  finish,
+  feedback,
+  rounded,
+  shape,
+  stroke,
+  surface,
   terminal,
   TERMINAL_COLUMN,
 } from '../../lib/ui/theme';
-import { fieldSize } from './input';
+import { type Live, read } from '../../lib/ui/utils';
+import { fieldSize, insetShade } from './input';
 
 const pointer = platform.desktop;
 
@@ -73,7 +78,7 @@ const triggerGap = 8;
 /** How long a trigger's edge fades: its border, its ring and its dimming. */
 const edgeFade = 120;
 
-/** A trigger's variants: `default` shadcn's field, `outline` an outline button of shadcn's, on the raised finish. */
+/** A trigger's variants: `default` shadcn's field, `outline` an outline button of shadcn's, on the raised surface. */
 export type PickerVariant = 'default' | 'outline';
 
 /** Options of `pickerLook`. */
@@ -91,18 +96,32 @@ export interface PickerLookOptions {
    * (the field fill, the input's edge), so it lines up with the text fields
    * of its form (a date picker's and a color picker's too: in dark
    * shadcn's outline button is the input's fill and edge as well); `outline`:
-   * an outline button on the raised finish, for a trigger that is not a
+   * an outline button on the raised surface, for a trigger that is not a
    * form's field.
    */
   variant?: PickerVariant;
+  /** It cannot be opened: takes the theme's disabled field where it states one, else 50%. */
+  disabled?: Live<boolean>;
+}
+
+/**
+ * A raised face: the raised surface, its edge the outline button's when the surface draws none of its
+ * own (a translucent face carries a `backdropFilter` instead of an edge, and keeps it).
+ */
+function outlineFace(): ViewStyle {
+  const face = surface('raised').style;
+  const edge = face.borderColor;
+  const drawsEdge = edge !== undefined && edge !== 'transparent';
+  if (drawsEdge || face.backdropFilter) return face;
+  return { ...face, borderColor: control('button').outlineEdge };
 }
 
 /**
  * A select's or date picker's trigger (spread it on the trigger's view): a
  * row as high as the controls around it (`controlSize.line`), on the field's
- * well (`default`) or the raised finish (`outline`), its edge stronger under
+ * well (`default`) or the raised surface (`outline`), its edge stronger under
  * the pointer and while the list is open, the danger tone while invalid (each
- * after the finish, which has an edge of its own), the fields' focus edge
+ * after the surface, which has an edge of its own), the fields' focus edge
  * while it has the keys, sunk to 70% while pressed, 50% while disabled.
  *
  * Dimmed through `disabledStyle`, on the trigger's own `disabled`. The open
@@ -116,12 +135,18 @@ export function pickerLook(o?: PickerLookOptions) {
   return {
     get style(): ViewStyle {
       const clearable = !!read(o?.clearable);
-      const field = fieldLook(control().field);
+      const field = fieldDrawn(control('field'));
+      // A theme that states the ground a field that cannot be used turns over to paints the trigger
+      // in it, edge and all (the surface's own stroke), rather than fading it.
+      const off =
+        !outline && read(o?.disabled) && feedback.disabled.replaceFace
+          ? feedback.disabled
+          : null;
       return {
         flexDirection: 'row',
         alignItems: 'center',
         gap: triggerGap,
-        height: controlSize.line,
+        height: fieldSize.height,
         minWidth: pointer ? minTriggerWidth : undefined,
         // With a pointer its title truncates before a row's label is squeezed.
         flexShrink: pointer ? 1 : undefined,
@@ -133,22 +158,27 @@ export function pickerLook(o?: PickerLookOptions) {
           : clearable
             ? clearInset() + controlSize.clear + 8
             : triggerPadding(),
-        ...fieldCorners(field),
-        ...fieldEdgeWidths(field),
+        ...(outline ? rounded(shape.control) : fieldCorners(field)),
+        ...(outline ? { borderWidth: stroke.control } : fieldEdgeWidths(field)),
         ...(outline
-          ? { backgroundColor: colors.raised, ...finish.raised }
-          : { backgroundColor: colors.field, ...finish.inset }),
+          ? outlineFace()
+          : off
+            ? off.style
+            : { backgroundColor: field.ground, ...insetShade() }),
         ...(invalid()
           ? { borderColor: colors.destructive }
-          : read(o?.open)
+          : read(o?.open) &&
+              (outline
+                ? surface('raised').style.borderTopColor ===
+                  surface('raised').style.borderBottomColor
+                : fieldHasUniformEdge(field))
             ? { borderColor: colors.faint }
-            : outline
-              ? { borderColor: colors.border }
+            : outline || off
+              ? {}
               : fieldRestEdge(field)),
-        ...(terminal
-          ? {}
-          : fieldRing(invalid() ? colors.destructive : colors.brand)),
-        transitionProperty: 'border-color, outline-color, opacity',
+        ...(terminal ? {} : fieldRing(fieldFocusTone(field, invalid()))),
+        transitionProperty:
+          'border-color, background-color, outline-color, opacity',
         transitionDuration: reduceMotion() ? 0 : edgeFade,
         // The look is one object (it is spread on the trigger's view), so a list of styles is
         // flattened into it: the app's style still lands last, over the look's.
@@ -156,21 +186,31 @@ export function pickerLook(o?: PickerLookOptions) {
       };
     },
     get hoverStyle(): ViewStyle | undefined {
-      return invalid() ? undefined : { borderColor: colors.faint };
+      if (invalid()) return undefined;
+      if (outline) {
+        const { borderTopColor, borderBottomColor } = surface('raised').style;
+        return borderTopColor != null && borderTopColor !== borderBottomColor
+          ? feedback.hoverSurface()
+          : { borderColor: colors.faint };
+      }
+      return fieldHasUniformEdge(fieldDrawn(control('field')))
+        ? { borderColor: colors.faint }
+        : undefined;
     },
     get activeStyle(): ViewStyle {
-      return { opacity: dimmed.pressed };
+      return { opacity: feedback.passive.pressedOpacity };
     },
     // The border with the outline, which not every platform draws over it; `focus-visible` is above `hover` in the
     // states' order. Only for the keyboard: a click's focus, and the focus a closing list gives back, draw nothing.
     get focusVisibleStyle(): ViewStyle {
-      const tone = invalid() ? colors.destructive : colors.brand;
-      return terminal
-        ? { borderColor: tone }
-        : fieldFocusEdge(fieldLook(control().field), tone);
+      const field = fieldDrawn(control('field'));
+      const tone = fieldFocusTone(field, invalid());
+      return terminal ? { borderColor: tone } : fieldFocusEdge(field, tone);
     },
     get disabledStyle(): ViewStyle {
-      return { opacity: dimmed.disabled };
+      return feedback.disabled.replaceFace
+        ? {}
+        : { opacity: feedback.disabled.contentOpacity };
     },
   };
 }
@@ -222,6 +262,7 @@ export function Picker(props: PickerProps) {
         open: () => props.open,
         invalid: () => !!props.invalid,
         clearable: () => !!props.clearable,
+        disabled: () => !!props.disabled,
         variant: props.variant,
         style: () => props.style ?? {},
       })}
@@ -239,7 +280,7 @@ export function Picker(props: PickerProps) {
           flex: 1,
           numberOfLines: 1,
           fontSize: fieldSize.font,
-          color: props.placeholder ? colors.mutedForeground : colors.foreground,
+          color: titleInk(!!props.placeholder, !!props.disabled),
         }}
       >
         {props.title}
@@ -684,4 +725,10 @@ export function SelectItem(props: SelectItemProps) {
   ctx.items.register(item);
   cleanup(() => ctx.items.unregister(item.value));
   return null;
+}
+
+/** A trigger's title: the placeholder in the muted ink, the disabled surface's ink while disabled. */
+function titleInk(placeholder: boolean, disabled: boolean): string {
+  if (disabled && feedback.disabled.replaceFace) return feedback.disabled.ink;
+  return placeholder ? colors.mutedForeground : colors.foreground;
 }

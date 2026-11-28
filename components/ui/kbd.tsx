@@ -3,7 +3,6 @@
 import type { JSX, TextStyle, ViewProps, ViewStyle } from 'nsh';
 import { split, token, View } from 'nsh';
 
-import { AsText } from '../../lib/ui/as-text';
 import {
   colors,
   font,
@@ -13,6 +12,7 @@ import {
   terminal,
   TERMINAL_ROW,
 } from '../../lib/ui/theme';
+import { AsText } from '../../lib/ui/utils';
 
 /** A key's look: the cap itself, the type on it, and a row of them. Spread each one. */
 export interface KbdLook {

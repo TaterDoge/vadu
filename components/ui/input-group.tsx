@@ -16,9 +16,8 @@ import {
   type InputProps as BaseInputProps,
 } from 'nsh/base';
 
-import { AsText } from '../../lib/ui/as-text';
-import { type Live, read } from '../../lib/ui/live-value';
 import { colors, terminal, TERMINAL_COLUMN } from '../../lib/ui/theme';
+import { AsText, type Live, read } from '../../lib/ui/utils';
 import {
   Button,
   type ButtonProps,
@@ -63,7 +62,15 @@ export function inputGroupLook(o?: InputGroupLookOptions) {
         ...read(o?.style),
       };
     },
-    disabledStyle: field.disabledStyle,
+    get hoverStyle(): ViewStyle | undefined {
+      return field.hoverStyle;
+    },
+    get focusWithinStyle(): ViewStyle {
+      return field.focusWithinStyle;
+    },
+    get disabledStyle(): ViewStyle {
+      return field.disabledStyle;
+    },
   };
 }
 

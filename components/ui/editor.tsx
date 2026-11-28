@@ -21,16 +21,15 @@ import {
   type EditorSearchResult,
 } from 'nsh/base';
 
-import { mergeClasses } from '../../lib/ui/class-names';
-import { Icon } from '../../lib/ui/icons';
 import {
   fieldCorners,
   fieldEdgeWidths,
   fieldRestEdge,
-} from '../../lib/ui/indicator';
-import { fieldLook } from '../../lib/ui/look';
+} from '../../lib/ui/field-look';
+import { Icon } from '../../lib/ui/icons';
 import { popupSurface } from '../../lib/ui/popup';
-import { colors, control, finish, platformMaterial } from '../../lib/ui/theme';
+import { colors, control, surface } from '../../lib/ui/theme';
+import { mergeClasses } from '../../lib/ui/utils';
 import { buttonGlyph } from './button';
 import {
   InputGroup,
@@ -57,13 +56,13 @@ export const editorClasses: EditorClasses = {
   selection: 'bg-brand/25',
   caret: 'bg-foreground',
   composition: 'text-foreground',
-  searchMatch: 'bg-warn/25',
-  currentSearchMatch: 'bg-warn/40',
+  searchMatch: 'bg-warning/25',
+  currentSearchMatch: 'bg-warning/40',
   matchingBracket: 'border-border',
   indentGuide: 'bg-border',
   placeholder: 'text-muted-foreground',
   diagnosticError: 'text-destructive',
-  diagnosticWarning: 'text-warn',
+  diagnosticWarning: 'text-warning',
   diagnosticInfo: 'text-info',
   diagnosticHint: 'text-muted-foreground',
   unnecessaryText: 'text-muted-foreground',
@@ -79,13 +78,13 @@ export const editorClasses: EditorClasses = {
  * used, so it follows the appearance and the theme; an app's `style` goes over it.
  */
 export function editorFrame(): ViewStyle {
-  const field = fieldLook(control().field);
+  const field = control('field');
   return {
-    backgroundColor: colors.field,
+    ...(field.ground ? { backgroundColor: field.ground } : {}),
     ...fieldEdgeWidths(field),
     ...fieldRestEdge(field),
     ...fieldCorners(field),
-    ...finish.inset,
+    boxShadow: surface('inset').style.boxShadow,
   };
 }
 
@@ -207,7 +206,7 @@ export function EditorFindBar(props: EditorFindBarProps) {
   const glyph = buttonGlyph('ghost', { size: 'sm' });
   return (
     <View
-      {...platformMaterial('overlay')}
+      {...surface('overlay').platformProps}
       {...rest}
       class={props.class}
       style={[{ ...popupSurface(), gap: 4 }, props.style ?? null]}

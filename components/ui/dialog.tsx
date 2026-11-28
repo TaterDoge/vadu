@@ -19,18 +19,19 @@ import {
   type DialogProps as BaseDialogProps,
 } from 'nsh/base';
 
-import { AsText } from '../../lib/ui/as-text';
-import { createOpenState, type OpenState } from '../../lib/ui/open-state';
 import { backdrop } from '../../lib/ui/popup';
+import { createOpenState, type OpenState } from '../../lib/ui/state';
 import {
   colors,
-  finish,
   font,
   rounded,
   shape,
   stroke,
+  surface,
+  surfaceBorderWidth,
   terminal,
 } from '../../lib/ui/theme';
+import { AsText } from '../../lib/ui/utils';
 import { Action, type ButtonVariant } from './button';
 
 const pointer = platform.desktop;
@@ -56,16 +57,20 @@ export function dialogCard(width?: number): ViewStyle {
   return {
     ...(width === undefined ? {} : { margin: 'auto', width, maxWidth: '90%' }),
     ...rounded(shape.modal),
-    borderWidth: stroke.hairline,
+    borderWidth: terminal
+      ? stroke.hairline
+      : surfaceBorderWidth(
+          surface('modal').style.borderColor as string | undefined,
+        ),
     padding: 20,
     gap: 12,
     maxHeight: windowSize().height - safeArea().top - safeArea().bottom - 48,
     ...(terminal
       ? { borderColor: colors.border }
       : {
-          backgroundColor: finish.modal.backgroundColor,
-          boxShadow: finish.modal.boxShadow,
-          borderColor: finish.modal.borderColor,
+          backgroundColor: surface('modal').style.backgroundColor,
+          boxShadow: surface('modal').style.boxShadow,
+          borderColor: surface('modal').style.borderColor,
         }),
   };
 }

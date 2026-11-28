@@ -3,25 +3,29 @@
 // Derived from NSH examples/nsh-gallery-ui (Apache-2.0, © Longbridge); modified. See NOTICE.
 
 import { ChevronDown, ChevronUp, type IconNode, Minus, Plus } from 'lucide';
-import type { InputStyle } from 'nsh';
-import { platform, split, Text } from 'nsh';
+import type { InputStyle, ViewStyle } from 'nsh';
+import { platform, signal, split, Text } from 'nsh';
 import {
   NumberInput as BaseNumberInput,
   type NumberInputProps as BaseNumberInputProps,
 } from 'nsh/base';
 
+import {
+  fieldCornerClass,
+  fieldDrawn,
+  fieldEdgeClass,
+} from '../../lib/ui/field-look';
 import { Icon } from '../../lib/ui/icons';
-import { fieldCornerClass, fieldEdgeClass } from '../../lib/ui/indicator';
-import { fieldLook } from '../../lib/ui/look';
 import { colors, control, terminal } from '../../lib/ui/theme';
-import { edgeClass, fieldSize } from './input';
+import { type Live } from '../../lib/ui/utils';
+import { edgeClass, fieldLook as fieldWellLook, fieldSize } from './input';
 
 const pointer = platform.desktop;
 
 /** The step buttons' feedback: lit under the pointer, darker while pressed, faded where a step does nothing. */
 const press = terminal
   ? 'justify-center disabled:opacity-50'
-  : 'items-center justify-center transition-colors duration-100 motion-reduce:transition-none enabled:hover:bg-accent active:bg-track disabled:opacity-50';
+  : 'items-center justify-center transition-colors duration-100 motion-reduce:transition-none enabled:hover:bg-accent active:bg-surface disabled:opacity-50';
 
 /**
  * A number input's parts as classes (`NumberInput`'s `class` and its
@@ -35,13 +39,12 @@ const press = terminal
 export const numberInputClasses = {
   /** The well: its corners and edge are the theme's field, read where it is drawn. */
   get frame(): string {
-    if (terminal)
-      return 'h-4 flex-row items-stretch bg-field pl-2 disabled:opacity-50';
-    const field = fieldLook(control().field);
+    if (terminal) return 'h-4 flex-row items-stretch pl-2 disabled:opacity-50';
+    const field = fieldDrawn(control('field'));
     return [
       pointer ? 'h-8' : 'h-11',
       fieldCornerClass(field),
-      'flex-row items-stretch overflow-hidden bg-field',
+      'flex-row items-stretch overflow-hidden',
       fieldEdgeClass(field),
       edgeClass({
         rest: 'border-input',
@@ -57,6 +60,38 @@ export const numberInputClasses = {
   pairButton: (top: boolean) =>
     `flex-1 ${press}${top ? ' border-b border-line' : ''}`,
 };
+
+/**
+ * A number input's frame props (`style`, `hoverStyle`, `focusWithinStyle`, `disabledStyle`, and
+ * `class` in a terminal): aligns the well with the field's recipe so step buttons share the theme's
+ * field fill, corners, edge widths, and smooth focus halo.
+ */
+export function numberInputLook(o?: {
+  disabled?: Live<boolean>;
+  focused?: Live<boolean>;
+}) {
+  if (terminal) {
+    return {
+      get class(): string {
+        return numberInputClasses.frame;
+      },
+      // The band's ground, which a class cannot name (`colors.field` became the field's recipe).
+      style: { backgroundColor: control('field').ground } as ViewStyle,
+      hoverStyle: undefined as ViewStyle | undefined,
+      focusWithinStyle: undefined as ViewStyle | undefined,
+      disabledStyle: undefined as ViewStyle | undefined,
+    };
+  }
+  return fieldWellLook({
+    disabled: o?.disabled,
+    focused: o?.focused,
+    style: () => ({
+      height: fieldSize.height,
+      alignItems: 'stretch',
+      overflow: 'hidden',
+    }),
+  });
+}
 
 /** A number input's field (`inputStyle`): the label size, tabular figures; at the end of a terminal's band, as a column of numbers reads. */
 export function numberInputText(): InputStyle {
@@ -143,6 +178,12 @@ export function NumberInput(props: NumberInputProps) {
   const [, rest] = split(props, [
     'steps',
     'class',
+    'style',
+    'hoverStyle',
+    'focusWithinStyle',
+    'disabledStyle',
+    'onFocus',
+    'onBlur',
     'inputStyle',
     'controlsRight',
     'controlsClass',
@@ -151,6 +192,11 @@ export function NumberInput(props: NumberInputProps) {
     'decrementButton',
     'incrementButton',
   ]);
+  const focused = signal(false);
+  const look = numberInputLook({
+    disabled: () => !!props.disabled,
+    focused: () => focused(),
+  });
   const kind = props.steps ?? 'pair';
   // Upstream's widths: a pair of chevrons sits in a narrower lane (`w-6` / `w-9`) than a − and
   // + either side of the field (`w-8` / `w-11`).
@@ -161,14 +207,31 @@ export function NumberInput(props: NumberInputProps) {
   const width = pointer ? lanes.desktop : lanes.touch;
   const glyphSize = pointer ? 14 : 16;
   const buttons = numberInputSteps(kind, width, glyphSize);
+  const cls = () =>
+    look.class
+      ? props.class
+        ? `${look.class} ${props.class}`
+        : look.class
+      : props.class;
   return (
     <BaseNumberInput
       {...rest}
-      class={
-        props.class
-          ? `${numberInputClasses.frame} ${props.class}`
-          : numberInputClasses.frame
-      }
+      onFocus={() => {
+        focused.set(true);
+        props.onFocus?.();
+      }}
+      onBlur={() => {
+        focused.set(false);
+        props.onBlur?.();
+      }}
+      class={cls()}
+      style={[look.style ?? null, props.style ?? null]}
+      hoverStyle={[look.hoverStyle ?? null, props.hoverStyle ?? null]}
+      focusWithinStyle={[
+        look.focusWithinStyle ?? null,
+        props.focusWithinStyle ?? null,
+      ]}
+      disabledStyle={[look.disabledStyle ?? null, props.disabledStyle ?? null]}
       inputStyle={[numberInputText(), props.inputStyle ?? null]}
       controlsRight={props.controlsRight ?? buttons.controlsRight}
       controlsClass={props.controlsClass ?? buttons.controlsClass}

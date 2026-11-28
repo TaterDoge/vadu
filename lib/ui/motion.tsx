@@ -1,31 +1,49 @@
-// Shared motion: a control shakes when a value is rejected, a figure rolls to its next one, and a
-// theme's motion role becomes the transition a state's transform rides.
+// Shared motion and press feedback: CSS transitions for theme timing roles, reject shakes,
+// rolling counters, press sink transforms, and touch hit-target expansion.
+// Derived from NSH examples/nsh-gallery-ui (Apache-2.0, © Longbridge); modified. See NOTICE.
 
-import type { StyleProp, TextStyle, ViewStyle } from 'nsh';
-import { createMotion, effect, reduceMotion, signal, Text } from 'nsh';
+import type {
+  MotionSpec as NshMotionSpec,
+  StyleProp,
+  TextStyle,
+  ViewStyle,
+} from 'nsh';
+import {
+  createMotion,
+  effect,
+  reduceMotion,
+  ScreenTransition,
+  shadersAvailable,
+  signal,
+  Text,
+} from 'nsh';
 
 import {
-  isTiming,
+  feedback,
   motion as themeMotion,
-  type Spring,
+  press,
+  terminal,
   type Timing,
 } from './theme';
+import { type Live, read } from './utils';
+
+/** Theme-driven dialog enter motion spec (`dialogEnter` timing, scale, Y offset, and optional spring). */
+export function dialogMotion(): NshMotionSpec {
+  return themeMotion.enterSpec('dialogEnter');
+}
 
 /**
  * A theme's motion role as a CSS transition: the two properties a `transitionProperty` needs, for
  * the feedback the CSS states own — a knob's `scale` under `hover:` and `active:` — because an
  * animated value and a CSS transition cannot both drive one view's transform.
  *
- * A spring times itself, so a spring role gives no duration; a timing role gives its own duration
- * and its curve as `cubic-bezier`. A named curve (`Easing.out(Easing.cubic)`) has no CSS spelling,
- * so it falls back to `ease-out`: every theme names a spring or a bezier.
+ * A role gives its own duration and its curve as `cubic-bezier`. A named curve
+ * (`Easing.out(Easing.cubic)`) has no CSS spelling, so it falls back to `ease-out`.
  */
-export function cssMotion(m: Spring | Timing): {
-  transitionDuration?: number;
+export function cssMotion(m: Timing): {
+  transitionDuration: number;
   transitionTimingFunction: ViewStyle['transitionTimingFunction'];
 } {
-  if (!isTiming(m))
-    return { transitionTimingFunction: `spring(${m.stiffness}, ${m.damping})` };
   const curve = m.timingFunction;
   return {
     transitionDuration: m.duration,
@@ -33,6 +51,54 @@ export function cssMotion(m: Spring | Timing): {
       ? `cubic-bezier(${curve.join(', ')})`
       : 'ease-out',
   };
+}
+
+/**
+ * A `style`'s transition for a press's sink: `transform`, and `also` (more
+ * of CSS's property names the control's states change, as
+ * `"background-color, opacity"`) alike, over the theme's `motion.state`.
+ */
+export function pressTransition(also?: string): ViewStyle {
+  return {
+    transitionProperty: also ? `${also}, transform` : 'transform',
+    ...cssMotion(themeMotion.state),
+  };
+}
+
+/**
+ * A press that sinks a control to `scale` (default: the theme's `press.scale`,
+ * 97%; none with reduced motion). A theme that draws no press (`press.scale` of
+ * 1, as shadcn's flat surfaces do) sinks nothing, whichever scale a control
+ * asks for. `scale` may be a function (a signal), read where the press is
+ * drawn. Spread `activeStyle` into the control's `activeStyle` (after its
+ * own pressed shade) and `transition` into its `style`
+ * (`pressTransition(also)`).
+ */
+export function pressSink(
+  scale?: Live<number | undefined>,
+  also?: string,
+): { readonly activeStyle: ViewStyle; readonly transition: ViewStyle } {
+  return {
+    get activeStyle(): ViewStyle {
+      if (reduceMotion()) return {};
+      const sink = press.scale;
+      if (sink >= 1) return {};
+      return { transform: [{ scale: read(scale) ?? sink }] };
+    },
+    get transition(): ViewStyle {
+      return pressTransition(also);
+    },
+  };
+}
+
+/**
+ * How far presses count past a control `side` points tall (a button's height,
+ * a toggle's side), so a finger gets the theme's `size.hit` points without the control
+ * looking bigger: none in a terminal or where the theme's hit target is 0 (a pointer's), and none
+ * once `side` is that big already.
+ */
+export function touchSlop(side: number): number | undefined {
+  return feedback.touchSlop(side);
 }
 
 /**
@@ -47,14 +113,18 @@ export function cssMotion(m: Spring | Timing): {
  * It returns the style to call where the field draws it (`style={shake.style()}`): a component's
  * body runs once, so only the style an expression builds is read again when the shake starts and
  * ends. At rest it is `null`, so a quiet field has no transform at all. `playing()` says whether
- * it is under way, for a control that holds its press until the field has answered.
+ * it is under way, for a control that holds its press until the field has answered; `plays()` is
+ * how many it has played, for a test, which cannot time one — the shake can start and end inside
+ * the step that pressed.
  */
 export function createRejectShake(tick: () => number | undefined): {
   style: () => ViewStyle | null;
   playing: () => boolean;
+  plays: () => number;
 } {
   const motion = createMotion();
   const shaking = signal(false);
+  const played = signal(0);
   let seen: number | undefined;
   let ready = false;
   effect(() => {
@@ -71,17 +141,19 @@ export function createRejectShake(tick: () => number | undefined): {
     seen = next;
     if (reduceMotion()) return;
     shaking.set(true);
+    played.update((count) => count + 1);
     void Promise.resolve(motion.play('shake')).then(() => shaking.set(false));
   });
   return {
     style: () => (shaking() ? { transform: motion.transform } : null),
     playing: () => shaking(),
+    plays: () => played(),
   };
 }
 
 /**
- * A figure that rolls to its next value: up when `value` grows, down when it shrinks, on the
- * theme's `motion.fast` spring. The native number field keeps its own glyphs and caret, so the
+ * A figure that rolls to its next value: up when `value` grows, down when it shrinks, over the
+ * theme's `motion.fast`. The native number field keeps its own glyphs and caret, so the
  * roll is the text beside it (upstream's ticker), not the field. The first value is already there.
  * With reduced motion the next value replaces this one in place.
  */
@@ -107,17 +179,8 @@ export function Roll(props: {
     motion.opacity.set(0);
     void motion.play({
       keyframes: { translateY: [away, 0], opacity: [0, 1] },
-      ...(isTiming(themeMotion.fast)
-        ? {
-            duration: themeMotion.fast.duration,
-            easing: themeMotion.fast.timingFunction,
-          }
-        : {
-            spring: {
-              stiffness: themeMotion.fast.stiffness,
-              damping: themeMotion.fast.damping,
-            },
-          }),
+      duration: themeMotion.fast.duration,
+      easing: themeMotion.fast.timingFunction,
     });
   });
   return (
@@ -129,5 +192,49 @@ export function Roll(props: {
     >
       {props.children}
     </Text>
+  );
+}
+
+/**
+ * Props of `ThemeTransition`. `value` is what `ScreenTransition` watches: a string, a number or a
+ * boolean, because that is the identity a screen transition compares.
+ */
+export interface ThemeTransitionProps {
+  /** Identity of the screen being shown. A change runs the active theme's switch. */
+  readonly value: string | number | boolean;
+  /** Length of the transition in milliseconds. Defaults to the theme's `themeSwitch.duration`. */
+  readonly duration?: number;
+}
+
+/**
+ * The active theme's screen transition when `value` changes. A theme that switches with `"none"`,
+ * and the terminal, draw nothing. Where a GPU shader is available the theme's WGSL runs; otherwise
+ * the platform cross-fades.
+ */
+export function ThemeTransition(props: ThemeTransitionProps) {
+  return (
+    <>
+      {() => {
+        const sw = themeMotion.themeSwitch;
+        if (sw.kind === 'none' || terminal) return null;
+        if (sw.shader && shadersAvailable()) {
+          return (
+            <ScreenTransition
+              value={props.value}
+              source={sw.shader}
+              duration={props.duration ?? sw.duration}
+              fallback="fade"
+            />
+          );
+        }
+        return (
+          <ScreenTransition
+            value={props.value}
+            duration={props.duration ?? sw.duration}
+            fallback="fade"
+          />
+        );
+      }}
+    </>
   );
 }
